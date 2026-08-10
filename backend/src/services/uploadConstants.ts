@@ -5,8 +5,14 @@
  * 避免兩處各自維護導致不一致。
  */
 
-/** 單檔上限：10 MB（base64 解碼後 bytes） */
-export const MAX_SINGLE_BYTES = 10 * 1024 * 1024;
+/** 單一上傳檔案上限：100 MB */
+export const MAX_SINGLE_BYTES = 100 * 1024 * 1024;
+
+/** ZIP 解壓後所有檔案的總大小上限：100 MB */
+export const MAX_ZIP_EXTRACTED_BYTES = MAX_SINGLE_BYTES;
+
+/** ZIP 內最多允許的項目數，避免大量小檔案耗盡系統資源 */
+export const MAX_ZIP_ENTRY_COUNT = 10_000;
 
 /**
  * uploadSessionId（UUID v4）驗證正則。

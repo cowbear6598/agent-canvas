@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
+import { strToU8, zipSync } from "fflate";
+import { MAX_SINGLE_BYTES } from "../../src/services/uploadConstants.js";
 
 vi.mock("../../src/config/index.js", () => ({
   config: {
@@ -24,11 +26,47 @@ const { writeAttachmentToStaging, promoteStagingToFinal } =
   await import("../../src/services/attachmentWriter.js");
 const { config } = await import("../../src/config/index.js");
 
-/** 單檔最大允許 bytes（10 MB） */
-const MAX_SINGLE_BYTES = 10 * 1024 * 1024;
-
 /** 合法的 uploadSessionId UUID v4 */
 const VALID_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000";
+
+/** 模擬部分 macOS ZIP：檔名 bytes 是 UTF-8，但 general-purpose flag 未標示 UTF-8。 */
+function clearZipUtf8Flags(archive: Uint8Array): void {
+  const view = new DataView(
+    archive.buffer,
+    archive.byteOffset,
+    archive.byteLength,
+  );
+  let offset = 0;
+
+  while (offset <= archive.byteLength - 4) {
+    const signature = view.getUint32(offset, true);
+    if (signature === 0x04034b50) {
+      view.setUint16(
+        offset + 6,
+        view.getUint16(offset + 6, true) & ~0x0800,
+        true,
+      );
+      const compressedSize = view.getUint32(offset + 18, true);
+      const fileNameLength = view.getUint16(offset + 26, true);
+      const extraFieldLength = view.getUint16(offset + 28, true);
+      offset += 30 + fileNameLength + extraFieldLength + compressedSize;
+      continue;
+    }
+    if (signature === 0x02014b50) {
+      view.setUint16(
+        offset + 8,
+        view.getUint16(offset + 8, true) & ~0x0800,
+        true,
+      );
+      const fileNameLength = view.getUint16(offset + 28, true);
+      const extraFieldLength = view.getUint16(offset + 30, true);
+      const commentLength = view.getUint16(offset + 32, true);
+      offset += 46 + fileNameLength + extraFieldLength + commentLength;
+      continue;
+    }
+    break;
+  }
+}
 /** 合法的 chatMessageId UUID */
 const VALID_CHAT_MSG_ID = "660e8400-e29b-41d4-a716-446655440001";
 
@@ -151,33 +189,164 @@ describe("writeAttachmentToStaging — collision rename", () => {
 });
 
 // ================================================================
+// writeAttachmentToStaging — ZIP 自動解壓縮
+// ================================================================
+describe("writeAttachmentToStaging — ZIP 自動解壓縮", () => {
+  it("ZIP 應解壓到同名資料夾並保留內部目錄結構", async () => {
+    const archive = zipSync({
+      "README.md": strToU8("hello"),
+      "src/index.ts": strToU8("export const value = 1;"),
+    });
+    const file = new File([archive], "project.zip", {
+      type: "application/zip",
+    });
+
+    const result = await writeAttachmentToStaging(
+      VALID_SESSION_ID,
+      file,
+      file.name,
+    );
+
+    expect(result.filename).toBe("project");
+    const extractionRoot = path.join(
+      stagingDir,
+      VALID_SESSION_ID,
+      "project",
+    );
+    expect(await fs.readFile(path.join(extractionRoot, "README.md"), "utf8")).toBe(
+      "hello",
+    );
+    expect(
+      await fs.readFile(path.join(extractionRoot, "src/index.ts"), "utf8"),
+    ).toBe("export const value = 1;");
+    await expect(
+      fs.access(path.join(stagingDir, VALID_SESSION_ID, "project.zip")),
+    ).rejects.toThrow();
+  });
+
+  it("同名 ZIP 應解壓到不重複的資料夾", async () => {
+    const archive = zipSync({ "file.txt": strToU8("content") });
+    const first = new File([archive], "bundle.zip");
+    const second = new File([archive], "bundle.zip");
+
+    const firstResult = await writeAttachmentToStaging(
+      VALID_SESSION_ID,
+      first,
+      first.name,
+    );
+    const secondResult = await writeAttachmentToStaging(
+      VALID_SESSION_ID,
+      second,
+      second.name,
+    );
+
+    expect(firstResult.filename).toBe("bundle");
+    expect(secondResult.filename).toBe("bundle-1");
+  });
+
+  it("副檔名大小寫不影響 ZIP 辨識", async () => {
+    const archive = zipSync({ "file.txt": strToU8("content") });
+    const file = new File([archive], "DATA.ZIP");
+
+    const result = await writeAttachmentToStaging(
+      VALID_SESSION_ID,
+      file,
+      file.name,
+    );
+
+    expect(result.filename).toBe("DATA");
+  });
+
+  it("未設定 UTF-8 flag 的 macOS ZIP 仍應保留中文檔名", async () => {
+    const archive = zipSync({ "背水一戰/腳本.md": strToU8("內容") });
+    clearZipUtf8Flags(archive);
+
+    const file = new File([archive], "macos.zip");
+    const result = await writeAttachmentToStaging(
+      VALID_SESSION_ID,
+      file,
+      file.name,
+    );
+
+    expect(result.filename).toBe("macos");
+    expect(
+      await fs.readFile(
+        path.join(
+          stagingDir,
+          VALID_SESSION_ID,
+          "macos/背水一戰/腳本.md",
+        ),
+        "utf8",
+      ),
+    ).toBe("內容");
+  });
+
+  it("損毀的 ZIP 應拒絕並清除解壓目錄", async () => {
+    const { AttachmentInvalidArchiveError } =
+      await import("../../src/services/attachmentErrors.js");
+    const file = new File(["not a zip"], "broken.zip");
+
+    await expect(
+      writeAttachmentToStaging(VALID_SESSION_ID, file, file.name),
+    ).rejects.toBeInstanceOf(AttachmentInvalidArchiveError);
+    await expect(
+      fs.access(path.join(stagingDir, VALID_SESSION_ID, "broken")),
+    ).rejects.toThrow();
+  });
+
+  it("ZIP 內含路徑穿越時應拒絕且不可寫出 staging", async () => {
+    const { AttachmentInvalidArchiveError } =
+      await import("../../src/services/attachmentErrors.js");
+    const archive = zipSync({ "../outside.txt": strToU8("unsafe") });
+    const file = new File([archive], "unsafe.zip");
+
+    await expect(
+      writeAttachmentToStaging(VALID_SESSION_ID, file, file.name),
+    ).rejects.toBeInstanceOf(AttachmentInvalidArchiveError);
+    await expect(fs.access(path.join(stagingDir, "outside.txt"))).rejects.toThrow();
+  });
+
+  it("ZIP 宣告的解壓後總大小超過 100 MB 時應拒絕", async () => {
+    const { AttachmentArchiveTooLargeError } =
+      await import("../../src/services/attachmentErrors.js");
+    const archive = zipSync({ "large.bin": strToU8("small") });
+    const view = new DataView(
+      archive.buffer,
+      archive.byteOffset,
+      archive.byteLength,
+    );
+    for (let offset = 0; offset <= archive.byteLength - 4; offset += 1) {
+      if (view.getUint32(offset, true) === 0x02014b50) {
+        view.setUint32(offset + 24, MAX_SINGLE_BYTES + 1, true);
+        break;
+      }
+    }
+    const file = new File([archive], "large.zip");
+
+    await expect(
+      writeAttachmentToStaging(VALID_SESSION_ID, file, file.name),
+    ).rejects.toBeInstanceOf(AttachmentArchiveTooLargeError);
+  });
+});
+
+// ================================================================
 // writeAttachmentToStaging — 大小限制
 // ================================================================
 describe("writeAttachmentToStaging — 大小限制", () => {
-  it("單檔超過 10 MB 應拋 AttachmentTooLargeError", async () => {
+  it("單檔超過 100 MB 應拋 AttachmentTooLargeError", async () => {
     const { AttachmentTooLargeError } =
       await import("../../src/services/attachmentErrors.js");
 
-    const bigContent = new Uint8Array(MAX_SINGLE_BYTES + 1);
-    const file = new File([bigContent], "big.bin");
+    const file = new File([], "big.bin");
+    Object.defineProperty(file, "size", { value: MAX_SINGLE_BYTES + 1 });
 
     await expect(
       writeAttachmentToStaging(VALID_SESSION_ID, file, "big.bin"),
     ).rejects.toBeInstanceOf(AttachmentTooLargeError);
   });
 
-  it("剛好等於 10 MB 的單檔不應拋錯", async () => {
-    const exactContent = new Uint8Array(MAX_SINGLE_BYTES);
-    const file = new File([exactContent], "exact.bin");
-
-    const result = await writeAttachmentToStaging(
-      VALID_SESSION_ID,
-      file,
-      "exact.bin",
-    );
-
-    expect(result.filename).toBe("exact.bin");
-    expect(result.size).toBe(MAX_SINGLE_BYTES);
+  it("上傳限制常數應為 100 MB", async () => {
+    expect(MAX_SINGLE_BYTES).toBe(100 * 1024 * 1024);
   });
 });
 

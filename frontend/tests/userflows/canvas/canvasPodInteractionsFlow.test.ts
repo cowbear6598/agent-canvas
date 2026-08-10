@@ -6,6 +6,7 @@ import CanvasPod from "@/components/pod/CanvasPod.vue";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useViewportStore } from "@/stores/pod";
+import { useUploadStore } from "@/stores/upload/uploadStore";
 import type { Pod } from "@/types";
 import type { Connection } from "@/types/connection";
 import { setupTestPinia } from "@tests/helpers/mockStoreFactory";
@@ -89,9 +90,11 @@ function mountPod(pod: Pod) {
       stubs: {
         PodModelSelector: { template: "<div />" },
         PodHeader: { template: "<div />" },
-        PodUploadOverlay: { template: "<div />" },
-        PodAnchors: { template: "<div />" },
-        PodActions: { template: "<div />" },
+        PodUploadOverlay: {
+          template: '<div data-testid="upload-overlay" />',
+        },
+        PodAnchors: { template: '<div data-testid="pod-anchors" />' },
+        PodActions: { template: '<div data-testid="pod-actions" />' },
         IntegrationStatusIcon: { template: "<div />" },
         ScheduleModal: { template: "<div />" },
         PluginPopover: {
@@ -208,6 +211,36 @@ describe("CanvasPod user interactions", () => {
     const connectionStore = useConnectionStore();
     connectionStore.connections = [connectionToPod("pod-target")];
     const wrapper = mountPod(makePod({ id: "pod-target" }));
+
+    await wrapper.find(".absolute.select-none").element.dispatchEvent(
+      createDropEvent(),
+    );
+    await nextTick();
+
+    expect(disabledDropAttempts).toEqual([true]);
+    expect(acceptedDropPodIds).toEqual([]);
+  });
+
+  it("上傳失敗待重試時，overlay 應覆蓋完整 Pod 並封鎖其他互動", async () => {
+    const podId = "pod-upload-failed";
+    const wrapper = mountPod(makePod({ id: podId }));
+    const uploadStore = useUploadStore();
+    uploadStore.startUpload(podId, [new File(["content"], "broken.zip")]);
+    const fileEntry = uploadStore.getUploadState(podId).files[0];
+    if (!fileEntry) throw new Error("測試上傳檔案狀態未建立");
+    uploadStore.markFileFailed(
+      podId,
+      fileEntry.id,
+      "ATTACHMENT_INVALID_ARCHIVE",
+    );
+    uploadStore.finalizeUpload(podId);
+    await nextTick();
+
+    expect(
+      wrapper.find('.pod-doodle > [data-testid="upload-overlay"]').exists(),
+    ).toBe(true);
+    expect(wrapper.find('[data-testid="pod-anchors"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="pod-actions"]').exists()).toBe(false);
 
     await wrapper.find(".absolute.select-none").element.dispatchEvent(
       createDropEvent(),

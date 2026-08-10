@@ -60,8 +60,9 @@ function createFile(
   sizeBytes: number,
   type = "text/plain",
 ): File {
-  const content = new Uint8Array(sizeBytes);
-  return new File([content], name, { type });
+  const file = new File([], name, { type });
+  Object.defineProperty(file, "size", { value: sizeBytes });
+  return file;
 }
 
 function createDataTransferItem(isDirectory: boolean): DataTransferItem {
@@ -223,6 +224,10 @@ describe("usePodFileDrop", () => {
   // ─────────────────────────────────────────────
 
   describe("handleDropEvent 驗證", () => {
+    it("Pod 拖曳單檔上限應為 100 MB", () => {
+      expect(MAX_POD_DROP_FILE_BYTES).toBe(100 * 1024 * 1024);
+    });
+
     it("拖入 0 個檔案時，應顯示 errors.attachmentEmpty toast，不觸發上傳", async () => {
       const { handleDropEvent } = usePodFileDrop(createOptions());
       const event = createDropEvent({ files: [] });

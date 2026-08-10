@@ -8,7 +8,8 @@
  * - 缺 uploadSessionId 欄位回 400
  * - uploadSessionId 格式錯（非 UUID v4）回 400
  * - 缺 file 欄位回 400
- * - 檔案超過 10 MB 回 413
+ * - 檔案超過 100 MB 回 413
+ * - ZIP 自動解壓到 staging 同名資料夾
  * - 檔名包含路徑分隔符（../evil）回 400
  * - HTTP 上傳階段不檢查 pod busy（不依賴 pod 狀態）
  * - 錯誤回應 body 格式為 { errorCode, message }，message 為 zh-TW
@@ -19,6 +20,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
+import { strToU8, zipSync } from "fflate";
+import { MAX_SINGLE_BYTES } from "../../src/services/uploadConstants.js";
 
 // ----------------------------------------------------------------
 // mock config：讓 stagingRoot 指向 sandbox tmp 目錄（beforeEach 動態替換）
@@ -82,9 +85,6 @@ const VALID_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000";
 
 /** 合法的 canvasId（UUID v4 格式） */
 const VALID_CANVAS_ID = "aaaabbbb-cccc-4ddd-8eee-ffffffffffff";
-
-/** 單檔最大允許 bytes（10 MB） */
-const MAX_SINGLE_BYTES = 10 * 1024 * 1024;
 
 /** handler 目標 URL */
 const UPLOAD_URL = "http://localhost/api/upload";
@@ -183,6 +183,33 @@ describe("POST /api/upload — 成功案例", () => {
     expect(body.size).toBe(11); // "hello world" 11 bytes
     expect(body.mime).toBe("application/pdf");
     expect(body.uploadSessionId).toBe(VALID_SESSION_ID);
+  });
+
+  it("上傳 ZIP 應自動解壓到 staging 同名資料夾", async () => {
+    const archive = zipSync({
+      "docs/guide.md": strToU8("guide"),
+      "config.json": strToU8('{"enabled":true}'),
+    });
+    const file = new File([archive], "workspace.zip", {
+      type: "application/zip",
+    });
+
+    const res = await handleUpload(makeUploadRequest({ file }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.filename).toBe("workspace");
+    const extractionRoot = path.join(
+      stagingDir,
+      VALID_SESSION_ID,
+      "workspace",
+    );
+    expect(
+      await fs.readFile(path.join(extractionRoot, "docs/guide.md"), "utf8"),
+    ).toBe("guide");
+    expect(
+      await fs.readFile(path.join(extractionRoot, "config.json"), "utf8"),
+    ).toBe('{"enabled":true}');
   });
 
   // ── Case 2：同一 sessionId 連續上傳多檔，staging 目錄累積所有檔案 ──
@@ -357,8 +384,8 @@ describe("POST /api/upload — file 欄位驗證", () => {
 // ================================================================
 
 describe("POST /api/upload — 檔案內容驗證", () => {
-  // ── Case 7：檔案超過 10 MB 回 413 ─────────────────────────────
-  it("檔案超過 10 MB 應回 413，errorCode 為 ATTACHMENT_TOO_LARGE", async () => {
+  // ── Case 7：檔案超過 100 MB 回 413 ────────────────────────────
+  it("檔案超過 100 MB 應回 413，errorCode 為 ATTACHMENT_TOO_LARGE", async () => {
     const bigContent = new Uint8Array(MAX_SINGLE_BYTES + 1);
     const bigFile = new File([bigContent], "huge.bin", {
       type: "application/octet-stream",
@@ -372,6 +399,18 @@ describe("POST /api/upload — 檔案內容驗證", () => {
     expect(body.errorCode).toBe("ATTACHMENT_TOO_LARGE");
     expect(typeof body.message).toBe("string");
     expect(body.message.length).toBeGreaterThan(0);
+  });
+
+  it("ZIP 格式損毀應回 400，errorCode 為 ATTACHMENT_INVALID_ARCHIVE", async () => {
+    const file = new File(["not a zip"], "broken.zip", {
+      type: "application/zip",
+    });
+
+    const res = await handleUpload(makeUploadRequest({ file }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.errorCode).toBe("ATTACHMENT_INVALID_ARCHIVE");
   });
 
   // ── Case 8：檔名包含路徑分隔符（../evil）回 400 ────────────────

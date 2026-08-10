@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUploadStore } from "@/stores/upload/uploadStore";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -52,12 +51,16 @@ const handleRetry = async (): Promise<void> => {
   <!-- 僅在 uploading 或 upload-failed 時渲染，idle 時整個元件不出現 -->
   <div
     v-if="isVisible"
-    class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm px-6"
+    data-testid="pod-upload-overlay"
+    class="absolute inset-0 z-[70] flex flex-col items-center justify-center gap-2 overflow-hidden rounded-[4px] bg-background/95 p-2 backdrop-blur-sm"
+    @mousedown.stop
+    @dblclick.stop
+    @contextmenu.prevent.stop
   >
     <!-- 上傳中視圖 -->
     <template v-if="uploadState.status === 'uploading'">
       <!-- 上傳進度文案 -->
-      <p class="text-sm font-mono text-foreground">
+      <p class="shrink-0 font-mono text-xs font-semibold text-foreground">
         {{
           t("pod.upload.uploading", { percent: uploadState.aggregateProgress })
         }}
@@ -65,7 +68,7 @@ const handleRetry = async (): Promise<void> => {
 
       <!-- 進度條：軌道 + 填充 -->
       <div
-        class="w-full max-w-xs h-2 rounded-full bg-secondary overflow-hidden"
+        class="h-1.5 w-full overflow-hidden rounded-full bg-secondary"
       >
         <div
           class="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
@@ -74,7 +77,7 @@ const handleRetry = async (): Promise<void> => {
       </div>
 
       <!-- 檔案數量文案 -->
-      <p class="text-xs font-mono text-muted-foreground">
+      <p class="shrink-0 font-mono text-[10px] text-muted-foreground">
         {{ t("pod.upload.fileCount", { count: uploadState.files.length }) }}
       </p>
     </template>
@@ -82,7 +85,7 @@ const handleRetry = async (): Promise<void> => {
     <!-- 失敗視圖 -->
     <template v-else-if="uploadState.status === 'upload-failed'">
       <!-- 失敗標題：全部失敗 / 部分失敗 -->
-      <p class="text-sm font-mono font-semibold text-destructive">
+      <p class="shrink-0 font-mono text-xs font-semibold leading-none text-destructive">
         {{
           isAllFailed
             ? t("pod.upload.failedAllTitle")
@@ -91,19 +94,19 @@ const handleRetry = async (): Promise<void> => {
       </p>
 
       <!-- 失敗檔案清單：超過高度時可捲動 -->
-      <ScrollArea class="w-full max-w-xs max-h-40">
-        <ul class="space-y-1">
+      <ScrollArea class="min-h-0 w-full flex-1">
+        <ul class="space-y-1 pr-2">
           <li
             v-for="entry in failedFiles"
             :key="entry.id"
-            class="flex flex-col gap-0.5 rounded px-2 py-1 bg-secondary"
+            class="flex flex-col gap-0.5 rounded bg-secondary px-2 py-1"
           >
             <!-- 檔案名稱 -->
-            <span class="text-xs font-mono text-foreground truncate">
+            <span class="truncate font-mono text-[11px] leading-tight text-foreground">
               {{ entry.name }}
             </span>
             <!-- 失敗原因（對應 i18n key pod.upload.failureReason.<reason>） -->
-            <span class="text-xs font-mono text-muted-foreground">
+            <span class="truncate font-mono text-[10px] leading-tight text-muted-foreground">
               {{ getFailureReasonText(entry.failureReason) }}
             </span>
           </li>
@@ -111,13 +114,14 @@ const handleRetry = async (): Promise<void> => {
       </ScrollArea>
 
       <!-- 重試按鈕 -->
-      <Button
-        variant="outline"
-        size="sm"
-        @click="handleRetry"
+      <button
+        type="button"
+        class="pod-upload-retry-button shrink-0"
+        @mousedown.stop
+        @click.stop="handleRetry"
       >
         {{ t("pod.upload.retry") }}
-      </Button>
+      </button>
     </template>
   </div>
 </template>

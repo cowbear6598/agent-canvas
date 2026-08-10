@@ -5,6 +5,8 @@ import {
   AttachmentInvalidNameError,
   AttachmentDiskFullError,
   AttachmentWriteError,
+  AttachmentInvalidArchiveError,
+  AttachmentArchiveTooLargeError,
 } from "../services/attachmentErrors.js";
 import { UPLOAD_SESSION_ID_REGEX } from "../services/uploadConstants.js";
 import {
@@ -14,6 +16,8 @@ import {
   ERROR_CODE_ATTACHMENT_INVALID_NAME,
   ERROR_CODE_ATTACHMENT_WRITE_FAILED,
   ERROR_CODE_ATTACHMENT_DISK_FULL,
+  ERROR_CODE_ATTACHMENT_INVALID_ARCHIVE,
+  ERROR_CODE_ATTACHMENT_ARCHIVE_TOO_LARGE,
 } from "../types/errorCodes.js";
 import { HTTP_STATUS } from "../constants.js";
 import { logger } from "../utils/logger.js";
@@ -152,13 +156,31 @@ export async function handleUpload(req: Request): Promise<Response> {
       HTTP_STATUS.OK,
     );
   } catch (err) {
+    if (err instanceof AttachmentArchiveTooLargeError) {
+      return new Response(
+        JSON.stringify({
+          errorCode: ERROR_CODE_ATTACHMENT_ARCHIVE_TOO_LARGE,
+          message: "ZIP 解壓後總大小超過允許的最大大小（100 MB）",
+        }),
+        { status: 413, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (err instanceof AttachmentTooLargeError) {
       return new Response(
         JSON.stringify({
           errorCode: ERROR_CODE_ATTACHMENT_TOO_LARGE,
-          message: "檔案超過允許的最大大小（10 MB）",
+          message: "檔案超過允許的最大大小（100 MB）",
         }),
         { status: 413, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (err instanceof AttachmentInvalidArchiveError) {
+      return jsonResponse(
+        {
+          errorCode: ERROR_CODE_ATTACHMENT_INVALID_ARCHIVE,
+          message: "ZIP 檔案格式無效、已損毀或含有不安全內容",
+        },
+        HTTP_STATUS.BAD_REQUEST,
       );
     }
     if (err instanceof AttachmentInvalidNameError) {

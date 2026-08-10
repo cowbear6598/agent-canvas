@@ -296,10 +296,12 @@
         "aborted": "アップロードがキャンセルされました",
         "UPLOAD_NO_FILE": "ファイルが指定されていません",
         "UPLOAD_INVALID_SESSION_ID": "アップロードセッション ID の形式が正しくありません",
-        "ATTACHMENT_TOO_LARGE": "ファイルが 10MB の上限を超えています",
+        "ATTACHMENT_TOO_LARGE": "ファイルが 100 MB の上限を超えています",
         "ATTACHMENT_INVALID_NAME": "ファイル名が無効です",
         "ATTACHMENT_WRITE_FAILED": "サーバーへの書き込みに失敗しました",
-        "ATTACHMENT_DISK_FULL": "サーバーのディスク容量が不足しています"
+        "ATTACHMENT_DISK_FULL": "サーバーのディスク容量が不足しています",
+        "ATTACHMENT_INVALID_ARCHIVE": "ZIP ファイルが無効か、安全でない内容が含まれています",
+        "ATTACHMENT_ARCHIVE_TOO_LARGE": "ZIP の展開後サイズが 100 MB の上限を超えています"
       }
     },
     "slot": {
@@ -1096,10 +1098,12 @@
     "resourceInUse": "{resource} は {count} 個の Pod で使用中のため、削除できません",
     "attachmentFolderNotAllowed": "フォルダはサポートされていません",
     "attachmentEmpty": "アップロードできるファイルがありません。ファイルを選択して再試行してください",
-    "attachmentTooLarge": "ファイルが 10 MB の上限を超えています",
+    "attachmentTooLarge": "ファイルが 100 MB の上限を超えています",
     "attachmentInvalidName": "ファイル名が無効です",
     "attachmentDiskFull": "ディスク容量が不足しているため、ファイルを書き込めません",
     "attachmentWriteFailed": "ファイルの書き込みに失敗しました。しばらくしてから再試行してください",
+    "attachmentInvalidArchive": "ZIP ファイルが無効、破損、または安全でない内容を含んでいます",
+    "attachmentArchiveTooLarge": "ZIP の展開後サイズが 100 MB の上限を超えています",
     "uploadSessionNotFound": "アップロードセッションが見つからないか、期限切れです。再度アップロードしてください",
     "uploadInvalidSessionId": "アップロードセッション ID の形式が無効です",
     "uploadNoFile": "リクエストにファイルが含まれていません。ファイルを選択して再試行してください",

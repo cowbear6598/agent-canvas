@@ -18,7 +18,9 @@ export type UploadFailureReason =
   | "ATTACHMENT_TOO_LARGE"
   | "ATTACHMENT_INVALID_NAME"
   | "ATTACHMENT_WRITE_FAILED"
-  | "ATTACHMENT_DISK_FULL";
+  | "ATTACHMENT_DISK_FULL"
+  | "ATTACHMENT_INVALID_ARCHIVE"
+  | "ATTACHMENT_ARCHIVE_TOO_LARGE";
 
 /** 上傳失敗的自訂錯誤類別 */
 export class UploadError extends Error {

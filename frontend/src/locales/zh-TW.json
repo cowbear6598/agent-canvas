@@ -296,10 +296,12 @@
         "aborted": "上傳已取消",
         "UPLOAD_NO_FILE": "未提供檔案",
         "UPLOAD_INVALID_SESSION_ID": "上傳識別碼格式錯誤",
-        "ATTACHMENT_TOO_LARGE": "檔案超過 10MB 上限",
+        "ATTACHMENT_TOO_LARGE": "檔案超過 100 MB 上限",
         "ATTACHMENT_INVALID_NAME": "檔名不合法",
         "ATTACHMENT_WRITE_FAILED": "伺服器寫入失敗",
-        "ATTACHMENT_DISK_FULL": "伺服器磁碟空間不足"
+        "ATTACHMENT_DISK_FULL": "伺服器磁碟空間不足",
+        "ATTACHMENT_INVALID_ARCHIVE": "ZIP 檔案無效或含有不安全內容",
+        "ATTACHMENT_ARCHIVE_TOO_LARGE": "ZIP 解壓後超過 100 MB 上限"
       }
     },
     "slot": {
@@ -1096,10 +1098,12 @@
     "resourceInUse": "{resource} 正在被 {count} 個 Pod 使用中，無法刪除",
     "attachmentFolderNotAllowed": "不支援拖入資料夾",
     "attachmentEmpty": "沒有可上傳的檔案，請選擇檔案後再試一次",
-    "attachmentTooLarge": "單檔大小超過 10 MB 上限",
+    "attachmentTooLarge": "單檔大小超過 100 MB 上限",
     "attachmentInvalidName": "檔案名稱不合法",
     "attachmentDiskFull": "磁碟空間不足，無法寫入檔案",
     "attachmentWriteFailed": "檔案寫入失敗，請稍後再試",
+    "attachmentInvalidArchive": "ZIP 檔案格式無效、已損毀或含有不安全內容",
+    "attachmentArchiveTooLarge": "ZIP 解壓後總大小超過 100 MB 上限",
     "uploadSessionNotFound": "找不到對應的上傳 session，可能已過期，請重新上傳",
     "uploadInvalidSessionId": "上傳 session ID 格式不合法",
     "uploadNoFile": "請求中缺少檔案欄位，請重新選擇檔案上傳",

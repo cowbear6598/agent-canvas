@@ -19,6 +19,7 @@ import {
   MAX_SINGLE_BYTES,
   UPLOAD_SESSION_ID_REGEX,
 } from "./uploadConstants.js";
+import { extractZipAttachment } from "./attachmentZipExtractor.js";
 
 export interface WriteAttachmentsResult {
   /** 最終落地目錄絕對路徑（<tmpRoot>/<chatMessageId>/） */
@@ -29,7 +30,7 @@ export interface WriteAttachmentsResult {
 
 /** staging 單一上傳結果 */
 export interface StagingWriteResult {
-  /** 落地後的 sanitized filename（含 collision rename） */
+  /** 落地後的檔案或資料夾名稱（含 collision rename） */
   filename: string;
   /** 檔案 bytes 大小 */
   size: number;
@@ -88,6 +89,7 @@ function resolveUniqueFilename(name: string, usedSet: Set<string>): string {
  * - sanitize 檔名，不合法直接拋出 AttachmentInvalidNameError
  * - 讀取目錄已有檔案後做 collision rename，確保不覆蓋同名檔
  * - 單檔超過 MAX_SINGLE_BYTES 拋出 AttachmentTooLargeError
+ * - ZIP 檔案安全解壓到同名資料夾，不保留原始壓縮檔
  * - 寫入失敗時清除已寫入的部分檔案後 rethrow AttachmentWriteError
  */
 export async function writeAttachmentToStaging(
@@ -136,15 +138,23 @@ export async function writeAttachmentToStaging(
     // 目錄剛建立時可能尚無內容，保持空陣列即可
   }
 
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  if (/\.zip$/i.test(sanitized)) {
+    const result = await extractZipAttachment(bytes, sessionDir, sanitized);
+    return {
+      filename: result.directoryName,
+      size: bytes.byteLength,
+      mime: file.type,
+    };
+  }
+
   const usedSet = new Set(existingFiles);
   const finalFilename = resolveUniqueFilename(sanitized, usedSet);
   const destPath = path.join(sessionDir, finalFilename);
 
-  const arrayBuffer = await file.arrayBuffer();
-  const buf = Buffer.from(arrayBuffer);
-
   try {
-    await fs.writeFile(destPath, buf);
+    await fs.writeFile(destPath, bytes);
   } catch (err) {
     // 清除寫到一半的檔案後 rethrow
     await fs.rm(destPath, { force: true }).catch(() => void 0);
@@ -153,7 +163,7 @@ export async function writeAttachmentToStaging(
 
   return {
     filename: finalFilename,
-    size: buf.length,
+    size: bytes.byteLength,
     mime: file.type,
   };
 }

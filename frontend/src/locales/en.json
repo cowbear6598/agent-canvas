@@ -296,10 +296,12 @@
         "aborted": "Upload cancelled",
         "UPLOAD_NO_FILE": "No file provided",
         "UPLOAD_INVALID_SESSION_ID": "Invalid upload session ID",
-        "ATTACHMENT_TOO_LARGE": "File exceeds the 10 MB limit",
+        "ATTACHMENT_TOO_LARGE": "File exceeds the 100 MB limit",
         "ATTACHMENT_INVALID_NAME": "Invalid file name",
         "ATTACHMENT_WRITE_FAILED": "Server failed to write file",
-        "ATTACHMENT_DISK_FULL": "Server disk space is full"
+        "ATTACHMENT_DISK_FULL": "Server disk space is full",
+        "ATTACHMENT_INVALID_ARCHIVE": "The ZIP file is invalid or contains unsafe content",
+        "ATTACHMENT_ARCHIVE_TOO_LARGE": "The extracted ZIP exceeds the 100 MB limit"
       }
     },
     "slot": {
@@ -1096,10 +1098,12 @@
     "resourceInUse": "{resource} is being used by {count} Pod(s), cannot delete",
     "attachmentFolderNotAllowed": "Folders are not supported.",
     "attachmentEmpty": "No files to upload. Please select files and try again.",
-    "attachmentTooLarge": "A single file exceeds the 10 MB limit.",
+    "attachmentTooLarge": "A single file exceeds the 100 MB limit.",
     "attachmentInvalidName": "Invalid file name.",
     "attachmentDiskFull": "Disk space is full. Unable to write file.",
     "attachmentWriteFailed": "Failed to write file. Please try again later.",
+    "attachmentInvalidArchive": "The ZIP file is invalid, corrupted, or contains unsafe content.",
+    "attachmentArchiveTooLarge": "The extracted ZIP exceeds the 100 MB limit.",
     "uploadSessionNotFound": "Upload session not found or expired. Please try uploading again.",
     "uploadInvalidSessionId": "The upload session ID is invalid.",
     "uploadNoFile": "No file found in the request. Please select a file and try again.",

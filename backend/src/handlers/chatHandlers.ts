@@ -143,7 +143,7 @@ async function handleChatSendWithUploadSession(
   // llmTriggerText：僅傳給 LLM，包含絕對路徑以讓 agent 能以 Read tool 讀取附件目錄。
   // 安全 trade-off：LLM 仍會收到絕對路徑，此為讓 agent 正常讀取附件的必要設計。
   // 若未來改為 per-pod workspace symlink 方案，可消除此洩漏，但需重構 tmpRoot 管理邏輯。
-  const llmTriggerText = `我提供了下列檔案在 \`${promoteResult.dir}\`：${fileList}`;
+  const llmTriggerText = `我提供了下列檔案或資料夾在 \`${promoteResult.dir}\`：${fileList}`;
 
   // multi-instance pod：建新 Run，userMessageId 透傳確保落地一致
   // multi-instance 路徑由 Run 自行管理訊息儲存，此處傳 llmTriggerText 供 LLM 讀取附件

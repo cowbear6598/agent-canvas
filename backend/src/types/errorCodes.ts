@@ -22,6 +22,10 @@ export const ERROR_CODE_ATTACHMENT_INVALID_NAME =
 export const ERROR_CODE_ATTACHMENT_DISK_FULL = "ATTACHMENT_DISK_FULL" as const;
 export const ERROR_CODE_ATTACHMENT_WRITE_FAILED =
   "ATTACHMENT_WRITE_FAILED" as const;
+export const ERROR_CODE_ATTACHMENT_INVALID_ARCHIVE =
+  "ATTACHMENT_INVALID_ARCHIVE" as const;
+export const ERROR_CODE_ATTACHMENT_ARCHIVE_TOO_LARGE =
+  "ATTACHMENT_ARCHIVE_TOO_LARGE" as const;
 
 // ── Upload 錯誤碼 ─────────────────────────────────────────────────
 /** 找不到對應 staging session（前端可能上傳未完成或 session 已過期） */
@@ -43,6 +47,10 @@ export const I18N_KEY_ATTACHMENT_DISK_FULL =
   "errors.attachmentDiskFull" as const;
 export const I18N_KEY_ATTACHMENT_WRITE_FAILED =
   "errors.attachmentWriteFailed" as const;
+export const I18N_KEY_ATTACHMENT_INVALID_ARCHIVE =
+  "errors.attachmentInvalidArchive" as const;
+export const I18N_KEY_ATTACHMENT_ARCHIVE_TOO_LARGE =
+  "errors.attachmentArchiveTooLarge" as const;
 
 // ── Upload i18n key 常量 ──────────────────────────────────────────
 export const I18N_KEY_UPLOAD_SESSION_NOT_FOUND =

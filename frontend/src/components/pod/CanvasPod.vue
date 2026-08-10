@@ -70,6 +70,12 @@ const goalTodoCount = computed(() => props.pod.goal?.todos.length ?? 0);
 
 const dividerPath = computed(() => createPodDividerPath(props.pod.id));
 
+// ---- 上傳狀態（來自 uploadStore，避免與 chatStore 狀態互相覆蓋）----
+/** 上傳中或等待重試時都應由 overlay 完整接管 Pod 互動。 */
+const isPodUploadActive = computed(
+  () => uploadStore.getUploadState(props.pod.id).status !== "idle",
+);
+
 // isElementSelected 內部使用 selectedElementSet（Set<string>），O(1) 查找
 const isSelected = computed(() =>
   selectionStore.isElementSelected("pod", props.pod.id),
@@ -140,7 +146,7 @@ const {
   handleDragLeave,
   handleDropEvent,
 } = usePodFileDrop({
-  disabled: () => isFileDropDisabled.value,
+  disabled: () => isFileDropDisabled.value || isPodUploadActive.value,
   getCanvasId: () => canvasStore.activeCanvasId,
 });
 
@@ -198,18 +204,6 @@ watch(
 
 // MCP notch 相關狀態
 const podMcpActiveCount = computed(() => props.pod.mcpServerNames?.length ?? 0);
-
-// ---- 上傳狀態（來自 uploadStore，避免與 chatStore 狀態互相覆蓋）----
-/**
- * 判斷此 Pod 是否正在上傳中（uploadStore.isUploading getter）。
- * 封鎖右鍵選單、連線把手、刪除按鈕等互動，但放行 Pod 拖移。
- */
-const isPodUploading = computed(() => uploadStore.isUploading(props.pod.id));
-
-/** 上傳狀態（uploading / upload-failed / idle），用於控制 overlay 渲染 */
-const podUploadStatus = computed(
-  () => uploadStore.getUploadState(props.pod.id).status,
-);
 
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =
@@ -354,7 +348,7 @@ const handleThinkingLevelChange = async (level: string): Promise<void> => {
 
 const handleContextMenu = (e: MouseEvent): void => {
   // 上傳中封鎖右鍵選單，避免誤觸刪除或其他操作
-  if (isPodUploading.value) {
+  if (isPodUploadActive.value) {
     e.preventDefault();
     return;
   }
@@ -437,9 +431,9 @@ const handleContextMenu = (e: MouseEvent): void => {
         <div class="repository-notch" />
         <div class="goal-notch" />
 
-        <!-- 上傳中隱藏連線把手，避免誤建立連線；放行 Pod 拖移（標題列邏輯未動） -->
+        <!-- 上傳流程中或失敗待重試時隱藏連線把手，避免誤建立連線。 -->
         <PodAnchors
-          v-if="!isPodUploading"
+          v-if="!isPodUploadActive"
           :pod-id="pod.id"
           @drag-start="handleAnchorDragStart"
           @drag-move="handleAnchorDragMove"
@@ -448,10 +442,9 @@ const handleContextMenu = (e: MouseEvent): void => {
 
         <IntegrationStatusIcon :bindings="pod.integrationBindings ?? []" />
 
-        <!-- 聊天區容器：加 relative 使 PodUploadOverlay 的 absolute inset-0 可正確定位
-             flex flex-col：禁用 child 之間的 margin collapse，讓 divider 與 button group
+        <!-- 聊天區容器：flex flex-col 禁用 child 之間的 margin collapse，讓 divider 與 button group
              的垂直間距精確等於設定值 -->
-        <div class="p-3 relative flex flex-col">
+        <div class="p-3 flex flex-col">
           <PodHeader
             :name="pod.name"
             :is-editing="isEditing"
@@ -486,21 +479,19 @@ const handleContextMenu = (e: MouseEvent): void => {
               {{ $t("pod.provider.unknownDescription") }}
             </span>
           </div>
-
-          <!-- 上傳中 / 上傳失敗 overlay：
-               absolute inset-0 蓋住聊天區（輸入區 + 訊息區），封鎖所有點擊。
-               僅在 uploading 或 upload-failed 時渲染，idle 時不 mount，避免不必要的 re-render。
-               overlay 自身內部已有 v-if 控制，外層再加 v-if 雙重保險。 -->
-          <PodUploadOverlay
-            v-if="isPodUploading || podUploadStatus === 'upload-failed'"
-            :pod-id="pod.id"
-          />
         </div>
+
+        <!-- 直接掛在 pod-doodle 下，absolute inset-0 才會覆蓋完整 Pod。 -->
+        <PodUploadOverlay
+          v-if="isPodUploadActive"
+          :pod-id="pod.id"
+        />
 
         <!-- PodActions 放在 pod-doodle 內部，讓 button-group 的 absolute 定位
              錨點為 pod-doodle 本體（min-height 102），避免被 pod-wrapper 的 slot
-             子元素影響到參考座標。is-uploading 傳入讓刪除按鈕在上傳中 disabled + tooltip -->
+             子元素影響到參考座標；上傳流程由 overlay 接管時不渲染。 -->
         <PodActions
+          v-if="!isPodUploadActive"
           :pod-name="pod.name"
           :show-schedule-button="showScheduleButton"
           :show-delete-dialog="showDeleteDialog"
@@ -509,7 +500,6 @@ const handleContextMenu = (e: MouseEvent): void => {
           :schedule-enabled="scheduleEnabled"
           :schedule-tooltip="scheduleTooltip"
           :is-schedule-fired-animating="isScheduleFiredAnimating"
-          :is-uploading="isPodUploading"
           @open-schedule-modal="handleOpenScheduleModal"
           @update:show-delete-dialog="showDeleteDialog = $event"
           @delete="handleDelete"
