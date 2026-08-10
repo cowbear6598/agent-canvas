@@ -126,10 +126,12 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
     success: boolean,
     error?: string,
   ): void {
+    if (context.runContext) return;
     this.completionHandlers.onComplete(context, success, error);
   }
 
   onError(context: CompletionContext, errorMessage: string): void {
+    if (context.runContext) return;
     this.completionHandlers.onError(context, errorMessage);
   }
 

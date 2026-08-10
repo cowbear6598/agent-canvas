@@ -9,6 +9,7 @@ import { runStore } from "./runStore.js";
 import { runExecutionService } from "./workflow/runExecutionService.js";
 import { injectRunUserMessage } from "../utils/runChatHelpers.js";
 import { createChatEmitStrategy } from "./chatEmitStrategy.js";
+import type { SessionContinuityPolicy } from "./workflow/workflowLoopPolicy.js";
 
 /**
  * 事件發送策略介面，負責 Run mode 的 WebSocket 事件發送。
@@ -65,18 +66,28 @@ export class ChatExecutionStrategy {
   constructor(
     private readonly canvasId: string,
     private readonly runContext: RunContext,
+    private readonly sessionContinuity: SessionContinuityPolicy =
+      "resume-session",
   ) {}
 
   withGoalRuntimeScope(goalRuntimeScopeId: string): ChatExecutionStrategy {
-    return new ChatExecutionStrategy(this.canvasId, {
-      ...this.runContext,
-      goalRuntimeScopeId,
-    });
+    return new ChatExecutionStrategy(
+      this.canvasId,
+      {
+        ...this.runContext,
+        goalRuntimeScopeId,
+      },
+      this.sessionContinuity,
+    );
   }
 
   getSessionId(podId: string): string | undefined {
     if (this.runContext.goalRuntimeScopeId) {
       return this.scopedSessionId;
+    }
+
+    if (this.sessionContinuity === "new-session") {
+      return undefined;
     }
 
     const instance = runStore.getPodInstance(this.runContext.runId, podId);

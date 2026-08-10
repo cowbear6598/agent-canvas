@@ -24,6 +24,7 @@ import {
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
 import { memoryMaintainerService } from "../../src/services/memoryMaintainerService.js";
+import { runQueueService } from "../../src/services/workflow/runQueueService.js";
 
 // --- 測試常數 ---
 const CANVAS_ID = "canvas-exec-1";
@@ -106,6 +107,31 @@ describe("RunExecutionService", () => {
   });
 
   describe("createRun", () => {
+    it("循環 chain 中的 Pod 完成一輪後維持 waiting，Run 持續 running", async () => {
+      const targetPodId = "pod-loop-target";
+      insertConnection(CANVAS_ID, SOURCE_POD_ID, targetPodId, "auto");
+      insertConnection(CANVAS_ID, targetPodId, SOURCE_POD_ID, "auto");
+
+      const ctx = await runExecutionService.createRun(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        "測試循環",
+      );
+
+      expect(runExecutionService.isCyclicPod(ctx, SOURCE_POD_ID)).toBe(true);
+      expect(runExecutionService.isCyclicPod(ctx, targetPodId)).toBe(true);
+
+      const sourceInstance = runStore.getPodInstance(ctx.runId, SOURCE_POD_ID);
+      expect(sourceInstance).toBeDefined();
+      runStore.updatePodInstanceStatus(sourceInstance!.id, "running");
+      runExecutionService.settlePodTrigger(ctx, SOURCE_POD_ID, "auto");
+
+      expect(runStore.getPodInstance(ctx.runId, SOURCE_POD_ID)?.status).toBe(
+        "waiting",
+      );
+      expect(runStore.getRun(ctx.runId)?.status).toBe("running");
+    });
+
     it("建立 Run 並為 chain 中所有 pod 建立 instance", async () => {
       const targetPodId = "pod-target";
       insertConnection(CANVAS_ID, SOURCE_POD_ID, targetPodId, "auto");
@@ -1202,10 +1228,12 @@ describe("RunExecutionService", () => {
       runExecutionService.registerActiveStream(run.id, "pod-active");
 
       const abortSpy = vi.spyOn(abortRegistry, "abort").mockReturnValue(true);
+      const clearQueueSpy = vi.spyOn(runQueueService, "clearRun");
 
       await runExecutionService.deleteRun(run.id);
 
       expect(abortSpy).toHaveBeenCalledWith(`${run.id}:pod-active`);
+      expect(clearQueueSpy).toHaveBeenCalledWith(run.id);
       expect(runStore.getRun(run.id)).toBeUndefined();
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         CANVAS_ID,

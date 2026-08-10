@@ -111,6 +111,16 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     return queue ? queue.length : 0;
   }
 
+  clearRun(runId: string): void {
+    const prefix = `${runId}:`;
+    for (const key of this.queues.keys()) {
+      if (key.startsWith(prefix)) this.queues.delete(key);
+    }
+    for (const key of this.processingKeys) {
+      if (key.startsWith(prefix)) this.processingKeys.delete(key);
+    }
+  }
+
   private clearQueue(key: string): number {
     const size = this.getQueueSize(key);
     this.queues.delete(key);
@@ -123,6 +133,10 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     runContext: RunContext,
   ): Promise<void> {
     const key = buildRunQueueKey(runContext.runId, targetPodId);
+    if (runStore.getRun(runContext.runId)?.status !== "running") {
+      this.clearRun(runContext.runId);
+      return;
+    }
     if (this.processingKeys.has(key)) {
       return;
     }

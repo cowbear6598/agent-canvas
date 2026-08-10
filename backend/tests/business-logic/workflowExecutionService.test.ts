@@ -13,6 +13,7 @@ import type { TriggerStrategy } from "../../src/services/workflow/types.js";
 import type { RunContext } from "../../src/types/run.js";
 import path from "path";
 import { config } from "../../src/config/index.js";
+import * as runChatHelpers from "../../src/utils/runChatHelpers.js";
 
 // ─── 常數 ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,17 @@ function setupBasicSpies() {
     summary: "Test summary",
     targetPodId: TARGET_POD_ID,
   });
+  vi.spyOn(runStore, "getRun").mockImplementation(((runId: string) => ({
+    id: runId,
+    canvasId: CANVAS_ID,
+    sourcePodId: SOURCE_POD_ID,
+    triggerMessage: "測試",
+    status: "running",
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+  })) as typeof runStore.getRun);
+  vi.spyOn(workflowExecutionService, "isCyclicPod").mockReturnValue(false);
+  vi.spyOn(runChatHelpers, "injectRunUserMessage").mockResolvedValue(undefined);
   vi.spyOn(podStore, "getById").mockImplementation(((
     _cId: string,
     podId: string,

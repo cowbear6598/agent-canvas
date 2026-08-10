@@ -140,6 +140,8 @@ export interface TriggerWorkflowWithSummaryParams {
 }
 
 export interface ExecutionServiceMethods {
+  isCyclicPod(runContext: RunContext, podId: string): boolean;
+
   generateSummaryWithFallback(
     canvasId: string,
     sourcePodId: string,

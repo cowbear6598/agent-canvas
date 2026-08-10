@@ -69,6 +69,7 @@ export function decidePodStatusAfterTriggerSettlement(
     "status" | "autoPathwaySettled" | "directPathwaySettled"
   >,
   queueSize: number,
+  keepAlive: boolean = false,
 ): RunPodInstanceStatus | null {
   if (
     !isAllPathwaysSettled(
@@ -81,7 +82,7 @@ export function decidePodStatusAfterTriggerSettlement(
 
   if (NEVER_TRIGGERED_STATUSES.has(instance.status)) return null;
   if (queueSize > 0) return null;
-  return "completed";
+  return keepAlive ? "waiting" : "completed";
 }
 
 export function decideRunTerminalStatus(

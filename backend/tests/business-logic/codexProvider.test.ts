@@ -160,10 +160,10 @@ describe("CodexProvider", () => {
     ).toBe(false);
   });
 
-  // ── Case 2：resume 時 spawn 指令包含 resume <id>，不含 --cd，並使用 bypass ─────────
+  // ── Case 2：resume 時 spawn 指令包含 resume <id>、model 與 bypass，不含 --cd ──
   // `codex exec resume` 不接受 --cd flag（會導致 "unexpected argument" 錯誤），
   // 工作目錄改由 Bun.spawn cwd 定錨。
-  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> 及 bypass 旗標，且不含 --cd", async () => {
+  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id>、model 及 bypass 旗標，且不含 --cd", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -182,6 +182,8 @@ describe("CodexProvider", () => {
       "-",
       "--json",
       "--dangerously-bypass-approvals-and-sandbox",
+      "--model",
+      "gpt-5.5",
     ]);
     // resume 模式不應含 --cd，且不應殘留舊 sandbox config
     expect(spawnArgs).not.toContain("--cd");
@@ -190,8 +192,6 @@ describe("CodexProvider", () => {
     expect(
       spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
     ).toBe(false);
-    // resume 模式由 session 決定 model，不應含 --model 旗標
-    expect(spawnArgs).not.toContain("--model");
   });
 
   it("有 Goal MCP 時，應一律 bootstrap 成先讀 Goal Runtime 的提示", async () => {

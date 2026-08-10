@@ -115,6 +115,7 @@ describe("WorkflowPipeline", () => {
   };
 
   const mockExecutionService = {
+    isCyclicPod: vi.fn().mockReturnValue(false),
     generateSummaryWithFallback: vi.fn(),
     triggerWorkflowWithSummary: vi.fn(),
   };
@@ -150,6 +151,16 @@ describe("WorkflowPipeline", () => {
     });
     vi.spyOn(socketService, "emitToCanvas").mockImplementation(() => {});
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
+    vi.spyOn(runStore, "getRun").mockReturnValue({
+      id: baseRunContext.runId,
+      canvasId: CANVAS_ID,
+      sourcePodId: SOURCE_POD_ID,
+      triggerMessage: "測試",
+      status: "running",
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    });
+    mockExecutionService.isCyclicPod.mockReturnValue(false);
     mockQueuedPodInstance.mockClear();
     mockHasActiveStream.mockReturnValue(false);
 
@@ -678,6 +689,34 @@ describe("WorkflowPipeline", () => {
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).not.toHaveBeenCalled();
+    });
+
+    it("循環 target 即使上一輪為 completed 仍可重新觸發", async () => {
+      const mockStrategy = makeStrategy("auto");
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue(
+        makeRunInstance("completed"),
+      );
+      mockExecutionService.isCyclicPod.mockReturnValue(true);
+
+      await workflowPipeline.execute(runContextPipelineBase, mockStrategy);
+
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalled();
+    });
+
+    it("循環 target 在 summarizing 時仍會進入後續 queue 流程", async () => {
+      const mockStrategy = makeStrategy("auto");
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue(
+        makeRunInstance("summarizing"),
+      );
+      mockExecutionService.isCyclicPod.mockReturnValue(true);
+
+      await workflowPipeline.execute(runContextPipelineBase, mockStrategy);
+
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalled();
     });
 
     it("skipped target instances are not triggered again", async () => {

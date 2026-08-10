@@ -36,7 +36,17 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       runContext.runId,
       targetPodId,
     );
-    return !targetInstance || TRIGGERABLE_STATUSES.has(targetInstance.status);
+    if (!targetInstance) return true;
+    if (TRIGGERABLE_STATUSES.has(targetInstance.status)) return true;
+    return (
+      this.deps.executionService.isCyclicPod(runContext, targetPodId) &&
+      (targetInstance.status === "summarizing" ||
+        targetInstance.status === "completed")
+    );
+  }
+
+  private isRunActive(runContext: PipelineContext["runContext"]): boolean {
+    return runStore.getRun(runContext.runId)?.status === "running";
   }
 
   /**
@@ -58,6 +68,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     const { canvasId, sourcePodId, connection, triggerMode, runContext } =
       context;
     const { targetPodId, id: connectionId } = connection;
+
+    if (!this.isRunActive(runContext)) return;
 
     const targetPod = podStore.getById(canvasId, targetPodId);
     if (!targetPod) {
@@ -117,6 +129,9 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     if (!summaryResult) {
       return;
     }
+
+    // 摘要查詢期間使用者可能刪除 Run，不可再啟動下一輪。
+    if (!this.isRunActive(runContext)) return;
 
     const collectResult = await this.runCollectSourcesStage(
       context,

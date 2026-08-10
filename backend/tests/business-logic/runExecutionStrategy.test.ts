@@ -99,6 +99,20 @@ describe("ChatExecutionStrategy", () => {
   }
 
   describe("getSessionId", () => {
+    it("new-session policy 不沿用 Pod instance 的既有 sessionId", () => {
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue({
+        id: "instance-1",
+        sessionId: "previous-session",
+      } as ReturnType<typeof runStore.getPodInstance>);
+      const strategy = new ChatExecutionStrategy(
+        CANVAS_ID,
+        runContext,
+        "new-session",
+      );
+
+      expect(strategy.getSessionId("pod-1")).toBeUndefined();
+    });
+
     it("Pod instance 不存在時應回傳 undefined", () => {
       vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
       const strategy = makeStrategy();

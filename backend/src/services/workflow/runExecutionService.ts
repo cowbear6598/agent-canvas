@@ -47,6 +47,7 @@ import {
   completeRunLifecycle,
 } from "./runCompletionLifecycle.js";
 import { RunResourceLifecycleService } from "./runResourceLifecycleService.js";
+import { collectCyclicPodIds } from "./workflowLoopPolicy.js";
 
 const GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE =
   "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod";
@@ -151,6 +152,8 @@ class RunExecutionService {
 
   private readonly resourceLifecycle = new RunResourceLifecycleService();
 
+  private readonly cyclicPodIdsByRun = new Map<string, Set<string>>();
+
   async createRun(
     canvasId: string,
     sourcePodId: string,
@@ -168,6 +171,10 @@ class RunExecutionService {
       canvasId,
       sourcePodId,
     };
+    this.cyclicPodIdsByRun.set(
+      workflowRun.id,
+      collectCyclicPodIds(chainPodIds, connectionStore.list(canvasId)),
+    );
     // 同一 Run 內相同 repositoryId 的 Pod 共用同一份 repo-level workspace
     const runRepoCache = new Map<
       string,
@@ -431,9 +438,25 @@ class RunExecutionService {
       );
       return;
     }
-    const nextStatus = decidePodStartStatus(instance.status);
+    const nextStatus =
+      this.isCyclicPod(runContext, podId) && instance.status === "completed"
+        ? "running"
+        : decidePodStartStatus(instance.status);
     if (!nextStatus) return;
     this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus);
+  }
+
+  isCyclicPod(runContext: RunContext, podId: string): boolean {
+    let cyclicPodIds = this.cyclicPodIdsByRun.get(runContext.runId);
+    if (!cyclicPodIds) {
+      const instances = runStore.getPodInstancesByRunId(runContext.runId);
+      cyclicPodIds = collectCyclicPodIds(
+        instances.map((instance) => instance.podId),
+        connectionStore.list(runContext.canvasId),
+      );
+      this.cyclicPodIdsByRun.set(runContext.runId, cyclicPodIds);
+    }
+    return cyclicPodIds.has(podId);
   }
 
   private settlePathwayAndRefresh(
@@ -488,6 +511,7 @@ class RunExecutionService {
     const nextStatus = decidePodStatusAfterTriggerSettlement(
       updated,
       runQueueService.getQueueSize(key),
+      this.isCyclicPod(runContext, podId),
     );
     if (!nextStatus) return;
 
@@ -866,6 +890,8 @@ class RunExecutionService {
     // 步驟 1：先從 activeRunStreams 移除，建立廉價 guard 的 invariant。
     // 必須在 updateRunStatus 之前執行，確保 hot path guard 可用 Map 做 O(1) 過濾。
     const activePodCounts = this.activeStreams.takeRunPodCounts(runId);
+    this.cyclicPodIdsByRun.delete(runId);
+    runQueueService.clearRun(runId);
 
     // 步驟 2：標記 DB 終態，供 fallback DB 查詢使用。
     if (shouldMarkRunCancelled(run)) {

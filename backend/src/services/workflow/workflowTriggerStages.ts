@@ -110,6 +110,7 @@ export async function completeWorkflowChatStage(params: {
   connectionId: string;
   sourcePodId: string;
   targetPodId: string;
+  triggerMode: TriggerWorkflowWithSummaryParams["triggerMode"];
   participatingConnectionIds: string[];
   sourcePodIds?: string[];
   sourcePodNames?: string[];
@@ -124,7 +125,7 @@ export async function completeWorkflowChatStage(params: {
       connectionId: params.connectionId,
       sourcePodId: params.sourcePodId,
       targetPodId: params.targetPodId,
-      triggerMode: params.strategy.mode,
+      triggerMode: params.triggerMode,
       participatingConnectionIds: params.participatingConnectionIds,
       sourcePodIds: params.sourcePodIds,
       sourcePodNames: params.sourcePodNames,
@@ -135,7 +136,7 @@ export async function completeWorkflowChatStage(params: {
   params.delegate.onChatComplete(
     params.canvasId,
     params.targetPodId,
-    resolveSettlementPathway(params.strategy.mode),
+    resolveSettlementPathway(params.triggerMode),
   );
   await params.checkAndTriggerWorkflows();
   params.delegate.scheduleNextInQueue(params.canvasId, params.targetPodId);
@@ -146,6 +147,7 @@ export function failWorkflowChatStage(params: {
   connectionId: string;
   sourcePodId: string;
   targetPodId: string;
+  triggerMode: TriggerWorkflowWithSummaryParams["triggerMode"];
   participatingConnectionIds: string[];
   sourcePodIds?: string[];
   sourcePodNames?: string[];
@@ -161,7 +163,7 @@ export function failWorkflowChatStage(params: {
       connectionId: params.connectionId,
       sourcePodId: params.sourcePodId,
       targetPodId: params.targetPodId,
-      triggerMode: params.strategy.mode,
+      triggerMode: params.triggerMode,
       participatingConnectionIds: params.participatingConnectionIds,
       sourcePodIds: params.sourcePodIds,
       sourcePodNames: params.sourcePodNames,

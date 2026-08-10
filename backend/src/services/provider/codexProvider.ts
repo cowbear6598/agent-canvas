@@ -8,7 +8,7 @@
  *
  * CLI 指令組合：
  *   - 新對話：`codex exec - --json --skip-git-repo-check --cd <repoPath> --dangerously-bypass-approvals-and-sandbox --model <model>`
- *   - 恢復對話：`codex exec resume <id> - --json --dangerously-bypass-approvals-and-sandbox`
+ *   - 恢復對話：`codex exec resume <id> - --json --dangerously-bypass-approvals-and-sandbox --model <model>`
  *     （`exec resume` 不接受 `--cd`，工作目錄由 Bun.spawn cwd 定錨）
  *   - `-` 表示從 stdin 讀取 prompt
  *   - `--cd <repoPath>` 讓 Codex 以 run clone 作為工作目錄
@@ -399,8 +399,8 @@ function buildCodexArgs(
     }
 
     // 恢復對話模式：`codex exec resume` 不接受 --cd，
-    // 工作目錄由 Bun.spawn cwd 定錨。
-    // --model 由 session 決定，不傳入。
+    // 工作目錄由 Bun.spawn cwd 定錨。model 必須明確傳入，否則 CLI 會改用
+    // ~/.codex/config.toml 的全域模型，可能與 session / Pod 設定不同。
     return [
       "exec",
       "resume",
@@ -415,6 +415,8 @@ function buildCodexArgs(
       ...runtimeMcpConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
+      "--model",
+      model,
     ];
   }
 

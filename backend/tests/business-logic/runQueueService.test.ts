@@ -188,6 +188,39 @@ describe("RunQueueService", () => {
     });
   });
 
+  describe("clearRun", () => {
+    it("只清除指定 Run 的所有 Pod 佇列", () => {
+      const otherRunContext = makeRunContext({ runId: "other-run" });
+      runQueueService.enqueue(createQueueItem());
+      runQueueService.enqueue(
+        createQueueItem({
+          targetPodId: "target-pod-2",
+        }),
+      );
+      runQueueService.enqueue(
+        createQueueItem({
+          runContext: otherRunContext,
+        }),
+      );
+
+      runQueueService.clearRun(mockRunContext.runId);
+
+      expect(
+        runQueueService.getQueueSize(
+          buildRunQueueKey(mockRunContext.runId, targetPodId),
+        ),
+      ).toBe(0);
+      expect(
+        runQueueService.getQueueSize(
+          buildRunQueueKey(mockRunContext.runId, "target-pod-2"),
+        ),
+      ).toBe(0);
+      expect(
+        runQueueService.getQueueSize(buildRunQueueKey("other-run", targetPodId)),
+      ).toBe(1);
+    });
+  });
+
   describe("hasActiveItem", () => {
     it("同一 runId:targetPodId 有活躍 stream 時回報忙碌", () => {
       mockHasActiveStream.mockReturnValue(true);

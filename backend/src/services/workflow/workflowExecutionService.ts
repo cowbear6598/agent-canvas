@@ -42,6 +42,7 @@ import {
   getUserVisibleErrorMessage,
   UserVisibleError,
 } from "../../utils/userVisibleError.js";
+import { resolveLoopSessionContinuity } from "./workflowLoopPolicy.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -74,11 +75,16 @@ function isTerminalRunPod(runContext: RunContext, podId: string): boolean {
   return instance?.status === "blocked" || instance?.status === "error";
 }
 
+function isRunActive(runContext: RunContext): boolean {
+  return runStore.getRun(runContext.runId)?.status === "running";
+}
+
 interface WorkflowChatContext {
   canvasId: string;
   connectionId: string;
   sourcePodId: string;
   targetPodId: string;
+  triggerMode: TriggerMode;
   participatingConnectionIds: string[];
   sourcePodIds?: string[];
   sourcePodNames?: string[];
@@ -91,6 +97,10 @@ interface WorkflowChatContext {
 type SummaryFallback = { content: string; isSummarized: boolean };
 
 class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
+  isCyclicPod(runContext: RunContext, podId: string): boolean {
+    return runExecutionService.isCyclicPod(runContext, podId);
+  }
+
   private getSummaryFallback(
     sourcePodId: string,
     runContext: RunContext,
@@ -246,6 +256,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     sourcePodId: string,
     runContext: RunContext,
   ): Promise<void> {
+    if (!isRunActive(runContext)) return;
+
     const connections = connectionStore.findBySourcePodId(
       canvasId,
       sourcePodId,
@@ -309,6 +321,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       skipBusyCheck,
     } = params;
     const delegate = params.delegate ?? createStatusDelegate(runContext);
+
+    if (!isRunActive(runContext)) return;
 
     const connection = connectionStore.getById(canvasId, connectionId);
     if (!connection) {
@@ -406,6 +420,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
           connectionId,
           sourcePodId,
           targetPodId,
+          triggerMode,
           content: summary,
           participatingConnectionIds: resolvedConnectionIds,
           sourcePodIds,
@@ -483,6 +498,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       connectionId,
       sourcePodId,
       targetPodId,
+      triggerMode,
       participatingConnectionIds,
       strategy,
       runContext,
@@ -493,6 +509,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       connectionId,
       sourcePodId,
       targetPodId,
+      triggerMode,
       participatingConnectionIds,
       sourcePodIds: params.sourcePodIds,
       sourcePodNames: params.sourcePodNames,
@@ -513,6 +530,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       connectionId,
       sourcePodId,
       targetPodId,
+      triggerMode,
       participatingConnectionIds,
       strategy,
       runContext,
@@ -525,6 +543,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       connectionId,
       sourcePodId,
       targetPodId,
+      triggerMode,
       participatingConnectionIds,
       sourcePodIds: params.sourcePodIds,
       sourcePodNames: params.sourcePodNames,
@@ -540,9 +559,17 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     params: WorkflowChatContext & { content: string },
   ): Promise<void> {
     const { canvasId, targetPodId, content, runContext } = params;
+    if (!isRunActive(runContext)) return;
+
     const baseMessage = buildTransferMessage(content);
 
-    const execStrategy = new ChatExecutionStrategy(canvasId, runContext);
+    const execStrategy = new ChatExecutionStrategy(
+      canvasId,
+      runContext,
+      resolveLoopSessionContinuity(
+        this.isCyclicPod(runContext, targetPodId),
+      ),
+    );
 
     await execStrategy.addUserMessage(targetPodId, baseMessage);
     const sourcePodNames =
