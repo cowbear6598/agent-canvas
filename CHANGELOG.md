@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.11] - 2026-08-11
+
+### 優化
+- 簡化全域設定載入與儲存流程，移除內部 Pinia store 的無謂 optional 防護
+- 移除 plugin registry 的舊式能力偵測與未使用查詢，讓資料寫入 invariant 失敗時立即報錯
+- 簡化 WebSocket API、trusted proxy、workflow traversal 與連線更新的重複分支
+
 ## [2.2.10] - 2026-08-11
 
 ### 修正
