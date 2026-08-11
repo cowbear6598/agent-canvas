@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import type { GoalTodoItem, Pod, PodGoal } from "../types/pod.js";
+import type { Pod, PodGoal } from "../types/pod.js";
 import type { RunContext } from "../types/run.js";
 import { buildInternalSelfSpawn } from "../utils/internalSelfSpawn.js";
 
@@ -26,6 +26,7 @@ const GOAL_RUNTIME_GENERIC_WRAPPER_TOOL_NAMES = new Set([
 export interface GoalRuntimeState {
   todoOrder: string[];
   activeTodoId: string | null;
+  lastReadTodoId: string | null;
   completedTodoIds: string[];
   status: GoalRuntimeStatus;
   blockedReason: string | null;
@@ -45,6 +46,7 @@ export interface GoalRuntimeToolResult {
   status: GoalRuntimeStatus;
   activeTodoId: string | null;
   activeTodoText: string | null;
+  lastReadTodoId: string | null;
   nextTodoId: string | null;
   nextTodoText: string | null;
   completedTodoIds: string[];
@@ -78,10 +80,6 @@ function normalizeGoalRuntimeGoal(goal: PodGoal | null | undefined): PodGoal {
   return {
     todos: Array.isArray(goal?.todos) ? [...goal.todos] : [],
   };
-}
-
-function getGoalTodoMap(goal: PodGoal): Map<string, GoalTodoItem> {
-  return new Map(goal.todos.map((todo) => [todo.id, todo]));
 }
 
 function dedupeTodoIds(ids: string[]): string[] {
@@ -119,11 +117,12 @@ export function normalizeGoalRuntimeState(
       : hasRemainingTodos
         ? "running"
         : "completed";
-
   return {
     ...state,
     todoOrder,
     activeTodoId,
+    lastReadTodoId:
+      state.lastReadTodoId === activeTodoId ? activeTodoId : null,
     completedTodoIds,
     status,
     blockedReason: status === "blocked" ? state.blockedReason : null,
@@ -161,6 +160,7 @@ export function createGoalRuntimeState(
   return {
     todoOrder,
     activeTodoId: todoOrder[0] ?? null,
+    lastReadTodoId: null,
     completedTodoIds: [],
     status: todoOrder.length > 0 ? "running" : "completed",
     blockedReason: null,
@@ -176,6 +176,49 @@ function withUpdatedAt(state: GoalRuntimeState): GoalRuntimeState {
   };
 }
 
+export function markActiveGoalTodoRead(
+  goal: PodGoal,
+  state: GoalRuntimeState,
+): GoalRuntimeState {
+  const normalizedState = normalizeGoalRuntimeState(goal, state);
+  return withUpdatedAt({
+    ...normalizedState,
+    lastReadTodoId: normalizedState.activeTodoId,
+  });
+}
+
+function getGoalTodoCompletionErrorFromState(
+  state: GoalRuntimeState,
+  todoId?: string,
+): string | null {
+  const targetTodoId = todoId ?? state.activeTodoId;
+
+  if (!state.activeTodoId) {
+    return "目前沒有可完成的 active todo，請先呼叫 get_active_goal_todo 確認目前狀態。";
+  }
+
+  if (state.lastReadTodoId !== state.activeTodoId) {
+    return "請先呼叫 get_active_goal_todo 讀取目前的 active todo，再呼叫 complete_goal_todo。";
+  }
+
+  if (targetTodoId !== state.lastReadTodoId) {
+    return "todoId 與最近透過 get_active_goal_todo 讀取的 active todo 不一致，請重新呼叫 get_active_goal_todo 後再完成。";
+  }
+
+  return null;
+}
+
+export function getGoalTodoCompletionError(
+  goal: PodGoal,
+  state: GoalRuntimeState,
+  todoId?: string,
+): string | null {
+  return getGoalTodoCompletionErrorFromState(
+    normalizeGoalRuntimeState(goal, state),
+    todoId,
+  );
+}
+
 export function completeGoalTodo(
   goal: PodGoal,
   state: GoalRuntimeState,
@@ -183,15 +226,12 @@ export function completeGoalTodo(
   handoffSummary: string | null = null,
 ): GoalRuntimeState {
   const normalizedState = normalizeGoalRuntimeState(goal, state);
-  const targetTodoId = todoId ?? normalizedState.activeTodoId ?? "";
-  const todoMap = getGoalTodoMap(goal);
-  if (!todoMap.has(targetTodoId)) return withUpdatedAt(normalizedState);
+  if (getGoalTodoCompletionErrorFromState(normalizedState, todoId)) {
+    return normalizedState;
+  }
 
-  const completedTodoIds = normalizedState.completedTodoIds.includes(
-    targetTodoId,
-  )
-    ? normalizedState.completedTodoIds
-    : [...normalizedState.completedTodoIds, targetTodoId];
+  const targetTodoId = todoId ?? normalizedState.activeTodoId ?? "";
+  const completedTodoIds = [...normalizedState.completedTodoIds, targetTodoId];
   const completedTodoIdSet = new Set(completedTodoIds);
   const activeTodoId =
     normalizedState.todoOrder.find((id) => !completedTodoIdSet.has(id)) ?? null;
@@ -199,6 +239,7 @@ export function completeGoalTodo(
   return withUpdatedAt({
     ...normalizedState,
     activeTodoId,
+    lastReadTodoId: null,
     completedTodoIds,
     status: activeTodoId ? "running" : "completed",
     blockedReason: null,
@@ -379,6 +420,7 @@ export function buildGoalRuntimeToolResult(
     status: state.status,
     activeTodoId: state.activeTodoId,
     activeTodoText: getGoalTodoText(goal, state.activeTodoId),
+    lastReadTodoId: state.lastReadTodoId,
     nextTodoId,
     nextTodoText: getGoalTodoText(goal, nextTodoId),
     completedTodoIds: [...state.completedTodoIds],

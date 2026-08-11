@@ -35,6 +35,7 @@
 
 # 特別注意
 
+- 要尋找專案相關內容時，優先使用 codegraph 搜尋
 - 不需要執行 `bun run dev` 指令，我這邊都會常駐開啟
 - 前後端 `bun run test` 可以確認測試有沒有壞掉而不是 `bun test`
 - 前後端 `bun run style` 可以確認 eslint 以及 type

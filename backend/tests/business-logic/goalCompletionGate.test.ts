@@ -11,6 +11,7 @@ import {
   completeGoalTodo,
   ensureGoalRuntime,
   getGoalRuntimeStatePath,
+  markActiveGoalTodoRead,
   readGoalRuntimeSnapshot,
   removeGoalRuntimeRun,
   writeGoalRuntimeSnapshot,
@@ -179,7 +180,11 @@ describe("nextNoProgressCount", () => {
 
     const updated: GoalRuntimeSnapshot = {
       ...snapshot,
-      state: completeGoalTodo(snapshot.goal, snapshot.state, "todo-1"),
+      state: completeGoalTodo(
+        snapshot.goal,
+        markActiveGoalTodoRead(snapshot.goal, snapshot.state),
+        "todo-1",
+      ),
     };
     writeGoalRuntimeSnapshot(
       getGoalRuntimeStatePath(runContext, pod.id),
@@ -204,6 +209,9 @@ describe("buildNudgeMessage", () => {
     expect(msg).toContain("Inspect logs");
     expect(msg).toContain("2 個未完成");
     expect(msg).toContain("agent_canvas_goal");
+    expect(msg).toContain("get_active_goal_todo");
+    expect(msg).toContain("每完成一項都必須重新讀取下一項");
+    expect(msg).toContain("get_goal_status");
   });
 
   it("activeTodoId 無效時應退回實際剩餘 todo，不顯示 UUID", () => {

@@ -112,7 +112,8 @@ export function buildNudgeMessage(snapshot: GoalRuntimeSnapshot): string {
   return [
     `還有 ${remaining} 個未完成的 todo，請繼續執行。`,
     `目前進行中：${activeText}`,
-    "請使用 agent_canvas_goal 工具回報進度（complete_goal_todo 完成、block_goal_progress 卡住）。",
+    "請先呼叫 agent_canvas_goal.get_active_goal_todo 讀取目前 todo，完成後再呼叫 complete_goal_todo；每完成一項都必須重新讀取下一項。",
+    "get_goal_status 僅供完整進度與除錯查詢，不會取得 complete_goal_todo 資格；若卡住請呼叫 block_goal_progress。",
   ].join("\n");
 }
 

@@ -17,6 +17,7 @@ import {
   forceBlockGoalRuntime,
   formatGoalTodos,
   getGoalRuntimeStatePath,
+  markActiveGoalTodoRead,
   readGoalRuntimeSnapshot,
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
@@ -58,6 +59,7 @@ describe("goalRuntime", () => {
     expect(state).toMatchObject({
       todoOrder: ["todo-1", "todo-2"],
       activeTodoId: "todo-1",
+      lastReadTodoId: null,
       completedTodoIds: [],
       status: "running",
       blockedReason: null,
@@ -72,6 +74,7 @@ describe("goalRuntime", () => {
     expect(state).toMatchObject({
       todoOrder: [],
       activeTodoId: null,
+      lastReadTodoId: null,
       completedTodoIds: [],
       status: "completed",
       blockedReason: null,
@@ -81,16 +84,30 @@ describe("goalRuntime", () => {
 
   it("completeGoalTodo 應推進到下一個 todo，全部完成後標記 completed", () => {
     const initial = createGoalRuntimeState(goal)!;
-    const afterFirst = completeGoalTodo(goal, initial);
-    const afterSecond = completeGoalTodo(goal, afterFirst);
+    const afterFirst = completeGoalTodo(
+      goal,
+      markActiveGoalTodoRead(goal, initial),
+    );
+    const afterSecond = completeGoalTodo(
+      goal,
+      markActiveGoalTodoRead(goal, afterFirst),
+    );
 
     expect(afterFirst.activeTodoId).toBe("todo-2");
     expect(afterFirst.completedTodoIds).toEqual(["todo-1"]);
+    expect(afterFirst.lastReadTodoId).toBeNull();
     expect(afterFirst.status).toBe("running");
 
     expect(afterSecond.activeTodoId).toBeNull();
     expect(afterSecond.completedTodoIds).toEqual(["todo-1", "todo-2"]);
+    expect(afterSecond.lastReadTodoId).toBeNull();
     expect(afterSecond.status).toBe("completed");
+  });
+
+  it("completeGoalTodo 未先讀取 active todo 時不應推進", () => {
+    const initial = createGoalRuntimeState(goal);
+
+    expect(completeGoalTodo(goal, initial)).toEqual(initial);
   });
 
   it("blockGoalRuntime 應保留目前進度並記錄阻塞原因", () => {
@@ -246,6 +263,7 @@ describe("goalRuntime", () => {
       status: "running",
       activeTodoId: "todo-1",
       activeTodoText: "Collect requirements",
+      lastReadTodoId: null,
       completedCount: 0,
       totalCount: 2,
     });
@@ -298,7 +316,7 @@ describe("goalRuntime", () => {
       });
 
       const listResponse = JSON.parse(writes.at(-1) ?? "{}") as {
-        result?: { tools?: Array<{ name: string }> };
+        result?: { tools?: Array<{ name: string; description: string }> };
       };
       expect(listResponse.result?.tools?.map((tool) => tool.name)).toContain(
         GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO,
@@ -329,6 +347,95 @@ describe("goalRuntime", () => {
       expect(JSON.parse(callResponse.result?.content?.[0]?.text ?? "{}")).toEqual(
         expected,
       );
+      expect(readGoalRuntimeSnapshot(statePath)?.state.lastReadTodoId).toBe(
+        "todo-1",
+      );
+
+      writes.length = 0;
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: GOAL_MCP_TOOL_NAMES.COMPLETE_TODO,
+          arguments: { todoId: "todo-1" },
+        },
+      });
+
+      expect(readGoalRuntimeSnapshot(statePath)?.state).toMatchObject({
+        activeTodoId: "todo-2",
+        lastReadTodoId: null,
+        completedTodoIds: ["todo-1"],
+      });
+
+      writes.length = 0;
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: GOAL_MCP_TOOL_NAMES.COMPLETE_TODO,
+          arguments: { todoId: "todo-2" },
+        },
+      });
+
+      const unreadCompleteResponse = JSON.parse(writes.at(-1) ?? "{}") as {
+        result?: { isError?: boolean; structuredContent?: { error?: string } };
+      };
+      expect(unreadCompleteResponse.result?.isError).toBe(true);
+      expect(unreadCompleteResponse.result?.structuredContent?.error).toContain(
+        "get_active_goal_todo",
+      );
+      expect(readGoalRuntimeSnapshot(statePath)?.state.completedTodoIds).toEqual([
+        "todo-1",
+      ]);
+
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: {
+          name: GOAL_MCP_TOOL_NAMES.GET_STATUS,
+          arguments: {},
+        },
+      });
+      expect(readGoalRuntimeSnapshot(statePath)?.state.lastReadTodoId).toBeNull();
+
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: {
+          name: GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO,
+          arguments: {},
+        },
+      });
+      expect(readGoalRuntimeSnapshot(statePath)?.state.lastReadTodoId).toBe(
+        "todo-2",
+      );
+
+      writes.length = 0;
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: {
+          name: GOAL_MCP_TOOL_NAMES.COMPLETE_TODO,
+          arguments: { todoId: "todo-1" },
+        },
+      });
+      const mismatchResponse = JSON.parse(writes.at(-1) ?? "{}") as {
+        result?: { isError?: boolean; structuredContent?: { error?: string } };
+      };
+      expect(mismatchResponse.result?.isError).toBe(true);
+      expect(mismatchResponse.result?.structuredContent?.error).toContain(
+        "不一致",
+      );
+      expect(readGoalRuntimeSnapshot(statePath)?.state).toMatchObject({
+        activeTodoId: "todo-2",
+        lastReadTodoId: "todo-2",
+        completedTodoIds: ["todo-1"],
+      });
     } finally {
       if (originalStatePath === undefined) {
         delete process.env.AGENT_CANVAS_GOAL_STATE_PATH;
@@ -337,6 +444,21 @@ describe("goalRuntime", () => {
       }
       writeSpy.mockRestore();
     }
+  });
+
+  it("舊 snapshot 缺少 lastReadTodoId 時應正規化為未讀取", () => {
+    const snapshot = ensureGoalRuntime(pod, runContext);
+    if (!snapshot) throw new Error("snapshot 應存在");
+    const statePath = getGoalRuntimeStatePath(runContext, pod.id);
+    const legacyState = { ...snapshot.state } as Partial<typeof snapshot.state>;
+    delete legacyState.lastReadTodoId;
+    fs.writeFileSync(
+      statePath,
+      JSON.stringify({ ...snapshot, state: legacyState }, null, 2),
+      "utf-8",
+    );
+
+    expect(readGoalRuntimeSnapshot(statePath)?.state.lastReadTodoId).toBeNull();
   });
 
   it("沒有 Goal 時仍應建立 Goal Runtime MCP metadata，並回報空狀態", () => {
@@ -350,6 +472,7 @@ describe("goalRuntime", () => {
       status: "completed",
       activeTodoId: null,
       activeTodoText: null,
+      lastReadTodoId: null,
       completedCount: 0,
       totalCount: 0,
       description: "Goal Runtime 可用，但目前尚未設定 goal",

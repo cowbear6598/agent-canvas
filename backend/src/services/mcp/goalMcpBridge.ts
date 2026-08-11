@@ -4,6 +4,8 @@ import {
   blockGoalRuntime,
   buildGoalRuntimeToolResult,
   completeGoalTodo,
+  getGoalTodoCompletionError,
+  markActiveGoalTodoRead,
   readGoalRuntimeSnapshot,
   writeGoalRuntimeSnapshot,
 } from "../goalRuntime.js";
@@ -78,6 +80,13 @@ function toolTextResult<T extends object>(payload: T): {
   };
 }
 
+function writeToolError(id: JsonRpcId, error: string): void {
+  writeResult(id, {
+    ...toolTextResult({ error }),
+    isError: true,
+  });
+}
+
 function handleGetGoalStatus(id: JsonRpcId): void {
   const snapshot = loadSnapshot();
   if (!snapshot) {
@@ -87,6 +96,7 @@ function handleGetGoalStatus(id: JsonRpcId): void {
         status: "completed",
         activeTodoId: null,
         activeTodoText: null,
+        lastReadTodoId: null,
         nextTodoId: null,
         nextTodoText: null,
         completedTodoIds: [],
@@ -103,7 +113,18 @@ function handleGetGoalStatus(id: JsonRpcId): void {
 }
 
 function handleGetActiveGoalTodo(id: JsonRpcId): void {
-  writeResult(id, toolTextResult(buildGoalRuntimeActiveTodoResult(loadSnapshot())));
+  const snapshot = loadSnapshot();
+  if (!snapshot) {
+    writeResult(id, toolTextResult(buildGoalRuntimeActiveTodoResult(null)));
+    return;
+  }
+
+  const nextSnapshot = {
+    ...snapshot,
+    state: markActiveGoalTodoRead(snapshot.goal, snapshot.state),
+  };
+  writeGoalRuntimeSnapshot(getStatePath(), nextSnapshot);
+  writeResult(id, toolTextResult(buildGoalRuntimeActiveTodoResult(nextSnapshot)));
 }
 
 function handleCompleteGoalTodo(
@@ -112,18 +133,23 @@ function handleCompleteGoalTodo(
 ): void {
   const snapshot = loadSnapshot();
   if (!snapshot) {
-    writeResult(id, {
-      ...toolTextResult({
-        error: "Goal Runtime 不存在",
-      }),
-      isError: true,
-    });
+    writeToolError(id, "Goal Runtime 不存在");
     return;
   }
 
   const todoId = typeof params?.todoId === "string" ? params.todoId : undefined;
   const handoffSummary =
     typeof params?.handoffSummary === "string" ? params.handoffSummary : null;
+
+  const completionError = getGoalTodoCompletionError(
+    snapshot.goal,
+    snapshot.state,
+    todoId,
+  );
+  if (completionError) {
+    writeToolError(id, completionError);
+    return;
+  }
 
   const nextState = completeGoalTodo(
     snapshot.goal,
@@ -145,12 +171,7 @@ function handleBlockGoalProgress(
 ): void {
   const snapshot = loadSnapshot();
   if (!snapshot) {
-    writeResult(id, {
-      ...toolTextResult({
-        error: "Goal Runtime 不存在",
-      }),
-      isError: true,
-    });
+    writeToolError(id, "Goal Runtime 不存在");
     return;
   }
 
@@ -159,12 +180,7 @@ function handleBlockGoalProgress(
       ? params.blockedReason.trim()
       : "";
   if (!blockedReason) {
-    writeResult(id, {
-      ...toolTextResult({
-        error: "blockedReason 為必填",
-      }),
-      isError: true,
-    });
+    writeToolError(id, "blockedReason 為必填");
     return;
   }
 
@@ -233,7 +249,7 @@ function handleRequest(request: JsonRpcRequest): void {
         version: "1.0.0",
       },
       instructions:
-        "Use get_active_goal_todo when you only need to know the current todo. Use get_goal_status only when you need full progress/debug state. Use complete_goal_todo after finishing the active todo, and block_goal_progress when the Pod is blocked.",
+        "For each todo, call get_active_goal_todo, finish that exact todo, then call complete_goal_todo. A successful completion consumes the read, so call get_active_goal_todo again before completing the next todo. get_goal_status is only for full progress/debug state and does not authorize completion. Use block_goal_progress when the Pod is blocked.",
     });
     return;
   }
@@ -253,7 +269,7 @@ function handleRequest(request: JsonRpcRequest): void {
         {
           name: GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO,
           description:
-            "Read only the current active todo id and text. Prefer this when deciding what to work on next.",
+            "Read the current active todo id and text, authorizing one complete_goal_todo call for that exact todo.",
           inputSchema: {
             type: "object",
             properties: {},
@@ -262,7 +278,7 @@ function handleRequest(request: JsonRpcRequest): void {
         {
           name: GOAL_MCP_TOOL_NAMES.GET_STATUS,
           description:
-            "Read the full Goal Runtime state for progress/debug checks.",
+            "Read the full Goal Runtime state for progress/debug checks. This does not authorize complete_goal_todo.",
           inputSchema: {
             type: "object",
             properties: {},
@@ -271,7 +287,7 @@ function handleRequest(request: JsonRpcRequest): void {
         {
           name: GOAL_MCP_TOOL_NAMES.COMPLETE_TODO,
           description:
-            "Mark the active todo as completed and return the next todo or final completion state.",
+            "Mark the active todo as completed only if it was most recently read with get_active_goal_todo. After success, call get_active_goal_todo again before completing the next todo.",
           inputSchema: {
             type: "object",
             properties: {
