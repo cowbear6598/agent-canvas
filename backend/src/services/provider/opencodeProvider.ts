@@ -1,5 +1,5 @@
 /**
- * OpencodeProvider（SDK v2 API + 1.14 binary 行為調適）
+ * OpencodeProvider（SDK v2 API + 現行 binary 行為調適）
  *
  * 透過 opencode SDK v2 串接 opencode 本地伺服器，
  * 將 SSE 事件串流轉換為標準化 NormalizedEvent。
@@ -15,8 +15,8 @@
  *   - session.create / prompt / abort / messages 使用平鋪參數形狀
  *     （sessionID、directory 頂層化，不再放在 path / query 子物件）
  *
- * 事件處理（opencode 1.14 binary 行為調適）：
- *   - 1.14 binary 在 streaming 階段只發 message.part.delta（field=text / reasoning），
+ * 事件處理（opencode binary 行為調適）：
+ *   - 現行 binary 在 streaming 階段只發 message.part.delta（field=text / reasoning），
  *     不發 session.next.*、也不在 streaming 中發 message.part.updated 帶 ToolPart；
  *     工具資訊只能透過 session.messages API 拉。
  *   - 為了讓工具能與文字 interleave 顯示（不是全擠到 turn 結尾），本檔利用

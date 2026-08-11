@@ -316,6 +316,47 @@ describe("CodexNormalizer - normalize()", () => {
     });
   });
 
+  it("Codex CLI 切換到 HTTPS transport 應映射為 non-fatal progress error", () => {
+    const line = toLine({
+      type: "item.completed",
+      item: {
+        id: "transport-fallback",
+        type: "error",
+        message:
+          "Falling back from WebSockets to HTTPS transport. stream disconnected before completion: websocket closed by server before response.completed",
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e.fatal).toBe(false);
+    expect(e.recovery).toBe("recoverable");
+    expect(e.code).toBe("STREAM_TRANSPORT_FALLBACK");
+  });
+
+  it("Codex CLI transport 最終斷線應映射為 fatal recoverable error", () => {
+    const line = toLine({
+      type: "error",
+      message:
+        "stream disconnected before completion: websocket closed by server before response.completed",
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.recovery).toBe("recoverable");
+    expect(e.code).toBe("STREAM_DISCONNECTED");
+    expect(e.systemMessage?.metadata).toMatchObject({
+      code: "STREAM_DISCONNECTED",
+      severity: "fatal",
+      recovery: "recoverable",
+    });
+  });
+
   it("item.completed 且 item_type=error 應映射為 non-fatal system error", () => {
     const line = toLine({
       type: "item.completed",

@@ -92,8 +92,10 @@ async function* makeEventStream(events: Array<NormalizedEvent>) {
   }
 }
 
-function setupProviderMock(events: Array<NormalizedEvent>) {
-  const chatMock = vi.fn(() => makeEventStream(events));
+function setupProviderMock(
+  events: Array<NormalizedEvent>,
+  chatMock: Mock<any> = vi.fn(() => makeEventStream(events)),
+) {
   // metadata 必須一起提供，否則 providerConfigResolver（buildPodFromRow 讀取路徑）
   // 呼叫 getProvider(provider).metadata 會拋出 TypeError
   asMock(getProvider).mockReturnValue({
@@ -111,6 +113,46 @@ function setupProviderMock(events: Array<NormalizedEvent>) {
     },
   });
   return { chatMock };
+}
+
+function mockCodexProviderChat(chatMock: Mock<any>): void {
+  asMock(getProvider).mockReturnValue({
+    chat: chatMock,
+    cancel: vi.fn(() => false),
+    buildOptions: vi.fn().mockResolvedValue({}),
+    metadata: {
+      availableModelValues: new Set(["gpt-5.5"]),
+      defaultOptions: { model: "gpt-5.5" },
+      availableModels: [{ label: "GPT-5.5", value: "gpt-5.5" }],
+    },
+  });
+}
+
+function mockRunSessionPersistence(instanceId: string): void {
+  let sessionId: string | null = null;
+  vi.mocked(runStore.getPodInstance).mockImplementation(
+    () =>
+      ({
+        id: instanceId,
+        sessionId,
+      }) as ReturnType<typeof runStore.getPodInstance>,
+  );
+  vi.mocked(runStore.updatePodInstanceSessionId).mockImplementation(
+    (_instanceId, nextSessionId) => {
+      sessionId = nextSessionId;
+    },
+  );
+}
+
+function makeCodexDisconnectedEvent(): NormalizedEvent {
+  return {
+    type: "error",
+    message:
+      "stream disconnected before completion: websocket closed by server before response.completed",
+    fatal: true,
+    recovery: "recoverable",
+    code: "STREAM_DISCONNECTED",
+  };
 }
 
 function readOnlyScopedGoalRuntimeSnapshot(
@@ -201,10 +243,15 @@ function insertClaudePod(
   });
 }
 
-function insertCodexPod() {
+function insertCodexPod(
+  overrides: {
+    goal?: { todos: Array<{ id: string; text: string }> };
+  } = {},
+) {
   return insertPodViaSQL({
     provider: "codex",
     providerConfigJson: null as unknown as undefined,
+    goalJson: overrides.goal ? JSON.stringify(overrides.goal) : null,
   });
 }
 
@@ -1425,11 +1472,11 @@ describe("executeStreamingChat", () => {
       ).toBe(false);
     });
 
-    it("第一輪收到可恢復 fatal provider error 時應交由 goal gate retry", async () => {
+    it("Codex transport 中斷時應透過既有 session 繼續並完成 Goal", async () => {
       const goal = {
         todos: [{ id: "todo-1", text: "重試後完成" }],
       };
-      const pod = insertClaudePod({ goal });
+      const pod = insertCodexPod({ goal });
       ensureGoalRuntime(pod, defaultRunContext);
 
       const chatMock = vi
@@ -1437,12 +1484,10 @@ describe("executeStreamingChat", () => {
         .mockImplementationOnce(() =>
           makeEventStream([
             {
-              type: "error",
-              message: "WebSocket connection closed while resuming stream",
-              fatal: true,
-              recovery: "recoverable",
-              code: "STREAM_ERROR",
+              type: "session_started",
+              sessionId: "codex-thread-before-disconnect",
             },
+            makeCodexDisconnectedEvent(),
           ]),
         )
         .mockImplementationOnce(() =>
@@ -1467,20 +1512,7 @@ describe("executeStreamingChat", () => {
             { type: "turn_complete" },
           ]),
         );
-      asMock(getProvider).mockReturnValue({
-        chat: chatMock,
-        cancel: vi.fn(() => false),
-        buildOptions: vi.fn().mockResolvedValue({}),
-        metadata: {
-          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
-          defaultOptions: { model: "opus" },
-          availableModels: [
-            { label: "Opus", value: "opus" },
-            { label: "Sonnet", value: "sonnet" },
-            { label: "Haiku", value: "haiku" },
-          ],
-        },
-      });
+      setupProviderMock([], chatMock);
 
       const onComplete = vi.fn();
       await executeStreamingChat(
@@ -1495,7 +1527,21 @@ describe("executeStreamingChat", () => {
       );
 
       expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
+        resumeSessionId: "codex-thread-before-disconnect",
+        message: expect.stringContaining(
+          "剛剛 Codex 內部連線中斷。請先確認目前工作狀態",
+        ),
+      });
       expect(runStore.addRunMessage).toHaveBeenCalledTimes(1);
+      expect(runStore.addRunMessage).toHaveBeenCalledWith(
+        defaultRunContext.runId,
+        pod.id,
+        "user",
+        expect.stringContaining("不要重做已完成項目"),
+        undefined,
+        undefined,
+      );
       expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
 
       const snapshot = readOnlyScopedGoalRuntimeSnapshot(
@@ -1503,6 +1549,95 @@ describe("executeStreamingChat", () => {
         pod.id,
       );
       expect(snapshot?.state.status).toBe("completed");
+    });
+
+    it("沒有 Goal 的 Codex Pod transport 中斷時仍應 resume 後才完成", async () => {
+      const pod = insertCodexPod();
+      mockRunSessionPersistence("codex-instance-without-goal");
+      const chatMock = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "session_started",
+              sessionId: "codex-thread-without-goal",
+            },
+            makeCodexDisconnectedEvent(),
+          ]),
+        )
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            { type: "text", content: "恢復完成" },
+            { type: "turn_complete" },
+          ]),
+        );
+      mockCodexProviderChat(chatMock);
+
+      const onComplete = vi.fn();
+      const onError = vi.fn();
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete, onError },
+      );
+
+      expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
+        resumeSessionId: "codex-thread-without-goal",
+      });
+      expect(onError).not.toHaveBeenCalled();
+      expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+    });
+
+    it("Codex transport resume 後再次斷線時應停止且不觸發完成", async () => {
+      const pod = insertCodexPod();
+      mockRunSessionPersistence("codex-instance-recovery-failed");
+      const chatMock = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "session_started",
+              sessionId: "codex-thread-recovery-failed",
+            },
+            makeCodexDisconnectedEvent(),
+          ]),
+        )
+        .mockImplementationOnce(() =>
+          makeEventStream([makeCodexDisconnectedEvent()]),
+        );
+      mockCodexProviderChat(chatMock);
+
+      const onComplete = vi.fn();
+      const onError = vi.fn();
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete, onError },
+      );
+
+      expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
+        resumeSessionId: "codex-thread-recovery-failed",
+      });
+      expect(onError).toHaveBeenCalledWith(
+        canvasId,
+        pod.id,
+        expect.objectContaining({
+          message: "Codex 連線恢復失敗，已停止本次執行",
+        }),
+      );
+      expect(onComplete).not.toHaveBeenCalled();
     });
 
     it("沒有 Goal 的 Pod 應跳過 gate，第一輪結束直接 onComplete", async () => {

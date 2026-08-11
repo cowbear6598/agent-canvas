@@ -536,7 +536,7 @@ async function* processStdoutLines(
 
     for (const line of lines) {
       const event = normalize(line);
-      if (event === null || consumeReconnectProgress(event)) {
+      if (event === null || consumeTransportProgress(event)) {
         continue;
       }
       if (event.type === "turn_complete") {
@@ -549,7 +549,7 @@ async function* processStdoutLines(
   // 處理 stdout 結束時剩餘的 buffer 內容
   if (buffer.trim()) {
     const event = normalize(buffer);
-    if (event !== null && !consumeReconnectProgress(event)) {
+    if (event !== null && !consumeTransportProgress(event)) {
       if (event.type === "turn_complete") {
         out.hasTurnComplete = true;
       }
@@ -558,15 +558,23 @@ async function* processStdoutLines(
   }
 }
 
-function consumeReconnectProgress(event: NormalizedEvent): boolean {
-  if (event.type !== "error" || event.code !== "STREAM_RECONNECTING") {
+function consumeTransportProgress(event: NormalizedEvent): boolean {
+  if (
+    event.type !== "error" ||
+    (event.code !== "STREAM_RECONNECTING" &&
+      event.code !== "STREAM_TRANSPORT_FALLBACK")
+  ) {
     return false;
   }
 
+  const status =
+    event.code === "STREAM_RECONNECTING"
+      ? "正在重新連線"
+      : "正在切換到 HTTPS transport";
   logger.warn(
     "Chat",
     "Warn",
-    `[CodexProvider] Codex CLI 正在重新連線：${event.message}`,
+    `[CodexProvider] Codex CLI ${status}：${event.message}`,
   );
   return true;
 }

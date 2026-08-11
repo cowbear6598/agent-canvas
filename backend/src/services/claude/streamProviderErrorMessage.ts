@@ -40,6 +40,7 @@ export function buildProviderErrorSystemMessage(
 
 const DETAILED_PROVIDER_ERROR_CODES = new Set([
   "STREAM_ERROR",
+  "STREAM_DISCONNECTED",
   "EXIT_CODE",
   "RESULT_ERROR",
 ]);

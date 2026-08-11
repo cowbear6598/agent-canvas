@@ -49,9 +49,21 @@ interface CodexStreamErrorEvent {
  */
 const CODEX_RECONNECT_PROGRESS_RE =
   /^Reconnecting\.\.\.\s+\d+\/\d+(?:\s|$)/;
+const CODEX_TRANSPORT_FALLBACK_RE =
+  /^Falling back from WebSockets to HTTPS transport\.(?:\s|$)/;
+const CODEX_TERMINAL_TRANSPORT_DISCONNECT_RE =
+  /^stream disconnected before completion:\s*websocket closed by server before response\.completed(?:\s|$)/;
 
 function isCodexReconnectProgressMessage(message: string): boolean {
   return CODEX_RECONNECT_PROGRESS_RE.test(message.trim());
+}
+
+function isCodexTransportFallbackMessage(message: string): boolean {
+  return CODEX_TRANSPORT_FALLBACK_RE.test(message.trim());
+}
+
+function isCodexTerminalTransportDisconnectMessage(message: string): boolean {
+  return CODEX_TERMINAL_TRANSPORT_DISCONNECT_RE.test(message.trim());
 }
 
 interface CodexItemError {
@@ -148,6 +160,18 @@ function buildCodexSystemError(
       },
 ): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("codex", params);
+}
+
+function buildCodexTransportFallbackError(
+  rawContent: string,
+): Extract<NormalizedEvent, { type: "error" }> {
+  return buildCodexSystemError({
+    content: rawContent,
+    fatal: false,
+    code: "STREAM_TRANSPORT_FALLBACK",
+    rawContent,
+    recovery: "recoverable",
+  });
 }
 
 function buildMcpToolName(item: CodexMcpToolCallItem): string {
@@ -347,6 +371,11 @@ export function normalize(line: string): NormalizedEvent | null {
         const rawContent =
           itemError.message ?? itemError.error ?? itemError.text ?? "";
         if (!rawContent) return null;
+
+        if (isCodexTransportFallbackMessage(rawContent)) {
+          return buildCodexTransportFallbackError(rawContent);
+        }
+
         return buildCodexSystemError({
           content: rawContent,
           fatal: false,
@@ -372,6 +401,20 @@ export function normalize(line: string): NormalizedEvent | null {
           content: rawContent,
           fatal: false,
           code: "STREAM_RECONNECTING",
+          rawContent,
+          recovery: "recoverable",
+        });
+      }
+
+      if (isCodexTransportFallbackMessage(rawContent)) {
+        return buildCodexTransportFallbackError(rawContent);
+      }
+
+      if (isCodexTerminalTransportDisconnectMessage(rawContent)) {
+        return buildCodexSystemError({
+          content: rawContent,
+          fatal: true,
+          code: "STREAM_DISCONNECTED",
           rawContent,
           recovery: "recoverable",
         });

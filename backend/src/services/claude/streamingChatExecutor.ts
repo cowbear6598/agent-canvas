@@ -307,7 +307,7 @@ async function resolveExecutionDependencies(
  *   - aborted_or_errored：abort 或 error，已由 handleStreamAbort/handleExecutionError 處理；
  *     呼叫端應直接 return result，不再進 gate loop
  *   - completed_with_recoverable_provider_error：turn 因 fatal provider error 中止，
- *     但 goal gate 仍可根據未完成狀態繼續 retry
+ *     呼叫端可依 provider 與未完成狀態決定是否 retry
  *   - completed_with_unrecoverable_provider_error：turn 因 fatal provider error 中止，
  *     若 goal 尚未完成，必須保留未完成狀態且不可觸發 onComplete
  */
@@ -323,6 +323,20 @@ interface ChatTurnOutcome {
 const CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH = 240;
 const PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE =
   "Provider 發生不可恢復錯誤，Goal 尚未完成";
+const CODEX_TRANSPORT_RECOVERY_MESSAGE =
+  "剛剛 Codex 內部連線中斷。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。";
+const CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE =
+  "Codex 連線恢復失敗，已停止本次執行";
+
+function shouldRetryCodexTransport(
+  pod: Pod,
+  turnOutcome: ChatTurnOutcome,
+): boolean {
+  return (
+    pod.provider === "codex" &&
+    turnOutcome.finished === "completed_with_recoverable_provider_error"
+  );
+}
 
 function createClientSafeBlockedReason(reason: string | null): string | null {
   const normalized = reason
@@ -505,12 +519,13 @@ async function executeChatTurn(
  *
  * 流程：
  *   1. 第一輪 turn 帶 caller 傳入的 message
- *   2. 進入 Goal 完成 gate loop：
+ *   2. Codex transport 中斷時，沿用 session 自動恢復一次
+ *   3. 進入 Goal 完成 gate loop：
  *      - proceed → 跳出，呼叫 callbacks.onComplete
  *      - retry   → 透過 strategy.addUserMessage 注入 nudge，再跑一輪
  *      - stop_blocked → 保留 Goal blocked 分隔資訊，但不呼叫 callbacks.onComplete
  *      - force_block → 自動標記剩餘 todo 為 blocked，保留分隔資訊但不呼叫 callbacks.onComplete
- *   3. abort 或 error 在 turn 內部就已處理；gate loop 不會被執行
+ *   4. abort 或 error 在 turn 內部就已處理；gate loop 不會被執行
  *
  * onComplete callback 只會在 gate 放行後呼叫一次，下游 workflow 觸發以此為準。
  */
@@ -550,6 +565,33 @@ export async function executeStreamingChat(
     );
     if (turnOutcome.finished === "aborted_or_errored") {
       return turnOutcome.result;
+    }
+
+    if (shouldRetryCodexTransport(podResult.pod, turnOutcome)) {
+      await effectiveOptions.strategy.addUserMessage(
+        podId,
+        CODEX_TRANSPORT_RECOVERY_MESSAGE,
+      );
+      turnOutcome = await executeChatTurn(
+        effectiveOptions,
+        podResult.pod,
+        CODEX_TRANSPORT_RECOVERY_MESSAGE,
+        callbacks,
+      );
+      if (turnOutcome.finished === "aborted_or_errored") {
+        return turnOutcome.result;
+      }
+
+      if (shouldRetryCodexTransport(podResult.pod, turnOutcome)) {
+        if (callbacks?.onError) {
+          await callbacks.onError(
+            canvasId,
+            podId,
+            new Error(CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE),
+          );
+        }
+        return turnOutcome.result;
+      }
     }
 
     // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈

@@ -571,7 +571,43 @@ describe("CodexProvider", () => {
     );
   });
 
-  it("Codex CLI 重連耗盡後的終態錯誤仍應標記為 unrecoverable", async () => {
+  it("Codex CLI 切換到 HTTPS transport 後成功時不應推出 error event", async () => {
+    const stdoutLines = [
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "transport-fallback",
+          type: "error",
+          message:
+            "Falling back from WebSockets to HTTPS transport. stream disconnected before completion: websocket closed by server before response.completed",
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: { id: "msg-after-fallback", type: "agent_message", text: "完成" },
+      }),
+      JSON.stringify({ type: "turn.completed" }),
+    ];
+    const mockProc = makeMockProc(stdoutLines, [], 0);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
+
+    expect(events.some((event) => event.type === "error")).toBe(false);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "text", content: "完成" }),
+        expect.objectContaining({ type: "turn_complete" }),
+      ]),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Chat",
+      "Warn",
+      expect.stringContaining("正在切換到 HTTPS transport"),
+    );
+  });
+
+  it("Codex CLI 重連耗盡後的終態 transport 錯誤應允許上層 resume", async () => {
     const stdoutLines = [
       JSON.stringify({
         type: "error",
@@ -597,8 +633,8 @@ describe("CodexProvider", () => {
     expect(collected[0]).toMatchObject({
       type: "error",
       fatal: true,
-      recovery: "unrecoverable",
-      code: "STREAM_ERROR",
+      recovery: "recoverable",
+      code: "STREAM_DISCONNECTED",
     });
   });
 
