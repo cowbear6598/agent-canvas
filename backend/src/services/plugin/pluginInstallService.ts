@@ -24,6 +24,19 @@ import type {
 } from "./managedPluginRegistry.js";
 import { getDb } from "../../database/index.js";
 import { logger } from "../../utils/logger.js";
+import {
+  isZip64Entry,
+  isZip64EndRecord,
+  isMultiDiskZip,
+  isZipSymlink,
+  openZipCentralDirectory,
+  readCentralDirectoryEntryHeader,
+  readUint32LE,
+  ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE,
+  ZIP_LOCAL_FILE_HEADER_SIGNATURE,
+  type ZipCentralDirectoryEntryHeader,
+  type ZipEndOfCentralDirectory,
+} from "../../utils/zipCentralDirectory.js";
 
 const PLUGIN_MANIFEST_RELATIVE_PATHS = [
   path.join(".codex-plugin", "plugin.json"),
@@ -35,18 +48,20 @@ const MAX_BUNDLE_TOTAL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
 const MAX_BUNDLE_ENTRY_BYTES = 5 * 1024 * 1024;
 const MAX_BUNDLE_ENTRY_COUNT = 500;
 
-const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
-const ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE = 0x02014b50;
-const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
-const ZIP64_U16_SENTINEL = 0xffff;
-const ZIP64_U32_SENTINEL = 0xffffffff;
-const ZIP_SYMLINK_FILE_TYPE = 0xa000;
-const ZIP_FILE_TYPE_MASK = 0xf000;
-
 interface ParsedZipEntry {
   normalizedName: string;
   isDirectory: boolean;
   uncompressedSize: number;
+}
+
+interface BundleZipDirectoryBounds {
+  totalEntries: number;
+  centralDirectoryOffset: number;
+}
+
+interface ParsedBundleZipEntryAtCursor {
+  entry: ParsedZipEntry | null;
+  nextCursor: number;
 }
 
 interface ExtractedBundleMetadata {
@@ -91,36 +106,6 @@ function createBundleError(code: string, message: string): string {
   return `${code}:${message}`;
 }
 
-function readUint16LE(view: DataView, offset: number): number {
-  return view.getUint16(offset, true);
-}
-
-function readUint32LE(view: DataView, offset: number): number {
-  return view.getUint32(offset, true);
-}
-
-function findEndOfCentralDirectoryOffset(
-  archiveBytes: Uint8Array,
-): number | null {
-  if (archiveBytes.byteLength < 22) {
-    return null;
-  }
-
-  const view = new DataView(
-    archiveBytes.buffer,
-    archiveBytes.byteOffset,
-    archiveBytes.byteLength,
-  );
-  const minOffset = Math.max(0, archiveBytes.byteLength - 0xffff - 22);
-  for (let offset = archiveBytes.byteLength - 22; offset >= minOffset; offset -= 1) {
-    if (readUint32LE(view, offset) === ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
-      return offset;
-    }
-  }
-
-  return null;
-}
-
 function validateZipEntryPath(
   destinationPath: string,
   normalizedName: string,
@@ -152,34 +137,14 @@ function validateZipEntryPath(
   return ok(targetPath);
 }
 
-function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
-  const view = new DataView(
-    archiveBytes.buffer,
-    archiveBytes.byteOffset,
-    archiveBytes.byteLength,
-  );
-  const eocdOffset = findEndOfCentralDirectoryOffset(archiveBytes);
-  if (eocdOffset === null) {
-    return err(
-      createBundleError(
-        "INVALID_BUNDLE_ARCHIVE",
-        "上傳檔案不是合法的 ZIP bundle",
-      ),
-    );
-  }
+function validateBundleZipDirectory(
+  endRecord: ZipEndOfCentralDirectory,
+  archiveSize: number,
+): Result<BundleZipDirectoryBounds> {
+  const { totalEntries, centralDirectorySize, centralDirectoryOffset } =
+    endRecord;
 
-  const diskNumber = readUint16LE(view, eocdOffset + 4);
-  const centralDirectoryDiskNumber = readUint16LE(view, eocdOffset + 6);
-  const entriesOnThisDisk = readUint16LE(view, eocdOffset + 8);
-  const totalEntries = readUint16LE(view, eocdOffset + 10);
-  const centralDirectorySize = readUint32LE(view, eocdOffset + 12);
-  const centralDirectoryOffset = readUint32LE(view, eocdOffset + 16);
-
-  if (
-    diskNumber !== 0 ||
-    centralDirectoryDiskNumber !== 0 ||
-    entriesOnThisDisk !== totalEntries
-  ) {
+  if (isMultiDiskZip(endRecord)) {
     return err(
       createBundleError(
         "INVALID_BUNDLE_ARCHIVE",
@@ -188,12 +153,7 @@ function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
     );
   }
 
-  if (
-    entriesOnThisDisk === ZIP64_U16_SENTINEL ||
-    totalEntries === ZIP64_U16_SENTINEL ||
-    centralDirectorySize === ZIP64_U32_SENTINEL ||
-    centralDirectoryOffset === ZIP64_U32_SENTINEL
-  ) {
+  if (isZip64EndRecord(endRecord)) {
     return err(
       createBundleError(
         "INVALID_BUNDLE_ARCHIVE",
@@ -222,8 +182,8 @@ function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
 
   const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
   if (
-    centralDirectoryOffset >= archiveBytes.byteLength ||
-    centralDirectoryEnd > archiveBytes.byteLength
+    centralDirectoryOffset >= archiveSize ||
+    centralDirectoryEnd > archiveSize
   ) {
     return err(
       createBundleError(
@@ -233,121 +193,170 @@ function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
     );
   }
 
+  return ok({ totalEntries, centralDirectoryOffset });
+}
+
+function readBundleZipEntryHeader(
+  archiveBytes: Uint8Array,
+  view: DataView,
+  cursor: number,
+): Result<ZipCentralDirectoryEntryHeader> {
+  if (cursor + 46 > archiveBytes.byteLength) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "bundle 中央目錄資料不完整",
+      ),
+    );
+  }
+
+  if (
+    readUint32LE(view, cursor) !==
+    ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
+  ) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "bundle 中央目錄格式不正確",
+      ),
+    );
+  }
+
+  const header = readCentralDirectoryEntryHeader(view, cursor);
+  const { localHeaderOffset, nextCursor } = header;
+
+  if (nextCursor > archiveBytes.byteLength) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "bundle 中央目錄檔名資料不完整",
+      ),
+    );
+  }
+
+  if (isZip64Entry(header)) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "目前不支援 ZIP64 格式的 bundle",
+      ),
+    );
+  }
+
+  if (localHeaderOffset + 4 > archiveBytes.byteLength) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "bundle local header 位址不合法",
+      ),
+    );
+  }
+
+  if (
+    readUint32LE(view, localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE
+  ) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "bundle local header 格式不正確",
+      ),
+    );
+  }
+
+  return ok(header);
+}
+
+function parseBundleZipEntry(
+  archiveBytes: Uint8Array,
+  decoder: TextDecoder,
+  header: ZipCentralDirectoryEntryHeader,
+): Result<ParsedBundleZipEntryAtCursor> {
+  const {
+    uncompressedSize,
+    fileNameLength,
+    externalAttributes,
+    fileNameOffset,
+    nextCursor,
+  } = header;
+
+  const normalizedName = decoder
+    .decode(archiveBytes.subarray(fileNameOffset, fileNameOffset + fileNameLength))
+    .replace(/\\/g, "/");
+  if (!normalizedName) {
+    return ok({ entry: null, nextCursor });
+  }
+
+  if (isZipSymlink(externalAttributes)) {
+    return err(
+      createBundleError(
+        "BUNDLE_SYMLINK_FORBIDDEN",
+        `bundle 內含不允許的 symlink：${normalizedName}`,
+      ),
+    );
+  }
+
+  const pathResult = validateZipEntryPath(os.tmpdir(), normalizedName);
+  if (!pathResult.success) {
+    return pathResult;
+  }
+
+  const isDirectory = normalizedName.endsWith("/");
+  if (!isDirectory && uncompressedSize > MAX_BUNDLE_ENTRY_BYTES) {
+    return err(
+      createBundleError(
+        "BUNDLE_ENTRY_TOO_LARGE",
+        `bundle 內檔案超過允許的最大大小（${normalizedName}）`,
+      ),
+    );
+  }
+
+  return ok({
+    entry: { normalizedName, isDirectory, uncompressedSize },
+    nextCursor,
+  });
+}
+
+function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
+  const openedDirectory = openZipCentralDirectory(archiveBytes);
+  if (!openedDirectory) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "上傳檔案不是合法的 ZIP bundle",
+      ),
+    );
+  }
+
+  const { view, endRecord } = openedDirectory;
+  const directoryResult = validateBundleZipDirectory(
+    endRecord,
+    archiveBytes.byteLength,
+  );
+  if (!directoryResult.success) return directoryResult;
+  const { totalEntries, centralDirectoryOffset } = directoryResult.data;
+
   const decoder = new TextDecoder();
   const entries: ParsedZipEntry[] = [];
   let totalUncompressedBytes = 0;
   let cursor = centralDirectoryOffset;
 
   for (let index = 0; index < totalEntries; index += 1) {
-    if (cursor + 46 > archiveBytes.byteLength) {
-      return err(
-        createBundleError(
-          "INVALID_BUNDLE_ARCHIVE",
-          "bundle 中央目錄資料不完整",
-        ),
-      );
-    }
+    const headerResult = readBundleZipEntryHeader(archiveBytes, view, cursor);
+    if (!headerResult.success) return headerResult;
 
-    if (
-      readUint32LE(view, cursor) !==
-      ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
-    ) {
-      return err(
-        createBundleError(
-          "INVALID_BUNDLE_ARCHIVE",
-          "bundle 中央目錄格式不正確",
-        ),
-      );
-    }
+    const entryResult = parseBundleZipEntry(
+      archiveBytes,
+      decoder,
+      headerResult.data,
+    );
+    if (!entryResult.success) return entryResult;
 
-    const compressedSize = readUint32LE(view, cursor + 20);
-    const uncompressedSize = readUint32LE(view, cursor + 24);
-    const fileNameLength = readUint16LE(view, cursor + 28);
-    const extraFieldLength = readUint16LE(view, cursor + 30);
-    const fileCommentLength = readUint16LE(view, cursor + 32);
-    const externalAttributes = readUint32LE(view, cursor + 38);
-    const localHeaderOffset = readUint32LE(view, cursor + 42);
-    const fileNameOffset = cursor + 46;
-    const nextCursor =
-      fileNameOffset + fileNameLength + extraFieldLength + fileCommentLength;
+    const { entry, nextCursor } = entryResult.data;
+    cursor = nextCursor;
+    if (!entry) continue;
 
-    if (nextCursor > archiveBytes.byteLength) {
-      return err(
-        createBundleError(
-          "INVALID_BUNDLE_ARCHIVE",
-          "bundle 中央目錄檔名資料不完整",
-        ),
-      );
-    }
-
-    if (
-      compressedSize === ZIP64_U32_SENTINEL ||
-      uncompressedSize === ZIP64_U32_SENTINEL ||
-      localHeaderOffset === ZIP64_U32_SENTINEL
-    ) {
-      return err(
-        createBundleError(
-          "INVALID_BUNDLE_ARCHIVE",
-          "目前不支援 ZIP64 格式的 bundle",
-        ),
-      );
-    }
-
-    if (localHeaderOffset + 4 > archiveBytes.byteLength) {
-      return err(
-        createBundleError(
-          "INVALID_BUNDLE_ARCHIVE",
-          "bundle local header 位址不合法",
-        ),
-      );
-    }
-
-    if (
-      readUint32LE(view, localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE
-    ) {
-      return err(
-        createBundleError(
-          "INVALID_BUNDLE_ARCHIVE",
-          "bundle local header 格式不正確",
-        ),
-      );
-    }
-
-    const normalizedName = decoder
-      .decode(archiveBytes.subarray(fileNameOffset, fileNameOffset + fileNameLength))
-      .replace(/\\/g, "/");
-    if (!normalizedName) {
-      cursor = nextCursor;
-      continue;
-    }
-
-    const posixMode = (externalAttributes >>> 16) & 0xffff;
-    if ((posixMode & ZIP_FILE_TYPE_MASK) === ZIP_SYMLINK_FILE_TYPE) {
-      return err(
-        createBundleError(
-          "BUNDLE_SYMLINK_FORBIDDEN",
-          `bundle 內含不允許的 symlink：${normalizedName}`,
-        ),
-      );
-    }
-
-    const pathResult = validateZipEntryPath(os.tmpdir(), normalizedName);
-    if (!pathResult.success) {
-      return pathResult;
-    }
-
-    const isDirectory = normalizedName.endsWith("/");
-    if (!isDirectory) {
-      if (uncompressedSize > MAX_BUNDLE_ENTRY_BYTES) {
-        return err(
-          createBundleError(
-            "BUNDLE_ENTRY_TOO_LARGE",
-            `bundle 內檔案超過允許的最大大小（${normalizedName}）`,
-          ),
-        );
-      }
-
-      totalUncompressedBytes += uncompressedSize;
+    if (!entry.isDirectory) {
+      totalUncompressedBytes += entry.uncompressedSize;
       if (totalUncompressedBytes > MAX_BUNDLE_TOTAL_UNCOMPRESSED_BYTES) {
         return err(
           createBundleError(
@@ -358,12 +367,7 @@ function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
       }
     }
 
-    entries.push({
-      normalizedName,
-      isDirectory,
-      uncompressedSize,
-    });
-    cursor = nextCursor;
+    entries.push(entry);
   }
 
   if (!entries.some((entry) => !entry.isDirectory)) {

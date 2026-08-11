@@ -388,6 +388,20 @@ describe("importBundleArchive", () => {
     }
     expect(managedPluginStore.insert).not.toHaveBeenCalled();
   });
+
+  it("ZIP 中央目錄損毀時回 INVALID_BUNDLE_ARCHIVE", async () => {
+    const result = await importBundleArchive(
+      new File(["not-a-zip"], "broken.zip", {
+        type: "application/zip",
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("INVALID_BUNDLE_ARCHIVE");
+    }
+    expect(managedPluginStore.insert).not.toHaveBeenCalled();
+  });
 });
 
 describe("removePlugin", () => {

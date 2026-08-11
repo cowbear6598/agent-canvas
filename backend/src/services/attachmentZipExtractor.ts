@@ -10,15 +10,20 @@ import {
   MAX_ZIP_ENTRY_COUNT,
   MAX_ZIP_EXTRACTED_BYTES,
 } from "./uploadConstants.js";
+import {
+  isZip64Entry,
+  isZip64EndRecord,
+  isMultiDiskZip,
+  isZipSymlink,
+  openZipCentralDirectory,
+  readCentralDirectoryEntryHeader,
+  readUint32LE,
+  ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE,
+  ZIP_ENCRYPTED_FLAG,
+  ZIP_LOCAL_FILE_HEADER_SIGNATURE,
+  type ZipEndOfCentralDirectory,
+} from "../utils/zipCentralDirectory.js";
 
-const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
-const ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE = 0x02014b50;
-const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
-const ZIP64_U16_SENTINEL = 0xffff;
-const ZIP64_U32_SENTINEL = 0xffffffff;
-const ZIP_SYMLINK_FILE_TYPE = 0xa000;
-const ZIP_FILE_TYPE_MASK = 0xf000;
-const ZIP_ENCRYPTED_FLAG = 0x0001;
 const MAX_RENAME_COUNTER = 9999;
 
 interface ParsedZipEntry {
@@ -30,30 +35,19 @@ interface ParsedZipEntry {
   uncompressedSize: number;
 }
 
+interface ZipDirectoryBounds {
+  totalEntries: number;
+  centralDirectoryOffset: number;
+  centralDirectoryEnd: number;
+}
+
+interface ParsedZipEntryAtCursor {
+  entry: ParsedZipEntry;
+  nextCursor: number;
+}
+
 export interface ExtractZipResult {
   directoryName: string;
-}
-
-function readUint16LE(view: DataView, offset: number): number {
-  return view.getUint16(offset, true);
-}
-
-function readUint32LE(view: DataView, offset: number): number {
-  return view.getUint32(offset, true);
-}
-
-function findEndOfCentralDirectoryOffset(bytes: Uint8Array): number | null {
-  if (bytes.byteLength < 22) return null;
-
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const minOffset = Math.max(0, bytes.byteLength - 0xffff - 22);
-  for (let offset = bytes.byteLength - 22; offset >= minOffset; offset -= 1) {
-    if (readUint32LE(view, offset) === ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
-      return offset;
-    }
-  }
-
-  return null;
 }
 
 function normalizeAndValidateEntryName(rawName: string): string {
@@ -120,33 +114,18 @@ function validateEntryTree(entries: ParsedZipEntry[]): void {
   }
 }
 
-function parseZipEntries(bytes: Uint8Array): ParsedZipEntry[] {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const eocdOffset = findEndOfCentralDirectoryOffset(bytes);
-  if (eocdOffset === null) {
-    throw new AttachmentInvalidArchiveError("找不到 ZIP 中央目錄");
-  }
+function validateZipDirectory(
+  endRecord: ZipEndOfCentralDirectory,
+  archiveSize: number,
+): ZipDirectoryBounds {
+  const { totalEntries, centralDirectorySize, centralDirectoryOffset } =
+    endRecord;
 
-  const diskNumber = readUint16LE(view, eocdOffset + 4);
-  const centralDirectoryDiskNumber = readUint16LE(view, eocdOffset + 6);
-  const entriesOnThisDisk = readUint16LE(view, eocdOffset + 8);
-  const totalEntries = readUint16LE(view, eocdOffset + 10);
-  const centralDirectorySize = readUint32LE(view, eocdOffset + 12);
-  const centralDirectoryOffset = readUint32LE(view, eocdOffset + 16);
-
-  if (
-    diskNumber !== 0 ||
-    centralDirectoryDiskNumber !== 0 ||
-    entriesOnThisDisk !== totalEntries
-  ) {
+  if (isMultiDiskZip(endRecord)) {
     throw new AttachmentInvalidArchiveError("不支援分割式 ZIP 檔案");
   }
 
-  if (
-    totalEntries === ZIP64_U16_SENTINEL ||
-    centralDirectorySize === ZIP64_U32_SENTINEL ||
-    centralDirectoryOffset === ZIP64_U32_SENTINEL
-  ) {
+  if (isZip64EndRecord(endRecord)) {
     throw new AttachmentInvalidArchiveError("不支援 ZIP64 格式");
   }
 
@@ -161,83 +140,113 @@ function parseZipEntries(bytes: Uint8Array): ParsedZipEntry[] {
 
   const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
   if (
-    centralDirectoryOffset >= bytes.byteLength ||
-    centralDirectoryEnd > bytes.byteLength
+    centralDirectoryOffset >= archiveSize ||
+    centralDirectoryEnd > archiveSize
   ) {
     throw new AttachmentInvalidArchiveError("ZIP 中央目錄資料損毀");
   }
 
+  return { totalEntries, centralDirectoryOffset, centralDirectoryEnd };
+}
+
+function readZipEntry(
+  bytes: Uint8Array,
+  view: DataView,
+  cursor: number,
+  centralDirectoryEnd: number,
+  usedNames: Set<string>,
+): ParsedZipEntryAtCursor {
+  if (
+    cursor + 46 > centralDirectoryEnd ||
+    readUint32LE(view, cursor) !==
+      ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
+  ) {
+    throw new AttachmentInvalidArchiveError("ZIP 中央目錄格式不正確");
+  }
+
+  const header = readCentralDirectoryEntryHeader(view, cursor);
+  const {
+    flags,
+    uncompressedSize,
+    fileNameLength,
+    externalAttributes,
+    localHeaderOffset,
+    fileNameOffset,
+    nextCursor,
+  } = header;
+
+  if (nextCursor > centralDirectoryEnd) {
+    throw new AttachmentInvalidArchiveError("ZIP 中央目錄資料不完整");
+  }
+  if (isZip64Entry(header)) {
+    throw new AttachmentInvalidArchiveError("不支援 ZIP64 格式");
+  }
+  if (
+    localHeaderOffset + 4 > bytes.byteLength ||
+    readUint32LE(view, localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE
+  ) {
+    throw new AttachmentInvalidArchiveError("ZIP local header 格式不正確");
+  }
+  if ((flags & ZIP_ENCRYPTED_FLAG) !== 0) {
+    throw new AttachmentInvalidArchiveError("不支援加密 ZIP 檔案");
+  }
+
+  const decodedNames = decodeEntryNames(
+    bytes.subarray(fileNameOffset, fileNameOffset + fileNameLength),
+    flags,
+  );
+  const name = normalizeAndValidateEntryName(decodedNames.name);
+  const fflateName = normalizeAndValidateEntryName(decodedNames.fflateName);
+  if (usedNames.has(name)) {
+    throw new AttachmentInvalidArchiveError(`ZIP 內含重複路徑：${name}`);
+  }
+  usedNames.add(name);
+
+  if (isZipSymlink(externalAttributes)) {
+    throw new AttachmentInvalidArchiveError(`ZIP 內含 symlink：${name}`);
+  }
+
+  return {
+    entry: {
+      name,
+      fflateName,
+      isDirectory: name.endsWith("/"),
+      uncompressedSize,
+    },
+    nextCursor,
+  };
+}
+
+function parseZipEntries(bytes: Uint8Array): ParsedZipEntry[] {
+  const openedDirectory = openZipCentralDirectory(bytes);
+  if (!openedDirectory) {
+    throw new AttachmentInvalidArchiveError("找不到 ZIP 中央目錄");
+  }
+
+  const { view, endRecord } = openedDirectory;
+  const { totalEntries, centralDirectoryOffset, centralDirectoryEnd } =
+    validateZipDirectory(endRecord, bytes.byteLength);
   const entries: ParsedZipEntry[] = [];
   const usedNames = new Set<string>();
   let totalUncompressedBytes = 0;
   let cursor = centralDirectoryOffset;
 
   for (let index = 0; index < totalEntries; index += 1) {
-    if (
-      cursor + 46 > centralDirectoryEnd ||
-      readUint32LE(view, cursor) !==
-        ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
-    ) {
-      throw new AttachmentInvalidArchiveError("ZIP 中央目錄格式不正確");
-    }
-
-    const flags = readUint16LE(view, cursor + 8);
-    const compressedSize = readUint32LE(view, cursor + 20);
-    const uncompressedSize = readUint32LE(view, cursor + 24);
-    const fileNameLength = readUint16LE(view, cursor + 28);
-    const extraFieldLength = readUint16LE(view, cursor + 30);
-    const fileCommentLength = readUint16LE(view, cursor + 32);
-    const externalAttributes = readUint32LE(view, cursor + 38);
-    const localHeaderOffset = readUint32LE(view, cursor + 42);
-    const fileNameOffset = cursor + 46;
-    const nextCursor =
-      fileNameOffset + fileNameLength + extraFieldLength + fileCommentLength;
-
-    if (nextCursor > centralDirectoryEnd) {
-      throw new AttachmentInvalidArchiveError("ZIP 中央目錄資料不完整");
-    }
-    if (
-      compressedSize === ZIP64_U32_SENTINEL ||
-      uncompressedSize === ZIP64_U32_SENTINEL ||
-      localHeaderOffset === ZIP64_U32_SENTINEL
-    ) {
-      throw new AttachmentInvalidArchiveError("不支援 ZIP64 格式");
-    }
-    if (
-      localHeaderOffset + 4 > bytes.byteLength ||
-      readUint32LE(view, localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE
-    ) {
-      throw new AttachmentInvalidArchiveError("ZIP local header 格式不正確");
-    }
-    if ((flags & ZIP_ENCRYPTED_FLAG) !== 0) {
-      throw new AttachmentInvalidArchiveError("不支援加密 ZIP 檔案");
-    }
-
-    const decodedNames = decodeEntryNames(
-      bytes.subarray(fileNameOffset, fileNameOffset + fileNameLength),
-      flags,
+    const { entry, nextCursor } = readZipEntry(
+      bytes,
+      view,
+      cursor,
+      centralDirectoryEnd,
+      usedNames,
     );
-    const name = normalizeAndValidateEntryName(decodedNames.name);
-    const fflateName = normalizeAndValidateEntryName(decodedNames.fflateName);
-    if (usedNames.has(name)) {
-      throw new AttachmentInvalidArchiveError(`ZIP 內含重複路徑：${name}`);
-    }
-    usedNames.add(name);
-
-    const posixMode = (externalAttributes >>> 16) & 0xffff;
-    if ((posixMode & ZIP_FILE_TYPE_MASK) === ZIP_SYMLINK_FILE_TYPE) {
-      throw new AttachmentInvalidArchiveError(`ZIP 內含 symlink：${name}`);
-    }
-
-    const isDirectory = name.endsWith("/");
-    if (!isDirectory) {
-      totalUncompressedBytes += uncompressedSize;
+    if (!entry.isDirectory) {
+      totalUncompressedBytes += entry.uncompressedSize;
       if (totalUncompressedBytes > MAX_ZIP_EXTRACTED_BYTES) {
         throw new AttachmentArchiveTooLargeError();
       }
     }
 
-    entries.push({ name, fflateName, isDirectory, uncompressedSize });
+    entries.push(entry);
     cursor = nextCursor;
   }
 
