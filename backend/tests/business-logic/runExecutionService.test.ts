@@ -1123,6 +1123,86 @@ describe("RunExecutionService", () => {
       expect(bulkOverflowSpy).not.toHaveBeenCalled();
     });
 
+    it("已透過 direct 執行的 Pod 應等待 active stream 結束，再結清 blocked auto pathway 為 completed", () => {
+      const autoSourcePodId = "pod-auto-blocked";
+      const directSourcePodId = "pod-direct-completed";
+      const targetPodId = "pod-mixed-target";
+      const run = runStore.createRun(CANVAS_ID, directSourcePodId, "測試");
+
+      const autoSource = runStore.createPodInstance(
+        run.id,
+        autoSourcePodId,
+        "settled",
+        "not-applicable",
+      );
+      runStore.updatePodInstanceStatus(
+        autoSource.id,
+        "blocked",
+        "上游 Goal blocked",
+      );
+
+      const directSource = runStore.createPodInstance(
+        run.id,
+        directSourcePodId,
+        "settled",
+        "not-applicable",
+      );
+      runStore.updatePodInstanceStatus(directSource.id, "completed");
+
+      const target = runStore.createPodInstance(
+        run.id,
+        targetPodId,
+        "pending",
+        "settled",
+      );
+      runStore.updatePodInstanceStatus(target.id, "running");
+
+      insertConnection(
+        CANVAS_ID,
+        autoSourcePodId,
+        targetPodId,
+        "auto",
+        "conn-auto-blocked-after-direct",
+      );
+      insertConnection(
+        CANVAS_ID,
+        directSourcePodId,
+        targetPodId,
+        "direct",
+        "conn-direct-completed",
+      );
+
+      const ctx = makeRunContext({
+        runId: run.id,
+        sourcePodId: directSourcePodId,
+      });
+      runExecutionService.registerActiveStream(run.id, targetPodId);
+      runExecutionService.evaluateRun(ctx);
+
+      const activeTarget = runStore.getPodInstance(run.id, targetPodId);
+      expect(activeTarget?.status).toBe("running");
+      expect(activeTarget?.autoPathwaySettled).toBe("pending");
+
+      runExecutionService.unregisterActiveStream(run.id, targetPodId);
+      runExecutionService.evaluateRun(ctx);
+
+      const completedTarget = runStore.getPodInstance(run.id, targetPodId);
+      expect(completedTarget?.status).toBe("completed");
+      expect(completedTarget?.autoPathwaySettled).toBe("settled");
+      expect(completedTarget?.directPathwaySettled).toBe("settled");
+      expect(runStore.getRun(run.id)?.status).toBe("error");
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+        expect.objectContaining({
+          podId: targetPodId,
+          status: "completed",
+          autoPathwaySettled: "settled",
+          directPathwaySettled: "settled",
+        }),
+      );
+    });
+
     it("source blocked 透過 error pathway 後，下游 auto/branch/direct pathway 應結清為 skipped 而不是持續等待", () => {
       const targetPodId = "pod-downstream";
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");

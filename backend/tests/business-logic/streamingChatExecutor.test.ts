@@ -1451,11 +1451,6 @@ describe("executeStreamingChat", () => {
         },
       ]);
 
-      runExecutionService.registerActiveStream(runContext.runId, pod.id);
-      expect(runExecutionService.hasActiveStream(runContext.runId, pod.id)).toBe(
-        true,
-      );
-
       await executeStreamingChat(
         {
           canvasId,
@@ -2476,8 +2471,55 @@ describe("executeStreamingChat", () => {
         runId,
         pod.id,
       );
+      expect(runExecutionService.registerActiveStream).toHaveBeenCalledTimes(2);
+      expect(runExecutionService.unregisterActiveStream).toHaveBeenCalledTimes(
+        2,
+      );
       expect(result.content).toBe("Run 回應");
       expect(result.aborted).toBe(false);
+    });
+
+    it("完成 callback 執行期間仍保留整段串流的 active scope，離開後才釋放", async () => {
+      const pod = insertClaudePod();
+      const scopedRunContext: RunContext = {
+        ...runContext,
+        runId: `run-outer-stream-${randomUUID()}`,
+      };
+      asMock(runExecutionService.registerActiveStream).mockImplementation(
+        realRegisterActiveStream,
+      );
+      asMock(runExecutionService.unregisterActiveStream).mockImplementation(
+        realUnregisterActiveStream,
+      );
+      setupProviderMock([
+        { type: "text", content: "Run 回應" },
+        { type: "turn_complete" },
+      ]);
+
+      const onComplete = vi.fn(() => {
+        expect(
+          runExecutionService.hasActiveStream(
+            scopedRunContext.runId,
+            pod.id,
+          ),
+        ).toBe(true);
+      });
+
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: new ChatExecutionStrategy(canvasId, scopedRunContext),
+        },
+        { onComplete },
+      );
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(
+        runExecutionService.hasActiveStream(scopedRunContext.runId, pod.id),
+      ).toBe(false);
     });
 
     it("AbortError → unregisterActiveStream + errorPodInstance", async () => {

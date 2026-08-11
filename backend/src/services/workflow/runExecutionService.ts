@@ -110,8 +110,12 @@ export function settleInstanceIfUnreachable(
   // 未提供時退回線性搜尋（保持向下相容）
   instanceMap?: Map<string, RunPodInstance>,
   incomingConnectionsMap?: Map<string, Connection[]>,
+  options: { allowRunning?: boolean } = {},
 ): boolean {
-  if (!NEVER_TRIGGERED_STATUSES.has(instance.status)) return false;
+  const canSettle =
+    NEVER_TRIGGERED_STATUSES.has(instance.status) ||
+    (options.allowRunning === true && instance.status === "running");
+  if (!canSettle) return false;
 
   const incomingConns =
     incomingConnectionsMap?.get(instance.podId) ??
@@ -153,6 +157,18 @@ class RunExecutionService {
   private readonly resourceLifecycle = new RunResourceLifecycleService();
 
   private readonly cyclicPodIdsByRun = new Map<string, Set<string>>();
+
+  private canSettleUnreachableInstance(
+    runId: string,
+    instance: RunPodInstance,
+  ): boolean {
+    if (NEVER_TRIGGERED_STATUSES.has(instance.status)) return true;
+
+    return (
+      instance.status === "running" &&
+      !this.activeStreams.hasActiveStream(runId, instance.podId)
+    );
+  }
 
   async createRun(
     canvasId: string,
@@ -588,9 +604,10 @@ class RunExecutionService {
       downstreamMap.get(conn.sourcePodId)!.push(conn.targetPodId);
     }
 
-    // 初始佇列：所有尚未進入終態的 instance（首輪需全部掃描一次）
-    const queue: RunPodInstance[] = instances.filter((i) =>
-      NEVER_TRIGGERED_STATUSES.has(i.status),
+    // 已執行過的 running instance 只有在整段串流結束後才能結算剩餘路徑，
+    // 避免 Goal retry 的 turn 間隙被提前標記為 completed。
+    const queue: RunPodInstance[] = instances.filter((instance) =>
+      this.canSettleUnreachableInstance(runId, instance),
     );
     let queueHead = 0;
     const inQueue = new Set<string>(queue.map((i) => i.podId));
@@ -610,6 +627,7 @@ class RunExecutionService {
         instancePodIds,
         instanceMap,
         incomingConnectionsMap,
+        { allowRunning: instance.status === "running" },
       );
       if (!settled) continue;
 
@@ -642,7 +660,10 @@ class RunExecutionService {
       for (const podId of downstreamPodIds) {
         if (inQueue.has(podId)) continue;
         const downstream = instanceMap.get(podId);
-        if (downstream && NEVER_TRIGGERED_STATUSES.has(downstream.status)) {
+        if (
+          downstream &&
+          this.canSettleUnreachableInstance(runId, downstream)
+        ) {
           queue.push(downstream);
           inQueue.add(podId);
         }

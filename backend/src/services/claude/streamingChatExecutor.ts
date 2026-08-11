@@ -680,6 +680,12 @@ export async function executeStreamingChat(
   }
 
   const runContext = effectiveOptions.strategy.getRunContext();
+  if (runContext) {
+    // provider turn 會各自增減一次；這一層覆蓋整段多輪執行，避免 Goal gate
+    // 在兩輪之間暫時被視為沒有活躍串流。
+    runExecutionService.registerActiveStream(runContext.runId, podId);
+  }
+  let shouldEvaluateAfterStreamRelease = false;
   try {
     // 第一輪 turn：使用 caller 傳入的 message
     let turnOutcome = await executeChatTurn(
@@ -715,12 +721,16 @@ export async function executeStreamingChat(
 
     if (callbacks?.onComplete) {
       await callbacks.onComplete(canvasId, podId);
+      shouldEvaluateAfterStreamRelease = true;
     }
 
     return turnOutcome.result;
   } finally {
     if (runContext) {
       runExecutionService.unregisterActiveStream(runContext.runId, podId);
+      if (shouldEvaluateAfterStreamRelease) {
+        runExecutionService.evaluateRun(runContext);
+      }
     }
   }
 }
