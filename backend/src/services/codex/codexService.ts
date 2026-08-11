@@ -116,7 +116,7 @@ const MODEL_RE = /^[a-zA-Z0-9._-]+$/;
 /**
  * 預設模型，與 CodexProvider.metadata.defaultOptions.model 對齊。
  */
-const DEFAULT_MODEL = "gpt-5.5";
+const DEFAULT_MODEL = "gpt-5.6-luna";
 
 /**
  * 對 prompt 內容進行 sanitize，防止角色邊界偽造注入。

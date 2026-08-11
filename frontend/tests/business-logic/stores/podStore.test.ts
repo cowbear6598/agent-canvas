@@ -1420,4 +1420,19 @@ describe("podStore", () => {
     });
   });
 
+  describe("updatePodFastMode", () => {
+    it("只更新指定 Pod 的 Fast 狀態", () => {
+      const store = usePodStore();
+      store.pods = [
+        createMockPod({ id: "pod-1", fastModeEnabled: false }),
+        createMockPod({ id: "pod-2", fastModeEnabled: false }),
+      ];
+
+      store.updatePodFastMode("pod-1", true);
+
+      expect(store.getPodById("pod-1")?.fastModeEnabled).toBe(true);
+      expect(store.getPodById("pod-2")?.fastModeEnabled).toBe(false);
+    });
+  });
+
 });

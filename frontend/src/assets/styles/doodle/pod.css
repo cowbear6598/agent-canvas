@@ -102,6 +102,22 @@
   z-index: -1;
 }
 
+/* Fast 凹槽（POD 上方，與右側 Thinking 凹槽對稱） */
+.pod-with-fast-notch .fast-notch {
+  position: absolute;
+  top: -6px;
+  left: calc(
+    50% - var(--model-notch-width) / 2 - var(--pod-thinking-notch-width) - 4px
+  );
+  width: var(--pod-thinking-notch-width);
+  height: 8px;
+  background: var(--card);
+  border: 2px solid var(--doodle-ink);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  z-index: -1;
+}
+
 /* Plugin 凹槽視覺效果（POD 左側） */
 .pod-with-plugin-notch .pod-doodle::after {
   content: "";

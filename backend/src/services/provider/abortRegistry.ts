@@ -162,6 +162,11 @@ class AbortRegistry {
   has(key: string): boolean {
     return this.controllers.has(key);
   }
+
+  /** 檢查指定 Pod 是否仍有任何進行中的 provider 查詢。 */
+  hasActiveForPod(podId: string): boolean {
+    return (this.podIndex.get(podId)?.size ?? 0) > 0;
+  }
 }
 
 /** 全站唯一的 AbortRegistry singleton */

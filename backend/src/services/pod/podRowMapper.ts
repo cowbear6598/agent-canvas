@@ -22,6 +22,7 @@ export interface PodRow {
   schedule_json: string | null;
   provider: string;
   provider_config_json: string | null;
+  fast_mode_enabled: number;
 }
 
 export interface IntegrationBindingRow {
@@ -111,6 +112,7 @@ export function buildPodFromRow(
     pluginIds: relations.pluginIds.get(row.id) ?? [],
     provider,
     providerConfig,
+    fastModeEnabled: row.fast_mode_enabled === 1,
     repositoryId: row.repository_id,
     goal: parseGoal(row.goal_json),
     integrationBindings: bindingsMap.get(row.id) ?? [],

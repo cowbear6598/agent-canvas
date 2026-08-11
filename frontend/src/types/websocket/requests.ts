@@ -78,6 +78,13 @@ export interface PodSetThinkingLevelPayload {
   level: string;
 }
 
+export interface PodSetFastModePayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  enabled: boolean;
+}
+
 export interface PodSetSchedulePayload {
   requestId: string;
   canvasId: string;
@@ -180,6 +187,7 @@ export interface PastePodItem {
   provider: PodProvider;
   /** Provider 對應的設定（含 model 等參數） */
   providerConfig: ProviderConfig;
+  fastModeEnabled?: boolean;
   mcpServerNames?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;

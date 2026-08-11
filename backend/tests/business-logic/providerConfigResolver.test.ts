@@ -41,7 +41,7 @@ describe("providerConfigResolver", () => {
     ["claude", "claude-fable-5", "high"],
     ["codex", "gpt-5.6-sol", "medium"],
     ["codex", "gpt-5.6-terra", "medium"],
-    ["codex", "gpt-5.6-luna", "medium"],
+    ["codex", "gpt-5.6-luna", "high"],
   ] as const)(
     "允許 %s 的新 model %s 並補入預設 thinking level",
     (provider, model, thinkingLevel) => {
@@ -55,6 +55,12 @@ describe("providerConfigResolver", () => {
   it("拒絕已退役的 Codex gpt-5.4 model", () => {
     expect(() =>
       sanitizeProviderConfigStrict({ model: "gpt-5.4" }, "codex"),
+    ).toThrowError("Provider codex 不支援此 model");
+  });
+
+  it("拒絕已退役的 Codex gpt-5.5 model", () => {
+    expect(() =>
+      sanitizeProviderConfigStrict({ model: "gpt-5.5" }, "codex"),
     ).toThrowError("Provider codex 不支援此 model");
   });
 });

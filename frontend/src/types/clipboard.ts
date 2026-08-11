@@ -11,6 +11,8 @@ export interface CopiedPod {
   provider: PodProvider;
   /** Provider 對應的設定（複製時保留，貼上時還原） */
   providerConfig: ProviderConfig;
+  /** 複製時保留使用者明確開啟的 Fast 狀態。 */
+  fastModeEnabled?: boolean;
   mcpServerNames?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;

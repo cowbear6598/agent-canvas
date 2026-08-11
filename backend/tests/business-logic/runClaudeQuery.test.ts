@@ -459,6 +459,28 @@ describe("runClaudeQuery", () => {
     });
   });
 
+  describe("Fast mode SDK 設定", () => {
+    it("options.settings 應原樣傳入 Claude Agent SDK", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({
+        options: {
+          ...createCtx().options!,
+          settings: { fastMode: true },
+        },
+      });
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+      expect(calledOptions.settings).toEqual({ fastMode: true });
+    });
+  });
+
   describe("stderr diagnostics", () => {
     it("stderr 先於第一個 SDK message 到達時應先 yield 非 fatal 診斷事件，避免靜默卡住", async () => {
       mockQueryGenerator = ({ options }: any) =>

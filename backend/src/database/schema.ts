@@ -6,6 +6,7 @@ const ALLOWED_ALTER_TABLES = new Set([
   "managed_mcp_servers",
   "managed_plugins",
   "model_aliases",
+  "pods",
   "repo_memory_states",
   "run_pod_instances",
 ]);
@@ -129,25 +130,65 @@ function ensureRepoMemoryEnabledColumn(db: Database): void {
   })();
 }
 
+function ensurePodFastModeColumn(db: Database): void {
+  db.transaction(() => {
+    addColumnIfMissing(
+      db,
+      "pods",
+      "fast_mode_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+    db.exec(
+      `UPDATE pods
+       SET fast_mode_enabled = CASE WHEN fast_mode_enabled = 1 THEN 1 ELSE 0 END`,
+    );
+  })();
+}
+
 function migrateRetiredCodexModels(db: Database): void {
   db.transaction(() => {
     db.exec(
       `UPDATE pods
-       SET provider_config_json = json_set(provider_config_json, '$.model', 'gpt-5.5')
-       WHERE json_extract(provider_config_json, '$.model') IN ('gpt-5.4-mini', 'gpt-5.4')`,
+       SET provider_config_json = json_set(
+         provider_config_json,
+         '$.model', 'gpt-5.6-luna',
+         '$.thinkingLevel', 'high'
+       )
+       WHERE json_extract(provider_config_json, '$.model') IN ('gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5')`,
     );
 
     db.exec(
       `UPDATE connections
-       SET summary_model = 'gpt-5.5'
-       WHERE summary_model IN ('gpt-5.4-mini', 'gpt-5.4')`,
+       SET summary_model = 'gpt-5.6-luna', summary_thinking_level = 'high'
+       WHERE summary_model IN ('gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5')`,
+    );
+
+    db.exec(
+      `INSERT INTO global_settings (key, value)
+       SELECT 'memory_thinking_level', 'high'
+       WHERE EXISTS (
+         SELECT 1 FROM global_settings
+         WHERE key = 'memory_model'
+           AND value IN ('gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5')
+       )
+       ON CONFLICT(key) DO UPDATE SET value = 'high'`,
+    );
+
+    db.exec(
+      `INSERT INTO global_settings (key, value)
+       SELECT 'connection_line_thinking_level', 'high'
+       WHERE EXISTS (
+         SELECT 1 FROM global_settings
+         WHERE key = 'connection_line_model'
+           AND value IN ('gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5')
+       )
+       ON CONFLICT(key) DO UPDATE SET value = 'high'`,
     );
 
     db.exec(
       `UPDATE global_settings
-       SET value = 'gpt-5.5'
+       SET value = 'gpt-5.6-luna'
        WHERE key IN ('memory_model', 'connection_line_model')
-         AND value IN ('gpt-5.4-mini', 'gpt-5.4')`,
+         AND value IN ('gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5')`,
     );
   })();
 }
@@ -205,6 +246,7 @@ function createBaseTables(db: Database): void {
       "schedule_json TEXT," +
       "provider TEXT NOT NULL DEFAULT 'claude'," +
       "provider_config_json TEXT," +
+      "fast_mode_enabled INTEGER NOT NULL DEFAULT 0," +
       "UNIQUE (canvas_id, name)" +
       ")",
   );
@@ -579,6 +621,7 @@ function createBaseTables(db: Database): void {
 
 export function createTables(db: Database): void {
   createBaseTables(db);
+  ensurePodFastModeColumn(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
   ensureConnectionPersistenceColumns(db);
   ensureSecretStorageVersionColumns(db);

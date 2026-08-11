@@ -19,6 +19,7 @@ import {
   serializeSchedule,
 } from "./pod/podUpdatePolicy.js";
 import { podRepository } from "./pod/podRepository.js";
+import { isFastModeSupported } from "./provider/capabilities.js";
 
 class PodStore {
   /**
@@ -88,6 +89,9 @@ class PodStore {
       pluginIds: data.pluginIds ?? [],
       provider,
       providerConfig,
+      fastModeEnabled:
+        data.fastModeEnabled === true &&
+        isFastModeSupported(provider, providerConfig.model),
       repositoryId: data.repositoryId ?? null,
       goal: normalizePodGoal(data.goal ?? null),
       // create 路徑直接回傳空陣列，與 getById/list（走 batchLoadBindings 路徑）保持結構一致

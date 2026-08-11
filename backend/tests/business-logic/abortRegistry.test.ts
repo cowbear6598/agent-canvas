@@ -47,6 +47,16 @@ describe("register", () => {
     // map 中應存放新的 controller（has 依然為 true）
     expect(abortRegistry.has("pod-dup")).toBe(true);
   });
+
+  it("帶 podId 註冊時 hasActiveForPod 應反映註冊與清除狀態", () => {
+    abortRegistry.register("run-001:pod-fast", "pod-fast");
+
+    expect(abortRegistry.hasActiveForPod("pod-fast")).toBe(true);
+    expect(abortRegistry.hasActiveForPod("other-pod")).toBe(false);
+
+    abortRegistry.unregister("run-001:pod-fast");
+    expect(abortRegistry.hasActiveForPod("pod-fast")).toBe(false);
+  });
 });
 
 // ================================================================

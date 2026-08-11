@@ -5,10 +5,12 @@ import type {
   PodSetProviderPayload,
   PodSetSchedulePayload,
   PodSetThinkingLevelPayload,
+  PodSetFastModePayload,
 } from "../../schemas/index.js";
 import type {
   Pod,
   PodGoalSetPayload,
+  PodFastModeSetPayload,
   PodModelSetPayload,
   PodMovedPayload,
   PodProviderSetPayload,
@@ -27,6 +29,18 @@ import { createI18nError } from "../../utils/i18nError.js";
 import { logger } from "../../utils/logger.js";
 import { WebSocketError } from "../../middleware/wsErrorHandler.js";
 import type { ApplicationCommandResult } from "./applicationCommand.js";
+import { isFastModeSupported } from "../provider/capabilities.js";
+import { abortRegistry } from "../provider/abortRegistry.js";
+import { runStore } from "../runStore.js";
+
+function getFastModeCompatibilityUpdate(
+  provider: string,
+  model: unknown,
+): { fastModeEnabled?: false } {
+  return isFastModeSupported(provider, model)
+    ? {}
+    : { fastModeEnabled: false };
+}
 
 function createCanvasPodDispatch<TPayload>(
   canvasId: string,
@@ -260,6 +274,10 @@ class PodCommandService {
       updates: {
         provider: params.provider,
         providerConfig: params.providerConfig,
+        ...getFastModeCompatibilityUpdate(
+          params.provider,
+          params.providerConfig.model,
+        ),
       },
       createPayload: (pod) => ({
         requestId: params.requestId,
@@ -299,7 +317,13 @@ class PodCommandService {
       podId: params.podId,
       requestId: params.requestId,
       event: WebSocketResponseEvents.POD_MODEL_SET,
-      updates: { providerConfig: safeProviderConfig },
+      updates: {
+        providerConfig: safeProviderConfig,
+        ...getFastModeCompatibilityUpdate(
+          params.existingPod.provider,
+          params.model,
+        ),
+      },
       createPayload: (pod) => ({
         requestId: params.requestId,
         canvasId: params.canvasId,
@@ -342,6 +366,55 @@ class PodCommandService {
       requestId: params.requestId,
       event: WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
       updates: { providerConfig: safeProviderConfig },
+      createPayload: (pod) => ({
+        requestId: params.requestId,
+        canvasId: params.canvasId,
+        success: true,
+        pod,
+      }),
+    });
+  }
+
+  setFastMode(params: {
+    canvasId: string;
+    podId: string;
+    requestId: string;
+    existingPod: Pod;
+    enabled: PodSetFastModePayload["enabled"];
+  }): ApplicationCommandResult<PodFastModeSetPayload> {
+    if (
+      abortRegistry.hasActiveForPod(params.podId) ||
+      runStore.hasActiveRunForPod(params.podId)
+    ) {
+      throw new WebSocketError(
+        "POD_BUSY",
+        "Pod 正在執行任務，無法切換 Fast mode",
+        undefined,
+        params.podId,
+      );
+    }
+
+    if (
+      params.enabled &&
+      !isFastModeSupported(
+        params.existingPod.provider,
+        params.existingPod.providerConfig?.model,
+      )
+    ) {
+      throw new WebSocketError(
+        "POD_FAST_MODE_UNSUPPORTED",
+        "目前的 provider 或 model 不支援 Fast mode",
+        undefined,
+        params.podId,
+      );
+    }
+
+    return this.updatePodAndBroadcast({
+      canvasId: params.canvasId,
+      podId: params.podId,
+      requestId: params.requestId,
+      event: WebSocketResponseEvents.POD_FAST_MODE_SET,
+      updates: { fastModeEnabled: params.enabled },
       createPayload: (pod) => ({
         requestId: params.requestId,
         canvasId: params.canvasId,

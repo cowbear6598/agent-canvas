@@ -81,6 +81,7 @@ export interface ModelOption {
   thinkingLevels?: ReadonlyArray<string>;
   thinkingLevelLabels?: Readonly<Record<string, string>>;
   defaultThinkingLevel?: string;
+  supportsFastMode?: boolean;
 }
 
 export type FrequencyType =
@@ -121,6 +122,7 @@ export interface Pod {
   integrationBindings?: IntegrationBinding[];
   provider: PodProvider;
   providerConfig: ProviderConfig;
+  fastModeEnabled?: boolean;
 }
 
 export interface PodTypeConfig {

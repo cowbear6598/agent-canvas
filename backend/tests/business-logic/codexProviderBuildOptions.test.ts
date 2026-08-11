@@ -82,6 +82,8 @@ describe("CodexProvider.buildOptions()", () => {
     expect(options.resumeMode).toBe("cli");
     expect(options.mcpEntries).toEqual([]);
     expect(options.hasGoalRuntime).toBe(false);
+    expect(options.fastModeEnabled).toBe(false);
+    expect(options.model).toBe("gpt-5.6-luna");
   });
 
   // ── Case 2：合法 model → 採用之 ──────────────────────────────────────
@@ -120,6 +122,24 @@ describe("CodexProvider.buildOptions()", () => {
     const options = await provider.buildOptions(pod);
 
     expect(options.model).toBe(provider.metadata.defaultOptions.model);
+  });
+
+  it("支援模型開啟 Fast mode 時保留 true，不支援模型則防禦性關閉", async () => {
+    const supported = await provider.buildOptions(
+      makePod({
+        providerConfig: { model: "gpt-5.6-luna" },
+        fastModeEnabled: true,
+      }),
+    );
+    const unsupported = await provider.buildOptions(
+      makePod({
+        providerConfig: { model: "gpt-5.4-pro" },
+        fastModeEnabled: true,
+      }),
+    );
+
+    expect(supported.fastModeEnabled).toBe(true);
+    expect(unsupported.fastModeEnabled).toBe(false);
   });
 
   // ── Case 5：runContext 傳入時透過 buildPodMcpEntries 取得 entries ─────

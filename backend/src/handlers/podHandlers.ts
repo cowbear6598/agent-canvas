@@ -18,6 +18,7 @@ import type {
   PodSetProviderPayload,
   PodSetModelPayload,
   PodSetThinkingLevelPayload,
+  PodSetFastModePayload,
   PodSetSchedulePayload,
   PodSetMemoryEnabledPayload,
   PodGetMemoryPayload,
@@ -322,6 +323,34 @@ export const handlePodSetThinkingLevel =
       );
     },
   );
+
+export const handlePodSetFastMode = withCanvasId<PodSetFastModePayload>(
+  WebSocketResponseEvents.POD_FAST_MODE_SET,
+  async (
+    connectionId: string,
+    canvasId: string,
+    payload: PodSetFastModePayload,
+    requestId: string,
+  ): Promise<void> => {
+    const existingPod = validatePod(
+      connectionId,
+      payload.podId,
+      WebSocketResponseEvents.POD_FAST_MODE_SET,
+      requestId,
+    );
+    if (!existingPod) return;
+
+    dispatchApplicationCommand(
+      podCommandService.setFastMode({
+        canvasId,
+        podId: payload.podId,
+        requestId,
+        existingPod,
+        enabled: payload.enabled,
+      }),
+    );
+  },
+);
 
 export const handlePodSetSchedule = withCanvasId<PodSetSchedulePayload>(
   WebSocketResponseEvents.POD_SCHEDULE_SET,

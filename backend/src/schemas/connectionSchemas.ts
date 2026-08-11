@@ -4,7 +4,7 @@ import { providerSchema } from "./podSchemas.js";
 
 export const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
 
-// summaryModel 接受合法模型名稱字串，允許 Codex 模型名稱（如 "gpt-5.5"）
+// summaryModel 接受合法模型名稱字串，允許 Codex 模型名稱（如 "gpt-5.6-luna"）
 // 與 OpenCode alias model value（如 "openai/gpt-4o"）。
 // 長度上限 200 字元，防止超長字串攻擊。
 const summaryModelSchema = z

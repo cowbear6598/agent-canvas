@@ -19,6 +19,7 @@
 import {
   CODEX_AVAILABLE_MODELS,
   CODEX_AVAILABLE_MODEL_VALUES,
+  isFastModeSupported,
 } from "./capabilities.js";
 import { normalize } from "./codexNormalizer.js";
 import { buildProviderSystemError } from "./types.js";
@@ -54,6 +55,8 @@ export interface CodexOptions {
   resumeMode: "cli";
   /** 思考深度等級（thinkingLevel），對應 codex 的 model_reasoning_effort；未設定時不傳 -c 旗標 */
   thinkingLevel?: string;
+  /** 是否啟用 Codex Fast mode。 */
+  fastModeEnabled?: boolean;
   /**
    * 要注入給 codex 的 managed MCP entries（含 Goal Runtime；run / chat 模式統一）。
    * 每筆轉成 `-c mcp_servers.<name>.*` CLI args 餵給 codex CLI。
@@ -321,6 +324,14 @@ function buildRuntimeMcpConfigArgs(entries: PodMcpEntry[]): string[] {
   return args;
 }
 
+function buildFastModeArgs(enabled: boolean): string[] {
+  return [
+    "-c",
+    `features.fast_mode=${enabled}`,
+    ...(enabled ? ["-c", 'service_tier="fast"'] : []),
+  ];
+}
+
 /** 組合新對話的 CLI 參數（無 resumeSessionId 或 sessionId 不合法時使用）。 */
 function buildNewSessionArgs(
   model: string,
@@ -328,6 +339,7 @@ function buildNewSessionArgs(
   mcpAutoApproveArgs: string[],
   goalMcpConfigArgs: string[],
   thinkingLevel?: string,
+  fastModeEnabled = false,
 ): string[] {
   return [
     "exec",
@@ -339,6 +351,7 @@ function buildNewSessionArgs(
     "--dangerously-bypass-approvals-and-sandbox",
     // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
     ...(thinkingLevel ? ["-c", `model_reasoning_effort=${thinkingLevel}`] : []),
+    ...buildFastModeArgs(fastModeEnabled),
     ...goalMcpConfigArgs,
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
     ...mcpAutoApproveArgs,
@@ -380,6 +393,7 @@ function buildCodexArgs(
 
   const mcpAutoApproveArgs = buildMcpAutoApproveArgs(autoApproveServerNames);
   const runtimeMcpConfigArgs = buildRuntimeMcpConfigArgs(entries);
+  const fastModeEnabled = options?.fastModeEnabled ?? false;
 
   if (resumeSessionId) {
     if (!SESSION_ID_RE.test(resumeSessionId)) {
@@ -395,6 +409,7 @@ function buildCodexArgs(
         mcpAutoApproveArgs,
         runtimeMcpConfigArgs,
         thinkingLevel,
+        fastModeEnabled,
       );
     }
 
@@ -412,6 +427,7 @@ function buildCodexArgs(
       ...(thinkingLevel
         ? ["-c", `model_reasoning_effort=${thinkingLevel}`]
         : []),
+      ...buildFastModeArgs(fastModeEnabled),
       ...runtimeMcpConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
@@ -426,6 +442,7 @@ function buildCodexArgs(
     mcpAutoApproveArgs,
     runtimeMcpConfigArgs,
     thinkingLevel,
+    fastModeEnabled,
   );
 }
 
@@ -694,11 +711,12 @@ function setupSubprocess(
 const codexMetadata: ProviderMetadata<CodexOptions> = {
   name: "codex",
   defaultOptions: {
-    model: "gpt-5.5",
+    model: "gpt-5.6-luna",
     resumeMode: "cli",
     mcpEntries: [],
     hasGoalRuntime: false,
     pluginCatalogText: "",
+    fastModeEnabled: false,
   },
   availableModels: CODEX_AVAILABLE_MODELS,
   availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
@@ -762,6 +780,8 @@ export const codexProvider: AgentProvider<CodexOptions> = {
       mcpEntries: entries,
       hasGoalRuntime,
       pluginCatalogText: formatPluginSkillCatalogPrompt(pluginCatalog),
+      fastModeEnabled:
+        pod.fastModeEnabled === true && isFastModeSupported("codex", model),
     };
 
     const rawThinkingLevel = pod.providerConfig?.thinkingLevel;

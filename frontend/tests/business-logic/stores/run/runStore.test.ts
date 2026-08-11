@@ -143,6 +143,31 @@ function createMockDivider(
   };
 }
 
+describe("isPodRunning", () => {
+  setupStoreTest();
+
+  it("只有 running Run 內尚未終止的 Pod instance 視為忙碌", () => {
+    const store = useRunStore();
+    setRuns(store, [createMockRun()]);
+
+    expect(store.isPodRunning("pod-1")).toBe(true);
+    expect(store.isPodRunning("pod-missing")).toBe(false);
+
+    setRuns(
+      store,
+      [
+        createMockRun({
+          podInstances: [createMockPodInstance({ status: "completed" })],
+        }),
+      ],
+    );
+    expect(store.isPodRunning("pod-1")).toBe(false);
+
+    setRuns(store, [createMockRun({ status: "completed" })]);
+    expect(store.isPodRunning("pod-1")).toBe(false);
+  });
+});
+
 /** 測試輔助：判斷巢狀 runChatMessages 中是否存在指定 runId / podId。 */
 function hasPodMessages(
   store: ReturnType<typeof useRunStore>,

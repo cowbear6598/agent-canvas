@@ -110,45 +110,45 @@ describe("ConfigStore", () => {
     it("成功更新 Memory thinking level 並讀取回正確值", () => {
       const result = configStore.update({
         memoryProvider: "codex",
-        memoryModel: "gpt-5.5",
+        memoryModel: "gpt-5.6-luna",
         memoryThinkingLevel: "high",
       });
 
       expect(result.memoryProvider).toBe("codex");
-      expect(result.memoryModel).toBe("gpt-5.5");
+      expect(result.memoryModel).toBe("gpt-5.6-luna");
       expect(result.memoryThinkingLevel).toBe("high");
 
       const config = configStore.getAll();
       expect(config.memoryProvider).toBe("codex");
-      expect(config.memoryModel).toBe("gpt-5.5");
+      expect(config.memoryModel).toBe("gpt-5.6-luna");
       expect(config.memoryThinkingLevel).toBe("high");
     });
 
     it("getMemoryConfig 回傳 Memory thinking level", () => {
       configStore.update({
         memoryProvider: "codex",
-        memoryModel: "gpt-5.5",
+        memoryModel: "gpt-5.6-luna",
         memoryThinkingLevel: "high",
       });
 
       const memoryConfig = configStore.getMemoryConfig();
 
       expect(memoryConfig.memoryProvider).toBe("codex");
-      expect(memoryConfig.memoryModel).toBe("gpt-5.5");
+      expect(memoryConfig.memoryModel).toBe("gpt-5.6-luna");
       expect(memoryConfig.memoryThinkingLevel).toBe("high");
     });
 
     it("Memory thinking level 設為 null 時會清除既有設定", () => {
       configStore.update({
         memoryProvider: "codex",
-        memoryModel: "gpt-5.5",
+        memoryModel: "gpt-5.6-luna",
         memoryThinkingLevel: "high",
       });
 
       const result = configStore.update({ memoryThinkingLevel: null });
 
       expect(result.memoryProvider).toBe("codex");
-      expect(result.memoryModel).toBe("gpt-5.5");
+      expect(result.memoryModel).toBe("gpt-5.6-luna");
       expect(result.memoryThinkingLevel).toBeNull();
       expect(configStore.getAll().memoryThinkingLevel).toBeNull();
       expect(configStore.getMemoryConfig().memoryThinkingLevel).toBeNull();

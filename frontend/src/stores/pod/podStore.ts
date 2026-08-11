@@ -246,6 +246,12 @@ export const usePodStore = defineStore("pod", () => {
     );
   }
 
+  function updatePodFastMode(podId: string, enabled: boolean): void {
+    const pod = findPodById(podId);
+    if (!pod) return;
+    pod.fastModeEnabled = enabled;
+  }
+
   function updatePodRepository(
     podId: string,
     repositoryId: string | null,
@@ -422,6 +428,7 @@ export const usePodStore = defineStore("pod", () => {
     updatePodProvider: commandActions.updatePodProvider,
     updatePodProviderConfigModel,
     updatePodThinkingLevel,
+    updatePodFastMode,
     updatePodRepository,
     setRepositoryMemoryState,
     updatePodGoal,

@@ -7,6 +7,7 @@ import PodSingleBindSlot from "@/components/pod/PodSingleBindSlot.vue";
 import PodPluginSlot from "@/components/pod/PodPluginSlot.vue";
 import PodMcpSlot from "@/components/pod/PodMcpSlot.vue";
 import PodThinkingSlot from "@/components/pod/PodThinkingSlot.vue";
+import PodFastSlot from "@/components/pod/PodFastSlot.vue";
 import PodGoalSlot from "@/components/pod/PodGoalSlot.vue";
 import { useRepositoryStore } from "@/stores/note";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
@@ -19,6 +20,8 @@ const props = defineProps<{
   provider: PodProvider;
   currentModel: string;
   currentThinkingLevel: string | undefined;
+  fastModeEnabled: boolean;
+  fastModeBusy: boolean;
   boundRepositoryNote: RepositoryNote | undefined;
   goalTodoCount: number;
 }>();
@@ -27,6 +30,7 @@ const emit = defineEmits<{
   "plugin-clicked": [event: MouseEvent];
   "mcp-clicked": [event: MouseEvent];
   "thinking-clicked": [event: MouseEvent];
+  "fast-clicked": [event: MouseEvent];
   "goal-clicked": [event: MouseEvent];
   "repository-dropped": [noteId: string];
   "repository-removed": [];
@@ -46,9 +50,31 @@ const thinkingDisabled = computed(
       props.currentModel,
     ),
 );
+
+const fastUnsupported = computed(
+  () =>
+    !providerCapabilityStore.isFastModeSupportedForModel(
+      props.provider,
+      props.currentModel,
+    ),
+);
+
+const fastDisabledTooltip = computed(() =>
+  props.fastModeBusy
+    ? t("pod.slot.fastBusyTooltip")
+    : t("pod.slot.fastUnsupportedTooltip"),
+);
 </script>
 
 <template>
+  <PodFastSlot
+    :pod-rotation="props.podRotation"
+    :enabled="props.fastModeEnabled"
+    :disabled="fastUnsupported || props.fastModeBusy"
+    :disabled-tooltip="fastDisabledTooltip"
+    @click="(ev) => emit('fast-clicked', ev)"
+  />
+
   <PodPluginSlot
     :pod-id="props.podId"
     :pod-rotation="props.podRotation"

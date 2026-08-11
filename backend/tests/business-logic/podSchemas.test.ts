@@ -28,6 +28,25 @@ describe("pod plugin id schema", () => {
     });
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fastModeEnabled).toBe(false);
+    }
+  });
+
+  it("paste payload 可保留明確指定的 Fast 狀態", () => {
+    const result = pastePodItemSchema.safeParse({
+      originalId: "33333333-3333-4333-8333-333333333333",
+      name: "Fast Pod",
+      x: 10,
+      y: 20,
+      rotation: 0,
+      fastModeEnabled: true,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fastModeEnabled).toBe(true);
+    }
   });
 });
 

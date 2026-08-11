@@ -139,7 +139,7 @@ describe("ConnectionStore SQLite 持久化", () => {
           "pod-default-thinking",
           canvasId,
           "Default Thinking Pod",
-          JSON.stringify({ model: "gpt-5.5" }),
+          JSON.stringify({ model: "gpt-5.6-luna" }),
         );
 
       const connection = connectionStore.create(canvasId, {
@@ -149,8 +149,8 @@ describe("ConnectionStore SQLite 持久化", () => {
         targetAnchor: "left",
       });
 
-      expect(connection.summaryThinkingLevel).toBe("medium");
-      expect(connection.branchThinkingLevel).toBe("medium");
+      expect(connection.summaryThinkingLevel).toBe("high");
+      expect(connection.branchThinkingLevel).toBe("high");
     });
   });
 
@@ -320,13 +320,13 @@ describe("ConnectionStore SQLite 持久化", () => {
         sourceAnchor: "right",
         targetPodId: "pod-b",
         targetAnchor: "left",
-        summaryProvider: "codex",
-        summaryModel: "gpt-5.5",
+        summaryProvider: "claude",
+        summaryModel: "sonnet",
       });
 
       expect(() =>
         connectionStore.update(canvasId, connection.id, {
-          summaryThinkingLevel: "max",
+          summaryThinkingLevel: "xhigh",
         }),
       ).toThrow("summaryThinkingLevel 不支援指定的 provider/model");
     });
@@ -346,7 +346,7 @@ describe("ConnectionStore SQLite 持久化", () => {
       });
 
       expect(updated?.summaryProvider).toBe("codex");
-      expect(updated?.summaryModel).toBe("gpt-5.5");
+      expect(updated?.summaryModel).toBe("gpt-5.6-luna");
     });
 
     it("更新 summary provider/model 時未指定 thinking level 應重設為新模型預設值", () => {
@@ -364,10 +364,10 @@ describe("ConnectionStore SQLite 持久化", () => {
 
       const updated = connectionStore.update(canvasId, connection.id, {
         summaryProvider: "codex",
-        summaryModel: "gpt-5.5",
+        summaryModel: "gpt-5.6-luna",
       });
 
-      expect(updated?.summaryThinkingLevel).toBe("medium");
+      expect(updated?.summaryThinkingLevel).toBe("high");
     });
 
     it("更新 summary thinking level 為模型不支援的值時應拒絕寫入", () => {
@@ -378,13 +378,13 @@ describe("ConnectionStore SQLite 持久化", () => {
         targetAnchor: "left",
         triggerMode: "branch",
         label: "Test-Label",
-        summaryProvider: "codex",
-        summaryModel: "gpt-5.5",
+        summaryProvider: "claude",
+        summaryModel: "sonnet",
       });
 
       expect(() =>
         connectionStore.update(canvasId, connection.id, {
-          summaryThinkingLevel: "max",
+          summaryThinkingLevel: "xhigh",
         }),
       ).toThrow("summaryThinkingLevel 不支援指定的 provider/model");
     });

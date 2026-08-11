@@ -15,6 +15,8 @@ export const webSocketRequestResponsePairs = {
   [WebSocketRequestEvents.POD_SET_MODEL]: WebSocketResponseEvents.POD_MODEL_SET,
   [WebSocketRequestEvents.POD_SET_THINKING_LEVEL]:
     WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+  [WebSocketRequestEvents.POD_SET_FAST_MODE]:
+    WebSocketResponseEvents.POD_FAST_MODE_SET,
   [WebSocketRequestEvents.POD_SET_SCHEDULE]:
     WebSocketResponseEvents.POD_SCHEDULE_SET,
   [WebSocketRequestEvents.POD_SET_MEMORY_ENABLED]:

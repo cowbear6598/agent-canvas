@@ -204,6 +204,29 @@ describe("claudeProvider.buildOptions()", () => {
     expect(options.model).toBe("sonnet");
   });
 
+  it("Opus Pod 開啟 Fast mode 時應傳入 SDK fastMode 設定", async () => {
+    const pod = makePod({
+      providerConfig: { model: "opus" },
+      fastModeEnabled: true,
+    });
+
+    const options = await claudeProvider.buildOptions(pod);
+
+    expect(options.settings).toEqual({ fastMode: true });
+  });
+
+  it("Fast mode 關閉或模型不支援時應明確傳入 false", async () => {
+    const disabled = await claudeProvider.buildOptions(
+      makePod({ providerConfig: { model: "opus" }, fastModeEnabled: false }),
+    );
+    const unsupported = await claudeProvider.buildOptions(
+      makePod({ providerConfig: { model: "sonnet" }, fastModeEnabled: true }),
+    );
+
+    expect(disabled.settings).toEqual({ fastMode: false });
+    expect(unsupported.settings).toEqual({ fastMode: false });
+  });
+
   // ── Case 3：pod.mcpServerNames → mcpServers 被填入 ─────────────────────
   it("pod.mcpServerNames 設定時應呼叫 readClaudeMcpServers，並以名稱過濾填入 mcpServers", async () => {
     const mockServers = [

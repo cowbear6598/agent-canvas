@@ -11,6 +11,7 @@ import {
 import {
   CLAUDE_MODEL_THINKING_LEVELS,
   CODEX_MODEL_THINKING_LEVELS,
+  isFastModeSupported,
 } from "../services/provider/capabilities.js";
 import { socketService } from "../services/socketService.js";
 import { getStmts } from "../database/index.js";
@@ -71,6 +72,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
       thinkingLevels: readonly string[];
       thinkingLevelLabels?: Readonly<Record<string, string>>;
       defaultThinkingLevel: string | null;
+      supportsFastMode: boolean;
     }>;
 
     if (name === "opencode") {
@@ -90,6 +92,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
           thinkingLevels: levels.map((level) => level.id),
           ...(levels.length > 0 ? { thinkingLevelLabels: labels } : {}),
           defaultThinkingLevel: r.default_thinking_level,
+          supportsFastMode: false,
         };
       });
     } else {
@@ -102,6 +105,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
           value: model.value,
           thinkingLevels: entry ? [...entry.levels] : [],
           defaultThinkingLevel: entry ? entry.default : null,
+          supportsFastMode: isFastModeSupported(name, model.value),
         };
       });
     }

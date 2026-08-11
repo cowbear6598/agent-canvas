@@ -22,6 +22,7 @@ describe("collectCopyData", () => {
         repositoryId: "repo-1",
         provider: "codex",
         providerConfig: { model: "gpt-5.5" },
+        fastModeEnabled: true,
         mcpServerNames: ["filesystem"],
         pluginIds: ["jira"],
         goal: { todos: [{ id: "todo-1", text: "Ship" }] },
@@ -46,6 +47,7 @@ describe("collectCopyData", () => {
         id: "pod-codex",
         provider: "codex",
         providerConfig: { model: "gpt-5.5" },
+        fastModeEnabled: true,
         repositoryId: "repo-1",
         mcpServerNames: ["filesystem"],
         pluginIds: ["jira"],
@@ -56,6 +58,7 @@ describe("collectCopyData", () => {
         provider: "claude",
         providerConfig: { model: "claude-3-5-sonnet-20241022" },
         goal: null,
+        fastModeEnabled: false,
       }),
     ]);
   });

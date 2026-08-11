@@ -9,6 +9,7 @@ type ModelThinkingConfig = Readonly<{
 type ModelMetadata = Readonly<{
   label: string;
   thinking: ModelThinkingConfig;
+  supportsFastMode: boolean;
 }>;
 
 const FIVE_THINKING_LEVELS = Object.freeze([
@@ -17,13 +18,6 @@ const FIVE_THINKING_LEVELS = Object.freeze([
   "high",
   "xhigh",
   "max",
-] as const satisfies readonly ThinkingLevel[]);
-
-const FOUR_THINKING_LEVELS = Object.freeze([
-  "low",
-  "medium",
-  "high",
-  "xhigh",
 ] as const satisfies readonly ThinkingLevel[]);
 
 const CLAUDE_OPUS_THINKING = Object.freeze({
@@ -46,42 +40,54 @@ const NO_THINKING = Object.freeze({
   default: null,
 } as const satisfies ModelThinkingConfig);
 
-const CODEX_STANDARD_THINKING = Object.freeze({
-  levels: FOUR_THINKING_LEVELS,
-  default: "medium",
-} as const satisfies ModelThinkingConfig);
-
 const CODEX_5_6_THINKING = Object.freeze({
   levels: FIVE_THINKING_LEVELS,
   default: "medium",
 } as const satisfies ModelThinkingConfig);
 
+const CODEX_5_6_LUNA_THINKING = Object.freeze({
+  levels: FIVE_THINKING_LEVELS,
+  default: "high",
+} as const satisfies ModelThinkingConfig);
+
 const CLAUDE_MODEL_METADATA = Object.freeze({
-  sonnet: Object.freeze({ label: "Sonnet", thinking: CLAUDE_SONNET_THINKING }),
-  opus: Object.freeze({ label: "Opus", thinking: CLAUDE_OPUS_THINKING }),
-  haiku: Object.freeze({ label: "Haiku", thinking: NO_THINKING }),
+  sonnet: Object.freeze({
+    label: "Sonnet",
+    thinking: CLAUDE_SONNET_THINKING,
+    supportsFastMode: false,
+  }),
+  opus: Object.freeze({
+    label: "Opus",
+    thinking: CLAUDE_OPUS_THINKING,
+    supportsFastMode: true,
+  }),
+  haiku: Object.freeze({
+    label: "Haiku",
+    thinking: NO_THINKING,
+    supportsFastMode: false,
+  }),
   "claude-fable-5": Object.freeze({
     label: "Fable 5",
     thinking: CLAUDE_OPUS_THINKING,
+    supportsFastMode: false,
   }),
 } as const satisfies Record<string, ModelMetadata>);
 
 const CODEX_MODEL_METADATA = Object.freeze({
-  "gpt-5.5": Object.freeze({
-    label: "GPT-5.5",
-    thinking: CODEX_STANDARD_THINKING,
-  }),
   "gpt-5.6-sol": Object.freeze({
     label: "GPT-5.6 Sol",
     thinking: CODEX_5_6_THINKING,
+    supportsFastMode: true,
   }),
   "gpt-5.6-terra": Object.freeze({
     label: "GPT-5.6 Terra",
     thinking: CODEX_5_6_THINKING,
+    supportsFastMode: true,
   }),
   "gpt-5.6-luna": Object.freeze({
     label: "GPT-5.6 Luna",
-    thinking: CODEX_5_6_THINKING,
+    thinking: CODEX_5_6_LUNA_THINKING,
+    supportsFastMode: true,
   }),
 } as const satisfies Record<string, ModelMetadata>);
 
@@ -103,6 +109,16 @@ function createThinkingLevelTable<T extends Record<string, ModelMetadata>>(
       Object.entries(metadata).map(([model, config]) => [model, config.thinking]),
     ),
   ) as Readonly<Record<keyof T & string, ModelThinkingConfig>>;
+}
+
+function createFastModeModelValues<T extends Record<string, ModelMetadata>>(
+  metadata: T,
+): ReadonlySet<string> {
+  return new Set(
+    Object.entries(metadata)
+      .filter(([, config]) => config.supportsFastMode)
+      .map(([model]) => model),
+  );
 }
 
 /** Claude Provider 支援的模型清單，供前端選擇器動態渲染 */
@@ -132,3 +148,27 @@ export const CODEX_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
 export const CODEX_MODEL_THINKING_LEVELS = createThinkingLevelTable(
   CODEX_MODEL_METADATA,
 );
+
+/** Claude 支援 Fast mode 的模型值。 */
+export const CLAUDE_FAST_MODE_MODEL_VALUES = createFastModeModelValues(
+  CLAUDE_MODEL_METADATA,
+);
+
+/** Codex 支援 Fast mode 的模型值。 */
+export const CODEX_FAST_MODE_MODEL_VALUES = createFastModeModelValues(
+  CODEX_MODEL_METADATA,
+);
+
+export function isFastModeSupported(
+  provider: string,
+  model: unknown,
+): boolean {
+  if (typeof model !== "string") return false;
+  if (provider === "claude") {
+    return CLAUDE_FAST_MODE_MODEL_VALUES.has(model);
+  }
+  if (provider === "codex") {
+    return CODEX_FAST_MODE_MODEL_VALUES.has(model);
+  }
+  return false;
+}

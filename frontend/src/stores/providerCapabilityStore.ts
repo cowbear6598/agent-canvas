@@ -257,6 +257,18 @@ export const useProviderCapabilityStore = defineStore(
         },
     );
 
+    const isFastModeSupportedForModel = computed(
+      () =>
+        (provider: PodProvider, model: string): boolean => {
+          if (provider === "opencode") return false;
+          return Boolean(
+            availableModelsByProvider.value[provider]?.find(
+              (option) => option.value === model,
+            )?.supportsFastMode,
+          );
+        },
+    );
+
     const allowedProviders = computed(
       () => new Set<string>(knownProviders.value),
     );
@@ -355,6 +367,7 @@ export const useProviderCapabilityStore = defineStore(
       getDefaultThinkingLevel,
       getThinkingLevelLabel,
       isThinkingSupportedForModel,
+      isFastModeSupportedForModel,
       syncFromPayload,
       loadFromBackend,
     };

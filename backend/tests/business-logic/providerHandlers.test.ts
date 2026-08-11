@@ -187,10 +187,10 @@ describe("handleProviderList", () => {
     expect(payload.requestId).toBe(specificRequestId);
   });
 
-  // ── B1/B2：thinkingLevels / defaultThinkingLevel 結構 ────────────────────
+  // ── B1/B2：模型能力結構 ────────────────────────────────────────────────
   // 對照 plan 之 B1 / B2 編號
 
-  it("[B1] 每個 provider 的 availableModels 內每個 model 都應含 thinkingLevels 與 defaultThinkingLevel 欄位", async () => {
+  it("[B1] 每個 provider 的 availableModels 內每個 model 都應含 thinking 與 Fast 能力欄位", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -203,7 +203,9 @@ describe("handleProviderList", () => {
       for (const model of provider.availableModels) {
         expect(model).toHaveProperty("thinkingLevels");
         expect(model).toHaveProperty("defaultThinkingLevel");
+        expect(model).toHaveProperty("supportsFastMode");
         expect(Array.isArray(model.thinkingLevels)).toBe(true);
+        expect(typeof model.supportsFastMode).toBe("boolean");
       }
     }
   });
@@ -271,17 +273,10 @@ describe("handleProviderList", () => {
     );
     expect(codex).toBeDefined();
 
-    const standardModels = codex.availableModels.filter(
-      (model: { value: string }) => model.value === "gpt-5.5",
-    );
-    expect(standardModels).toHaveLength(1);
-    for (const model of standardModels) {
-      expect(model.thinkingLevels).toEqual(["low", "medium", "high", "xhigh"]);
-      expect(model.defaultThinkingLevel).toBe("medium");
-    }
     expect(
       codex.availableModels.some(
-        (model: { value: string }) => model.value === "gpt-5.4",
+        (model: { value: string }) =>
+          model.value === "gpt-5.4" || model.value === "gpt-5.5",
       ),
     ).toBe(false);
 
@@ -301,8 +296,26 @@ describe("handleProviderList", () => {
         "xhigh",
         "max",
       ]);
-      expect(model.defaultThinkingLevel).toBe("medium");
+      expect(model.supportsFastMode).toBe(true);
     }
+
+    expect(
+      gpt56Models.find(
+        (model: { value: string }) => model.value === "gpt-5.6-sol",
+      ).defaultThinkingLevel,
+    ).toBe("medium");
+    expect(
+      gpt56Models.find(
+        (model: { value: string }) => model.value === "gpt-5.6-terra",
+      ).defaultThinkingLevel,
+    ).toBe("medium");
+    expect(
+      gpt56Models.find(
+        (model: { value: string }) => model.value === "gpt-5.6-luna",
+      ).defaultThinkingLevel,
+    ).toBe("high");
+
+    expect(codex.defaultOptions.model).toBe("gpt-5.6-luna");
   });
 
   it("[B2] opencode 全系列 model 都應為 thinkingLevels=[]、defaultThinkingLevel=null", async () => {
@@ -321,6 +334,25 @@ describe("handleProviderList", () => {
     for (const model of opencode.availableModels) {
       expect(model.thinkingLevels).toEqual([]);
       expect(model.defaultThinkingLevel).toBeNull();
+      expect(model.supportsFastMode).toBe(false);
     }
+  });
+
+  it("Claude 只有 Opus 回報支援 Fast mode", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+    const claude = payload.providers.find(
+      (provider: { name: string }) => provider.name === "claude",
+    );
+    const fastModels = claude.availableModels
+      .filter((model: { supportsFastMode: boolean }) => model.supportsFastMode)
+      .map((model: { value: string }) => model.value);
+
+    expect(fastModels).toEqual(["opus"]);
   });
 });

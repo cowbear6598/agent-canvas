@@ -650,6 +650,10 @@ const serverEventContracts = {
     "podThinkingLevelSetPayloadSchema",
     podMutationSuccessPayloadSchema,
   ),
+  [WebSocketResponseEvents.POD_FAST_MODE_SET]: withRequestError(
+    "podFastModeSetPayloadSchema",
+    podMutationSuccessPayloadSchema,
+  ),
   [WebSocketResponseEvents.POD_SCHEDULE_SET]: withRequestError(
     "podScheduleSetPayloadSchema",
     podMutationSuccessPayloadSchema,

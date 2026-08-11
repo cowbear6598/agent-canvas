@@ -101,7 +101,7 @@ function makeCtx(
   }> = {},
 ) {
   const defaultOptions: CodexOptions = {
-    model: "gpt-5.5",
+    model: "gpt-5.6-luna",
     resumeMode: "cli",
   };
   return {
@@ -154,6 +154,8 @@ describe("CodexProvider", () => {
       "--cd",
       ctx.workspacePath,
       "--dangerously-bypass-approvals-and-sandbox",
+      "-c",
+      "features.fast_mode=false",
       "--model",
       "gpt-4o",
     ]);
@@ -187,8 +189,10 @@ describe("CodexProvider", () => {
       "-",
       "--json",
       "--dangerously-bypass-approvals-and-sandbox",
+      "-c",
+      "features.fast_mode=false",
       "--model",
-      "gpt-5.5",
+      "gpt-5.6-luna",
     ]);
     // resume 模式不應含 --cd，且不應殘留舊 sandbox config
     expect(spawnArgs).not.toContain("--cd");
@@ -197,6 +201,45 @@ describe("CodexProvider", () => {
     expect(
       spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
     ).toBe(false);
+  });
+
+  it("Fast mode 開啟時，新對話與 resume 都應傳入 Fast CLI 設定", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    await collectEvents(
+      codexProvider.chat(
+        makeCtx({
+          options: {
+            model: "gpt-5.6-luna",
+            resumeMode: "cli",
+            fastModeEnabled: true,
+          },
+        }),
+      ),
+    );
+
+    let [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs).toContain("features.fast_mode=true");
+    expect(spawnArgs).toContain('service_tier="fast"');
+
+    spawnSpy.mockClear();
+    await collectEvents(
+      codexProvider.chat(
+        makeCtx({
+          resumeSessionId: "session-fast-123",
+          options: {
+            model: "gpt-5.6-luna",
+            resumeMode: "cli",
+            fastModeEnabled: true,
+          },
+        }),
+      ),
+    );
+
+    [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs).toContain("features.fast_mode=true");
+    expect(spawnArgs).toContain('service_tier="fast"');
   });
 
   it("有 Goal MCP 時，應一律 bootstrap 成先讀 Goal Runtime 的提示", async () => {

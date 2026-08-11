@@ -10,6 +10,7 @@ import {
   podSetProviderSchema,
   podSetModelSchema,
   podSetThinkingLevelSchema,
+  podSetFastModeSchema,
   podSetScheduleSchema,
   podSetMemoryEnabledSchema,
   podGetMemorySchema,
@@ -27,6 +28,7 @@ import {
   handlePodSetProvider,
   handlePodSetModel,
   handlePodSetThinkingLevel,
+  handlePodSetFastMode,
   handlePodSetSchedule,
   handlePodSetMemoryEnabled,
   handlePodGetMemory,
@@ -92,6 +94,12 @@ export const podHandlerGroup = createHandlerGroup({
       handler: handlePodSetThinkingLevel,
       schema: podSetThinkingLevelSchema,
       responseEvent: WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+    },
+    {
+      event: WebSocketRequestEvents.POD_SET_FAST_MODE,
+      handler: handlePodSetFastMode,
+      schema: podSetFastModeSchema,
+      responseEvent: WebSocketResponseEvents.POD_FAST_MODE_SET,
     },
     {
       event: WebSocketRequestEvents.POD_SET_SCHEDULE,

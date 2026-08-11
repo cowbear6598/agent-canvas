@@ -251,11 +251,11 @@ function buildStatements(db: Database): {
         `INSERT INTO pods (
           id, canvas_id, name, x, y, rotation, workspace_path,
           session_id, repository_id, goal_json, schedule_json,
-          provider, provider_config_json
+          provider, provider_config_json, fast_mode_enabled
         ) VALUES (
           $id, $canvasId, $name, $x, $y, $rotation, $workspacePath,
           $sessionId, $repositoryId, $goalJson, $scheduleJson,
-          $provider, $providerConfigJson
+          $provider, $providerConfigJson, $fastModeEnabled
         )`,
       ),
       selectByCanvasId: db.prepare("SELECT * FROM pods WHERE canvas_id = ?"),
@@ -275,7 +275,8 @@ function buildStatements(db: Database): {
           session_id = $sessionId, repository_id = $repositoryId,
           goal_json = $goalJson, schedule_json = $scheduleJson,
           provider = $provider,
-          provider_config_json = $providerConfigJson
+          provider_config_json = $providerConfigJson,
+          fast_mode_enabled = $fastModeEnabled
         WHERE id = $id`,
       ),
       updateSessionId: db.prepare(

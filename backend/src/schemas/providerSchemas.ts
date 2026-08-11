@@ -27,6 +27,7 @@ export interface ProviderListResultPayload {
       thinkingLevels: readonly string[];
       thinkingLevelLabels?: Readonly<Record<string, string>>;
       defaultThinkingLevel: string | null;
+      supportsFastMode: boolean;
     }>;
   }>;
 }

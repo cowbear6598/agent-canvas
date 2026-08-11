@@ -22,6 +22,7 @@ import type { RunContext } from "../../../types/run.js";
 import { logger } from "../../../utils/logger.js";
 import { managedMcpSurfaceService } from "../../mcp/managedMcpSurfaceService.js";
 import { formatPluginSkillCatalogPrompt } from "../../plugin/pluginCatalogBuilder.js";
+import { isFastModeSupported } from "../capabilities.js";
 
 // ─── ClaudeOptions 介面定義 ──────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ export interface ClaudeOptions {
   effort?: EffortLevel;
   /** 思考設定（搭配 effort 使用，固定為 adaptive） */
   thinking?: ThinkingConfig;
+  /** Pod 的 Fast mode 設定，以 SDK flag settings 覆寫本機設定。 */
+  settings?: Options["settings"];
   /**
    * Plugin Skill Catalog 文字段落（已預先 format）。
    * 空字串代表本 Pod 無啟用 plugin 或掃不出任何 SKILL.md。
@@ -258,6 +261,11 @@ export async function buildClaudeOptions(
       : {}),
     model,
     pluginCatalogText: mcpServerOptions.pluginCatalogText ?? "",
+    settings: {
+      fastMode:
+        pod.fastModeEnabled === true &&
+        isFastModeSupported("claude", model),
+    },
     ...(thinkingLevel
       ? {
           effort: thinkingLevel as EffortLevel,

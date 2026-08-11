@@ -49,6 +49,14 @@ export interface PodModelSetPayload {
   error?: string;
 }
 
+export interface PodFastModeSetPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  pod?: PodPublicView;
+  error?: string;
+}
+
 export interface PodGoalSetPayload {
   requestId: string;
   canvasId: string;

@@ -567,6 +567,42 @@ describe("providerCapabilityStore", () => {
     });
   });
 
+  describe("Fast mode capability", () => {
+    it("依後端模型 metadata 判斷支援狀態，OpenCode 固定不支援", () => {
+      const store = useProviderCapabilityStore();
+      store.syncFromPayload([
+        {
+          name: "claude",
+          availableModels: [
+            { label: "Opus", value: "opus", supportsFastMode: true },
+            { label: "Sonnet", value: "sonnet", supportsFastMode: false },
+          ],
+        },
+        {
+          name: "opencode",
+          availableModels: [
+            {
+              label: "Dynamic model",
+              value: "openai/example",
+              supportsFastMode: true,
+            },
+          ],
+        },
+      ]);
+
+      expect(store.isFastModeSupportedForModel("claude", "opus")).toBe(true);
+      expect(store.isFastModeSupportedForModel("claude", "sonnet")).toBe(
+        false,
+      );
+      expect(
+        store.isFastModeSupportedForModel("opencode", "openai/example"),
+      ).toBe(false);
+      expect(store.isFastModeSupportedForModel("codex", "unknown")).toBe(
+        false,
+      );
+    });
+  });
+
   // ----------------------------------------------------------------
   // 重連行為：state 覆蓋不累積；先成功再失敗時保留上次成功值
   // ----------------------------------------------------------------

@@ -230,6 +230,7 @@ export class PodRepository {
         $scheduleJson: null,
         $provider: pod.provider,
         $providerConfigJson: JSON.stringify(pod.providerConfig),
+        $fastModeEnabled: pod.fastModeEnabled ? 1 : 0,
       });
       this.insertJoinTableIds(id, pod);
     })();
@@ -313,6 +314,7 @@ export class PodRepository {
         $scheduleJson: serializeSchedule(updatedPod.schedule),
         $provider: updatedPod.provider,
         $providerConfigJson: sanitizedProviderConfigJson,
+        $fastModeEnabled: updatedPod.fastModeEnabled ? 1 : 0,
       });
       this.updateJoinTables(podId, updates);
     })();

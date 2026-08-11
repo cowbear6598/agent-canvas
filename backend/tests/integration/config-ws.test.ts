@@ -78,14 +78,14 @@ describe("Config WebSocket", () => {
         {
           requestId: uuidv4(),
           memoryProvider: "codex",
-          memoryModel: "gpt-5.5",
+          memoryModel: "gpt-5.6-luna",
           memoryThinkingLevel: "high",
         },
       );
 
       expect(updateResponse.success).toBe(true);
       expect(updateResponse.memoryProvider).toBe("codex");
-      expect(updateResponse.memoryModel).toBe("gpt-5.5");
+      expect(updateResponse.memoryModel).toBe("gpt-5.6-luna");
       expect(updateResponse.memoryThinkingLevel).toBe("high");
 
       const getResponse = await emitAndWaitResponse<
@@ -100,7 +100,7 @@ describe("Config WebSocket", () => {
 
       expect(getResponse.success).toBe(true);
       expect(getResponse.memoryProvider).toBe("codex");
-      expect(getResponse.memoryModel).toBe("gpt-5.5");
+      expect(getResponse.memoryModel).toBe("gpt-5.6-luna");
       expect(getResponse.memoryThinkingLevel).toBe("high");
     });
 
@@ -117,14 +117,14 @@ describe("Config WebSocket", () => {
         {
           requestId: uuidv4(),
           connectionLineProvider: "codex",
-          connectionLineModel: "gpt-5.5",
+          connectionLineModel: "gpt-5.6-luna",
           connectionLineThinkingLevel: "xhigh",
         },
       );
 
       expect(updateResponse.success).toBe(true);
       expect(updateResponse.connectionLineProvider).toBe("codex");
-      expect(updateResponse.connectionLineModel).toBe("gpt-5.5");
+      expect(updateResponse.connectionLineModel).toBe("gpt-5.6-luna");
       expect(updateResponse.connectionLineThinkingLevel).toBe("xhigh");
 
       const getResponse = await emitAndWaitResponse<
@@ -139,7 +139,7 @@ describe("Config WebSocket", () => {
 
       expect(getResponse.success).toBe(true);
       expect(getResponse.connectionLineProvider).toBe("codex");
-      expect(getResponse.connectionLineModel).toBe("gpt-5.5");
+      expect(getResponse.connectionLineModel).toBe("gpt-5.6-luna");
       expect(getResponse.connectionLineThinkingLevel).toBe("xhigh");
     });
   });

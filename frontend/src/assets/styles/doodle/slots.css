@@ -346,6 +346,104 @@
 }
 
 /* ===================================
+   Fast Slot（Pod 上方，與 Thinking Slot 對稱）
+   =================================== */
+
+.pod-fast-notch-area {
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: calc(
+    50% - var(--model-notch-width) / 2 - var(--pod-thinking-notch-width) - 4px
+  );
+  width: var(--pod-thinking-notch-width);
+  margin-bottom: -2px;
+  z-index: -1;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+}
+
+.pod-fast-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--pod-thinking-notch-width) * 0.85);
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0;
+  background: var(--card);
+  border: 2px solid var(--doodle-ink);
+  border-radius: 3px 3px 2px 2px;
+  cursor: pointer;
+  color: var(--doodle-ink);
+  box-shadow: 1.5px 1.5px 0 oklch(0.4 0.02 50 / 0.3);
+  overflow: hidden;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: auto;
+}
+
+.pod-fast-slot:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2.5px 2.5px 0 oklch(0.4 0.02 50 / 0.4);
+}
+
+.pod-fast-slot .fast-charge-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0;
+  background: var(--doodle-yellow);
+  pointer-events: none;
+  transition: height 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pod-fast-slot--enabled .fast-charge-fill {
+  height: 100%;
+}
+
+.pod-fast-slot .fast-icon {
+  position: relative;
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  fill: transparent;
+}
+
+.pod-fast-slot:disabled {
+  cursor: not-allowed;
+  background: var(--muted);
+  color: oklch(0.55 0.02 50);
+  box-shadow: none;
+}
+
+.pod-fast-slot:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.fast-disabled-overlay {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  color: oklch(0.55 0.2 25);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pod-fast-slot .fast-charge-fill {
+    transition: none;
+  }
+}
+
+/* ===================================
    Thinking Slot（Pod 上方 thinking notch 對應按鈕）
    =================================== */
 

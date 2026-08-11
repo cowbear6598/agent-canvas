@@ -59,6 +59,8 @@ export const pastePodItemSchema = z
      * Zod strip 會靜默丟失未宣告欄位，前端型別若有變動會讓 model 資訊消失，曾真實發生 bug。
      */
     providerConfig: providerConfigSchema.optional(),
+    /** 複製已啟用的 Pod 時保留 Fast 狀態；歷史 payload 缺少時仍預設關閉。 */
+    fastModeEnabled: z.boolean().optional().default(false),
     /** MCP server 名稱清單，每筆名稱只允許字母、數字、底線、點、連字號 */
     mcpServerNames: z
       .array(

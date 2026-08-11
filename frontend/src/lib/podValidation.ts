@@ -89,6 +89,7 @@ export function enrichPod(pod: Pod): Pod {
     repoMemoryEnabled: pod.repoMemoryEnabled ?? false,
     hasPodMemory: pod.hasPodMemory ?? false,
     hasRepoMemory: pod.hasRepoMemory ?? false,
+    fastModeEnabled: pod.fastModeEnabled ?? false,
     goal,
     schedule: pod.schedule ?? null,
     pluginIds: pod.pluginIds ?? [],

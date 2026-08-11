@@ -13,6 +13,8 @@ import type {
   PodModelSetPayload,
   PodSetThinkingLevelPayload,
   PodThinkingLevelSetPayload,
+  PodSetFastModePayload,
+  PodFastModeSetPayload,
 } from "@/types/websocket";
 import { useSendCanvasAction } from "@/composables/useSendCanvasAction";
 import { usePodDrag } from "@/composables/pod/usePodDrag";
@@ -26,6 +28,7 @@ import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useRunStore } from "@/stores/run/runStore";
+import { useChatStore } from "@/stores/chat/chatStore";
 import { useUploadStore } from "@/stores/upload/uploadStore";
 import PodHeader from "@/components/pod/PodHeader.vue";
 import PodUploadOverlay from "@/components/pod/PodUploadOverlay.vue";
@@ -53,6 +56,7 @@ const {
   canvasStore,
 } = useCanvasContext();
 const runStore = useRunStore();
+const chatStore = useChatStore();
 const uploadStore = useUploadStore();
 const { startBatchDrag, isElementSelected, isBatchDragging } = useBatchDrag();
 const { toast } = useToast();
@@ -67,6 +71,10 @@ const boundRepositoryNote = computed(
 );
 const currentModel = computed(() => props.pod.providerConfig.model);
 const goalTodoCount = computed(() => props.pod.goal?.todos.length ?? 0);
+const isFastModeBusy = computed(
+  () =>
+    chatStore.isTyping(props.pod.id) || runStore.isPodRunning(props.pod.id),
+);
 
 const dividerPath = computed(() => createPodDividerPath(props.pod.id));
 
@@ -207,7 +215,7 @@ const podMcpActiveCount = computed(() => props.pod.mcpServerNames?.length ?? 0);
 
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =
-  ".pod-plugin-slot, .pod-repository-slot, .pod-goal-slot, .pod-mcp-server-slot, .pod-model-slot";
+  ".pod-plugin-slot, .pod-repository-slot, .pod-goal-slot, .pod-mcp-server-slot, .pod-model-slot, .pod-thinking-slot, .pod-fast-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
   return target.closest(SLOT_CLASSES) !== null;
@@ -320,10 +328,34 @@ const handleModelChange = async (model: string): Promise<void> => {
   const response = result.data;
   if (!response.pod) return;
 
-  podStore.updatePodProviderConfigModel(
-    props.pod.id,
-    response.pod.providerConfig.model,
-  );
+  podStore.updatePod(response.pod);
+};
+
+const handleFastModeToggle = async (): Promise<void> => {
+  if (isFastModeBusy.value) return;
+
+  const result = await sendCanvasAction<
+    PodSetFastModePayload,
+    PodFastModeSetPayload
+  >({
+    requestEvent: WebSocketRequestEvents.POD_SET_FAST_MODE,
+    responseEvent: WebSocketResponseEvents.POD_FAST_MODE_SET,
+    payload: {
+      podId: props.pod.id,
+      enabled: !props.pod.fastModeEnabled,
+    },
+  });
+
+  if (!result.success || !result.data.pod) {
+    toast({
+      title: t("pod.slot.fastLabel"),
+      description: t("pod.slot.fastToggleFailed"),
+      variant: "destructive",
+    });
+    return;
+  }
+
+  podStore.updatePod(result.data.pod);
 };
 
 const handleThinkingLevelChange = async (level: string): Promise<void> => {
@@ -377,7 +409,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     <div class="pod-glow-layer" />
 
     <div
-      class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch pod-with-thinking-notch"
+      class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch pod-with-thinking-notch pod-with-fast-notch"
       :class="{ dragging: isDragging || isBatchDragging }"
       :style="{ '--pod-rotation': `${pod.rotation}deg` }"
     >
@@ -397,11 +429,14 @@ const handleContextMenu = (e: MouseEvent): void => {
         :provider="pod.provider"
         :current-model="currentModel"
         :current-thinking-level="pod.providerConfig.thinkingLevel"
+        :fast-mode-enabled="pod.fastModeEnabled === true"
+        :fast-mode-busy="isFastModeBusy"
         :bound-repository-note="boundRepositoryNote"
         :goal-todo-count="goalTodoCount"
         @plugin-clicked="handlePluginClick"
         @mcp-clicked="handleMcpClick"
         @thinking-clicked="handleThinkingClick"
+        @fast-clicked="handleFastModeToggle"
         @goal-clicked="handleGoalClick"
         @repository-dropped="(noteId) => handleNoteDrop('repository', noteId)"
         @repository-removed="() => handleNoteRemove('repository')"
@@ -426,6 +461,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         />
         <div class="model-notch" />
         <div class="thinking-notch" />
+        <div class="fast-notch" />
         <div class="mcp-notch" />
         <div class="mcp-server-notch" />
         <div class="repository-notch" />

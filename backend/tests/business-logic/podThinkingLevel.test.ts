@@ -160,14 +160,14 @@ describe("Pod 建立預設 thinkingLevel 寫入", () => {
     });
   });
 
-  it("[B4] Codex gpt-5.5 Pod 建立後 DB 內 providerConfig.thinkingLevel 應為 'medium'", () => {
+  it("[B4] Codex gpt-5.6-luna Pod 建立後 DB 內 providerConfig.thinkingLevel 應為 'high'", () => {
     const { pod } = podStore.create(TEST_CANVAS_ID, {
-      name: "pod-b4-codex-gpt55",
+      name: "pod-b4-codex-luna",
       x: 0,
       y: 0,
       rotation: 0,
       provider: "codex",
-      providerConfig: { model: "gpt-5.5" },
+      providerConfig: { model: "gpt-5.6-luna" },
     });
 
     const row = getDb()
@@ -177,8 +177,8 @@ describe("Pod 建立預設 thinkingLevel 寫入", () => {
       string,
       unknown
     >;
-    expect(parsed.model).toBe("gpt-5.5");
-    expect(parsed.thinkingLevel).toBe("medium");
+    expect(parsed.model).toBe("gpt-5.6-luna");
+    expect(parsed.thinkingLevel).toBe("high");
   });
 
   it("[B5] Claude haiku Pod 建立後 providerConfig 不應含 thinkingLevel key", () => {

@@ -1,0 +1,70 @@
+description: >
+  Pod 目前缺少可直接切換 provider Fast mode 的控制項，因此使用者無法在畫布上辨識、保存或套用個別 Pod 的 Fast 狀態。新增與大腦控制項視覺一致、位置對稱的閃電控制項，能讓使用者清楚切換 Fast，並從圖示填滿或歸零立即看出目前狀態；同時淘汰既有 Codex GPT-5.5 選項並在初始化時安全遷移舊資料，避免已保存的 Pod 或背景模型設定落入不再支援的模型。
+goal:
+  - 讓使用者能在 Pod 上切換 Fast 狀態，並將狀態保存於該 Pod。
+  - 讓所有既有與新建 Pod 預設關閉 Fast，缺少 Fast 欄位的歷史資料也按關閉處理，只有使用者主動開啟後才啟用。
+  - 以和大腦控制項對稱的閃電圖示呈現 Fast 狀態，開啟時填滿、關閉時為零；所有 Pod 固定顯示，不支援的 provider 或 model 顯示禁止符號且不可操作，其中 OpenCode 在本次範圍內固定停用 Fast。
+  - 讓啟用 Fast 的 Pod 在支援的 Claude 與 Codex 查詢中實際套用各 provider 的快速模式，未啟用時維持一般模式。
+  - 當 Pod 切換到不支援 Fast 的 provider 或 model 時，自動關閉並保存 Fast 狀態；切回支援項目後維持關閉，直到使用者再次開啟。
+  - 在 Pod 正進行聊天或 Run 時維持既有 Fast 狀態並禁止切換，前後端都拒絕競態更新且前端提供 ja、zh-TW、en 的忙碌提示。
+  - 透過既有 WebSocket 流程同步 Fast 狀態，讓所有觀看同一畫布的前端取得一致結果。
+  - 將 Claude Agent SDK 從 0.3.207 升級至規劃時最新的 0.3.227，並維持既有 Claude 查詢、session、MCP 與 plugin 行為。
+  - 從 Codex 可選模型與預設值移除 GPT-5.5，改以 GPT-5.6 Luna 搭配 high thinking level 作為替代。
+  - 在資料庫初始化時，將 Pod、Connection Line 摘要與分支、全域 Memory 及全域 Connection Line 中既有的 GPT-5.5 設定全部冪等遷移為 GPT-5.6 Luna 與 high thinking level，且不改動其他模型設定。
+related:
+  - backend/package.json
+  - backend/bun.lock
+  - frontend/src/components/pod/PodFastSlot.vue
+  - frontend/src/components/pod/PodSlots.vue
+  - frontend/src/components/pod/CanvasPod.vue
+  - frontend/src/assets/styles/doodle/pod.css
+  - frontend/src/assets/styles/doodle/slots.css
+  - frontend/src/assets/styles/variables.css
+  - frontend/src/types/pod.ts
+  - frontend/src/types/websocket/requests.ts
+  - frontend/src/types/websocket/responses.ts
+  - frontend/src/stores/providerCapabilityStore.ts
+  - frontend/src/stores/chat/chatStore.ts
+  - frontend/src/stores/run/runStore.ts
+  - frontend/src/stores/pod/podStore.ts
+  - frontend/src/stores/pod/podUpdateEffects.ts
+  - frontend/src/locales/zh-TW.json
+  - frontend/src/locales/en.json
+  - frontend/src/locales/ja.json
+  - frontend/tests/userflows/canvas/podFastModeFlow.test.ts
+  - frontend/tests/business-logic/stores/providerCapabilityStore.test.ts
+  - frontend/tests/business-logic/stores/podStore.test.ts
+  - shared/websocket/events.ts
+  - backend/src/database/schema.ts
+  - backend/src/schemas/providerSchemas.ts
+  - backend/src/schemas/pasteSchemas.ts
+  - backend/src/handlers/providerHandlers.ts
+  - backend/src/services/configStore.ts
+  - backend/src/services/connectionStore.ts
+  - backend/src/services/runStore.ts
+  - backend/src/services/provider/abortRegistry.ts
+  - backend/src/schemas/podSchemas.ts
+  - backend/src/handlers/groups/podHandlerGroup.ts
+  - backend/src/handlers/podHandlers.ts
+  - backend/src/services/commands/podCommandService.ts
+  - backend/src/services/pod/providerConfigResolver.ts
+  - backend/src/services/provider/capabilities.ts
+  - backend/src/services/provider/codexProvider.ts
+  - backend/src/services/codex/codexService.ts
+  - backend/src/services/provider/claude/buildClaudeOptions.ts
+  - backend/src/services/provider/claude/runClaudeQuery.ts
+  - backend/src/types/pod.ts
+  - backend/src/types/connection.ts
+  - backend/src/types/responses/pod.ts
+  - backend/tests/business-logic/podFastMode.test.ts
+  - backend/tests/business-logic/claudeProviderBuildOptions.test.ts
+  - backend/tests/business-logic/runClaudeQuery.test.ts
+  - backend/tests/business-logic/codexProvider.test.ts
+  - backend/tests/business-logic/codexService.test.ts
+  - backend/tests/business-logic/providerHandlers.test.ts
+  - backend/tests/business-logic/providerConfigResolver.test.ts
+  - backend/tests/business-logic/abortRegistry.test.ts
+  - backend/tests/business-logic/runStore.test.ts
+  - backend/tests/database/schema.test.ts
+verify:
+  - bun run test

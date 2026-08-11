@@ -39,8 +39,9 @@ export interface Pod {
   mcpServerNames: string[];
   pluginIds: string[];
   provider: ProviderName;
-  /** providerConfig.model 是 model 的唯一來源（Claude 用短名如 "opus"，Codex 用完整名如 "gpt-5.5"） */
+  /** providerConfig.model 是 model 的唯一來源（Claude 用短名如 "opus"，Codex 用完整名如 "gpt-5.6-luna"） */
   providerConfig: Record<string, unknown> | null;
+  fastModeEnabled?: boolean;
   repositoryId: string | null;
   goal?: PodGoal | null;
   schedule?: ScheduleConfig;

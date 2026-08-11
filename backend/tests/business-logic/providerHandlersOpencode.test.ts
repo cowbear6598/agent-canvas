@@ -139,18 +139,21 @@ describe("provider:list — opencode 動態 availableModels（真實 SQLite DB�
         value: "anthropic/claude-sonnet-4-5",
         thinkingLevels: [],
         defaultThinkingLevel: null,
+        supportsFastMode: false,
       },
       {
         label: "GPT-5",
         value: "openai/gpt-5",
         thinkingLevels: [],
         defaultThinkingLevel: null,
+        supportsFastMode: false,
       },
       {
         label: "Opus 4",
         value: "anthropic/claude-opus-4",
         thinkingLevels: [],
         defaultThinkingLevel: null,
+        supportsFastMode: false,
       },
     ]);
   });

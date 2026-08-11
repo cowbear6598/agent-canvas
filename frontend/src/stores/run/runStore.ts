@@ -79,6 +79,12 @@ interface RunState {
 }
 
 const RUN_CHAT_PAGE_SIZE = 50;
+const TERMINAL_RUN_POD_STATUSES: ReadonlySet<RunPodStatus> = new Set([
+  "completed",
+  "blocked",
+  "error",
+  "skipped",
+]);
 
 export const useRunStore = defineStore("run", {
   state: (): RunState => ({
@@ -114,6 +120,17 @@ export const useRunStore = defineStore("run", {
         if (run.status === "running") count++;
       }
       return count;
+    },
+
+    isPodRunning: (state) => (podId: string): boolean => {
+      for (const run of state.runsById.values()) {
+        if (run.status !== "running") continue;
+        const instance = run.podInstances.find((item) => item.podId === podId);
+        if (instance && !TERMINAL_RUN_POD_STATUSES.has(instance.status)) {
+          return true;
+        }
+      }
+      return false;
     },
 
     getRunById:

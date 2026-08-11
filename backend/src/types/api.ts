@@ -10,6 +10,7 @@ export interface CreatePodRequest {
   pluginIds?: string[];
   provider?: ProviderName;
   providerConfig?: Record<string, unknown>;
+  fastModeEnabled?: boolean;
   repositoryId?: string | null;
   goal?: PodGoal | null;
 }

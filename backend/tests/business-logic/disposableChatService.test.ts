@@ -55,7 +55,7 @@ import type { RunContext } from "../../src/types/run.js";
 /** 合法 Claude model */
 const VALID_CLAUDE_MODEL = "sonnet";
 /** 合法 Codex model */
-const VALID_CODEX_MODEL = "gpt-5.5";
+const VALID_CODEX_MODEL = "gpt-5.6-luna";
 /** 不合法 model（不在任何 provider 清單內） */
 const INVALID_MODEL = "no-such-model-xyz";
 
@@ -196,7 +196,7 @@ describe("disposableChatService", () => {
     // resolvedModel 應為 codex 的預設（不等於輸入的 INVALID_MODEL）
     expect(result.resolvedModel).not.toBe(INVALID_MODEL);
     // 應為 codex 的合法 model
-    expect(result.resolvedModel).toBe("gpt-5.5");
+    expect(result.resolvedModel).toBe("gpt-5.6-luna");
   });
 
   it("不支援的 provider → throw Error('不支援的 provider')", async () => {

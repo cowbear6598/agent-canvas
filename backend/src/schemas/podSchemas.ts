@@ -126,7 +126,7 @@ export const podSetModelSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
   podId: podIdSchema,
-  /** pod:set-model 可能傳 Claude 短名（opus/sonnet/haiku）或 Codex 完整名（gpt-5.5 等），使用與 providerConfig.model 同規則的 regex */
+  /** pod:set-model 可能傳 Claude 短名（opus/sonnet/haiku）或 Codex 完整名（gpt-5.6-luna 等），使用與 providerConfig.model 同規則的 regex */
   model: z
     .string()
     .regex(MODEL_PATTERN, "model 名稱包含不允許的字元")
@@ -147,6 +147,13 @@ export const podSetThinkingLevelSchema = z.object({
     .string()
     .regex(THINKING_LEVEL_PATTERN, "thinking level 包含不允許的字元")
     .max(MAX_THINKING_LEVEL_LENGTH),
+});
+
+export const podSetFastModeSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  enabled: z.boolean(),
 });
 
 export const podSetScheduleSchema = z.object({
@@ -199,6 +206,7 @@ export type PodSetModelPayload = z.infer<typeof podSetModelSchema>;
 export type PodSetThinkingLevelPayload = z.infer<
   typeof podSetThinkingLevelSchema
 >;
+export type PodSetFastModePayload = z.infer<typeof podSetFastModeSchema>;
 export type PodSetSchedulePayload = z.infer<typeof podSetScheduleSchema>;
 export type PodSetMemoryEnabledPayload = z.infer<
   typeof podSetMemoryEnabledSchema

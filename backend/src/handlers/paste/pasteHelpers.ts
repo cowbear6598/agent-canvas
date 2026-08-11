@@ -175,6 +175,7 @@ async function createSinglePod(
     rotation: podItem.rotation,
     provider: podItem.provider,
     providerConfig: podItem.providerConfig,
+    fastModeEnabled: podItem.fastModeEnabled,
     mcpServerNames: podItem.mcpServerNames ?? [],
     pluginIds: podItem.pluginIds ?? [],
     repositoryId: finalRepositoryId,

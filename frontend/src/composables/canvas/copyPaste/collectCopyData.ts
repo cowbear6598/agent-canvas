@@ -147,6 +147,7 @@ export function collectSelectedPods(
           rotation: pod.rotation,
           provider: pod.provider,
           providerConfig: pod.providerConfig,
+          fastModeEnabled: pod.fastModeEnabled === true,
           mcpServerNames: pod.mcpServerNames,
           pluginIds: pod.pluginIds,
           repositoryId: pod.repositoryId,
