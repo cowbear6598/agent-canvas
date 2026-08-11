@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.10] - 2026-08-11
+
+### 修正
+- Codex WebSocket 切換至 HTTPS transport 時改為持續等待，最終斷線時沿用既有 session 自動恢復一次
+- 修正 Codex transport 恢復再次失敗時仍可能繼續完成流程的問題
+- OpenCode SDK 與 CLI 升級至 1.16.0，避免舊版 binary 無法寫入新版共用資料庫
+
 ## [2.2.9] - 2026-08-11
 
 ### 修正
