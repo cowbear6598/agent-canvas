@@ -223,6 +223,42 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.label).toBe("");
       expect(updated?.decideStatus).toBe("none");
     });
+
+    it("triggerMode=direct 同時明確指定 direct=false 時，以明確值為準", () => {
+      insertPod("src-direct-override");
+      insertPod("dst-direct-override");
+
+      const conn = createBranchConnection(
+        "src-direct-override",
+        "dst-direct-override",
+        "DirectOverride",
+      );
+      const updated = connectionStore.update(CANVAS_ID, conn.id, {
+        triggerMode: "direct",
+        direct: false,
+      });
+
+      expect(updated?.triggerMode).toBe("auto");
+      expect(updated?.direct).toBe(false);
+    });
+
+    it("離開 branch 同時明確指定 decideStatus 時，以明確值覆寫 reset", () => {
+      insertPod("src-decide-override");
+      insertPod("dst-decide-override");
+
+      const conn = createBranchConnection(
+        "src-decide-override",
+        "dst-decide-override",
+        "DecideOverride",
+      );
+      const updated = connectionStore.update(CANVAS_ID, conn.id, {
+        triggerMode: "auto",
+        decideStatus: "pending",
+      });
+
+      expect(updated?.triggerMode).toBe("auto");
+      expect(updated?.decideStatus).toBe("pending");
+    });
   });
 
   describe("update — branch → branch label 變更", () => {

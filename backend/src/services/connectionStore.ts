@@ -5,6 +5,7 @@ import type {
   TriggerMode,
   DecideStatus,
   ConnectionStatus,
+  Pod,
 } from "../types";
 import { getDb } from "../database/index.js";
 import { getProvider, type ProviderName } from "./provider/index.js";
@@ -51,6 +52,44 @@ interface CreateConnectionData {
   branchThinkingLevel?: string | null;
 }
 
+type ConnectionUpdateData = Partial<{
+  triggerMode: TriggerMode;
+  decideStatus: DecideStatus;
+  decideReason: string | null;
+  /** summaryModel 接受任意非空模型名稱 */
+  summaryModel: string;
+  /** null 代表清除指定 provider；undefined 代表本次不修改 */
+  summaryProvider: ProviderName | null;
+  summaryThinkingLevel: string | null;
+  direct: boolean;
+  label: string;
+  description: string | null;
+  branchProvider: ProviderName | null;
+  branchModel: string | null;
+  branchThinkingLevel: string | null;
+}>;
+
+interface ConnectionUpdateOptions {
+  skipBranchLabelValidation?: boolean;
+}
+
+type ConnectionUpdateState = Pick<
+  UpdateConnectionRowInput,
+  | "triggerMode"
+  | "decideStatus"
+  | "decideReason"
+  | "connectionStatus"
+  | "summaryModel"
+  | "summaryProvider"
+  | "summaryThinkingLevel"
+  | "direct"
+  | "label"
+  | "description"
+  | "branchProvider"
+  | "branchModel"
+  | "branchThinkingLevel"
+>;
+
 function normalizeDirectMode(input: {
   triggerMode?: TriggerMode;
   direct?: boolean;
@@ -63,6 +102,199 @@ function normalizeDirectMode(input: {
     triggerMode: input.triggerMode === "branch" ? "branch" : "auto",
     direct: input.direct ?? false,
   };
+}
+
+function normalizeTriggerMode(
+  triggerMode: TriggerMode,
+): Connection["triggerMode"] {
+  return triggerMode === "direct" ? "auto" : triggerMode;
+}
+
+function createConnectionUpdateState(
+  existing: Connection,
+): ConnectionUpdateState {
+  return {
+    triggerMode: existing.triggerMode,
+    decideStatus: existing.decideStatus,
+    decideReason: existing.decideReason,
+    connectionStatus: existing.connectionStatus,
+    summaryModel: existing.summaryModel,
+    summaryProvider: existing.summaryProvider,
+    summaryThinkingLevel: existing.summaryThinkingLevel,
+    direct: existing.direct,
+    label: existing.label,
+    description: existing.description ?? null,
+    branchProvider: existing.branchProvider,
+    branchModel: existing.branchModel ?? null,
+    branchThinkingLevel: existing.branchThinkingLevel,
+  };
+}
+
+function applyModeAndDecisionUpdates(
+  state: ConnectionUpdateState,
+  existing: Connection,
+  updates: ConnectionUpdateData,
+): void {
+  if (updates.triggerMode !== undefined) {
+    const triggerMode = normalizeTriggerMode(updates.triggerMode);
+    if (shouldResetDecideState(existing.triggerMode, triggerMode)) {
+      state.decideStatus = "none";
+      state.decideReason = null;
+      state.connectionStatus = "idle";
+    }
+
+    if (existing.triggerMode === "branch" && triggerMode !== "branch") {
+      state.label = "";
+      state.description = null;
+      state.branchProvider = null;
+      state.branchModel = null;
+      state.branchThinkingLevel = null;
+    }
+
+    state.triggerMode = triggerMode;
+    state.direct =
+      updates.triggerMode === "direct" ? true : updates.direct ?? false;
+  }
+
+  if (updates.direct !== undefined) state.direct = updates.direct;
+  if (updates.decideStatus !== undefined) {
+    state.decideStatus = updates.decideStatus;
+  }
+  if (updates.decideReason !== undefined) {
+    state.decideReason = updates.decideReason;
+  }
+}
+
+function resolveTargetSummaryProvider(
+  existing: Connection,
+  sourcePod: Pod | undefined,
+  updates: ConnectionUpdateData,
+): ProviderName {
+  const configuredProvider =
+    updates.summaryProvider !== undefined
+      ? updates.summaryProvider
+      : existing.summaryProvider;
+  return configuredProvider ?? sourcePod?.provider ?? "claude";
+}
+
+function shouldResetThinkingLevel(
+  thinkingLevel: string | null | undefined,
+  providerChanged: boolean,
+  modelChanged: boolean,
+): boolean {
+  return thinkingLevel === undefined && (providerChanged || modelChanged);
+}
+
+function applySummaryUpdates(
+  state: ConnectionUpdateState,
+  existing: Connection,
+  sourcePod: Pod | undefined,
+  updates: ConnectionUpdateData,
+): void {
+  if (updates.summaryProvider !== undefined) {
+    state.summaryProvider = updates.summaryProvider;
+  }
+  if (updates.summaryThinkingLevel !== undefined) {
+    state.summaryThinkingLevel = updates.summaryThinkingLevel;
+  }
+
+  const provider = resolveTargetSummaryProvider(existing, sourcePod, updates);
+  if (
+    updates.summaryProvider !== undefined &&
+    updates.summaryModel === undefined
+  ) {
+    const providerMeta = getProvider(provider).metadata;
+    state.summaryModel =
+      (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
+  } else if (updates.summaryModel !== undefined) {
+    validateProviderModel(provider, updates.summaryModel, "summaryModel");
+    state.summaryModel = updates.summaryModel;
+  }
+
+  if (
+    shouldResetThinkingLevel(
+      updates.summaryThinkingLevel,
+      updates.summaryProvider !== undefined,
+      updates.summaryModel !== undefined,
+    )
+  ) {
+    state.summaryThinkingLevel = getDefaultThinkingLevel(
+      provider,
+      state.summaryModel,
+    );
+  }
+
+  validateConnectionThinkingLevel(
+    provider,
+    state.summaryModel,
+    state.summaryThinkingLevel,
+    "summaryThinkingLevel",
+  );
+}
+
+function validateBranchModel(state: ConnectionUpdateState): void {
+  if (state.branchProvider !== null && state.branchModel !== null) {
+    validateProviderModel(
+      state.branchProvider,
+      state.branchModel,
+      "branchModel",
+    );
+  }
+}
+
+function validateBranchThinkingLevel(state: ConnectionUpdateState): void {
+  if (state.branchProvider !== null) {
+    validateConnectionThinkingLevel(
+      state.branchProvider,
+      state.branchModel,
+      state.branchThinkingLevel,
+      "branchThinkingLevel",
+    );
+    return;
+  }
+
+  if (state.branchThinkingLevel !== null) {
+    throw new Error("branchThinkingLevel 不支援指定的 provider/model");
+  }
+}
+
+function applyBranchUpdates(
+  state: ConnectionUpdateState,
+  updates: ConnectionUpdateData,
+): void {
+  if (updates.branchProvider !== undefined) {
+    state.branchProvider = updates.branchProvider;
+    if (updates.branchProvider === null) {
+      state.branchModel = null;
+    } else if (updates.branchModel === undefined) {
+      state.branchModel =
+        resolveProviderDefaultModel(updates.branchProvider) ?? state.branchModel;
+    }
+  }
+
+  if (updates.branchModel !== undefined) {
+    state.branchModel = updates.branchModel;
+  }
+  if (updates.branchThinkingLevel !== undefined) {
+    state.branchThinkingLevel = updates.branchThinkingLevel;
+  }
+
+  validateBranchModel(state);
+
+  if (
+    shouldResetThinkingLevel(
+      updates.branchThinkingLevel,
+      updates.branchProvider !== undefined,
+      updates.branchModel !== undefined,
+    )
+  ) {
+    state.branchThinkingLevel =
+      state.branchProvider !== null && state.branchModel !== null
+        ? getDefaultThinkingLevel(state.branchProvider, state.branchModel)
+        : null;
+  }
+
+  validateBranchThinkingLevel(state);
 }
 
 class ConnectionStore {
@@ -241,146 +473,22 @@ class ConnectionStore {
   update(
     canvasId: string,
     id: string,
-    updates: Partial<{
-      triggerMode: TriggerMode;
-      decideStatus: DecideStatus;
-      decideReason: string | null;
-      /** summaryModel 接受任意非空模型名稱 */
-      summaryModel: string;
-      /**
-       * summaryProvider 可明確設為 null（清除指定，讓執行端 fallback），
-       * 或指定新 provider；undefined 表示本次不修改。
-       */
-      summaryProvider: ProviderName | null;
-      summaryThinkingLevel: string | null;
-      direct: boolean;
-      label: string;
-      description: string | null;
-      branchProvider: ProviderName | null;
-      branchModel: string | null;
-      branchThinkingLevel: string | null;
-    }>,
-    options?: {
-      skipBranchLabelValidation?: boolean;
-    },
+    updates: ConnectionUpdateData,
+    options?: ConnectionUpdateOptions,
   ): Connection | undefined {
     const existing = this.getById(canvasId, id);
     if (!existing) return undefined;
 
-    let newTriggerMode = existing.triggerMode;
-    let newDecideStatus = existing.decideStatus;
-    let newDecideReason = existing.decideReason;
-    let newConnectionStatus = existing.connectionStatus;
-    let newDirect = existing.direct;
-    let newSummaryModel = existing.summaryModel;
-    // summaryProvider 寫回 DB：以 updates.summaryProvider 為準（沒提供就保留既有值）
-    let newSummaryProvider: ProviderName | null =
-      updates.summaryProvider !== undefined
-        ? updates.summaryProvider
-        : existing.summaryProvider;
-    let newSummaryThinkingLevel =
-      updates.summaryThinkingLevel !== undefined
-        ? updates.summaryThinkingLevel
-        : existing.summaryThinkingLevel;
-    let newLabel = existing.label;
-    let newDescription: string | null = existing.description ?? null;
-    let newBranchProvider: ProviderName | null = existing.branchProvider;
-    let newBranchModel: string | null = existing.branchModel ?? null;
-    let newBranchThinkingLevel =
-      updates.branchThinkingLevel !== undefined
-        ? updates.branchThinkingLevel
-        : existing.branchThinkingLevel;
+    const state = createConnectionUpdateState(existing);
+    applyModeAndDecisionUpdates(state, existing, updates);
 
-    if (updates.triggerMode !== undefined) {
-      const normalizedTriggerMode =
-        updates.triggerMode === "direct" ? "auto" : updates.triggerMode;
-      if (
-        shouldResetDecideState(existing.triggerMode, normalizedTriggerMode)
-      ) {
-        newDecideStatus = "none";
-        newDecideReason = null;
-        newConnectionStatus = "idle";
-      }
-      // 切換離開 branch 時清空 branch 相關欄位
-      if (
-        existing.triggerMode === "branch" &&
-        normalizedTriggerMode !== "branch"
-      ) {
-        newLabel = "";
-        newDescription = null;
-        newBranchProvider = null;
-        newBranchModel = null;
-        newBranchThinkingLevel = null;
-      }
-      newTriggerMode = normalizedTriggerMode;
-      newDirect =
-        updates.triggerMode === "direct"
-          ? true
-          : updates.direct ?? false;
-    }
-
-    if (updates.direct !== undefined) {
-      newDirect = updates.direct;
-    }
-
-    if (updates.decideStatus !== undefined) {
-      newDecideStatus = updates.decideStatus;
-    }
-
-    if (updates.decideReason !== undefined) {
-      newDecideReason = updates.decideReason;
-    }
-
-    // 決定摘要 provider（用於驗證 summaryModel 合法性）
     const sourcePod = podStore.getById(canvasId, existing.sourcePodId);
-    const targetSummaryProvider: ProviderName =
-      updates.summaryProvider !== undefined
-        ? // 客戶端明確指定（含 null 的情況：null 時 fallback 至 sourcePod.provider 或 "claude"）
-          (updates.summaryProvider ?? sourcePod?.provider ?? "claude")
-        : // 本次未提供 summaryProvider：沿用既有值（或 fallback）
-          (existing.summaryProvider ?? sourcePod?.provider ?? "claude");
+    applySummaryUpdates(state, existing, sourcePod, updates);
 
     if (
-      updates.summaryProvider !== undefined &&
-      updates.summaryModel === undefined
+      state.triggerMode === "branch" &&
+      !options?.skipBranchLabelValidation
     ) {
-      // 情境三：只切換 provider，未同時指定 model → 重設為新 provider 的預設模型
-      const providerMeta = getProvider(targetSummaryProvider).metadata;
-      newSummaryModel =
-        (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
-    } else if (updates.summaryModel !== undefined) {
-      // 有明確提供 summaryModel：驗證合法性，不合法直接拒絕，不再寫入時 silent fallback
-      validateProviderModel(
-        targetSummaryProvider,
-        updates.summaryModel,
-        "summaryModel",
-      );
-      newSummaryModel = updates.summaryModel;
-    }
-    const shouldResetSummaryThinkingLevel =
-      updates.summaryThinkingLevel === undefined &&
-      (updates.summaryProvider !== undefined ||
-        updates.summaryModel !== undefined);
-    if (shouldResetSummaryThinkingLevel) {
-      newSummaryThinkingLevel = getDefaultThinkingLevel(
-        targetSummaryProvider,
-        newSummaryModel,
-      );
-    }
-    validateConnectionThinkingLevel(
-      targetSummaryProvider,
-      newSummaryModel,
-      newSummaryThinkingLevel,
-      "summaryThinkingLevel",
-    );
-
-    const targetMode =
-      updates.triggerMode !== undefined
-        ? updates.triggerMode === "direct"
-          ? "auto"
-          : updates.triggerMode
-        : existing.triggerMode;
-    if (targetMode === "branch" && !options?.skipBranchLabelValidation) {
       validateBranchLabel(
         updates.label ?? existing.label,
         this.findBySourcePodId(canvasId, existing.sourcePodId),
@@ -388,55 +496,13 @@ class ConnectionStore {
       );
     }
 
-    if (updates.label !== undefined && targetMode === "branch") {
-      newLabel = updates.label;
+    if (updates.label !== undefined && state.triggerMode === "branch") {
+      state.label = updates.label;
     }
-
     if (updates.description !== undefined) {
-      newDescription = updates.description;
+      state.description = updates.description;
     }
-
-    if (updates.branchProvider !== undefined) {
-      newBranchProvider = updates.branchProvider;
-      if (updates.branchProvider === null) {
-        newBranchModel = null;
-      } else if (updates.branchModel === undefined) {
-        newBranchModel =
-          resolveProviderDefaultModel(updates.branchProvider) ?? newBranchModel;
-      }
-    }
-
-    if (updates.branchModel !== undefined) {
-      newBranchModel = updates.branchModel;
-    }
-
-    if (updates.branchThinkingLevel !== undefined) {
-      newBranchThinkingLevel = updates.branchThinkingLevel;
-    }
-
-    if (newBranchProvider !== null && newBranchModel !== null) {
-      validateProviderModel(newBranchProvider, newBranchModel, "branchModel");
-    }
-    const shouldResetBranchThinkingLevel =
-      updates.branchThinkingLevel === undefined &&
-      (updates.branchProvider !== undefined ||
-        updates.branchModel !== undefined);
-    if (shouldResetBranchThinkingLevel) {
-      newBranchThinkingLevel =
-        newBranchProvider !== null && newBranchModel !== null
-          ? getDefaultThinkingLevel(newBranchProvider, newBranchModel)
-          : null;
-    }
-    if (newBranchProvider !== null) {
-      validateConnectionThinkingLevel(
-        newBranchProvider,
-        newBranchModel,
-        newBranchThinkingLevel,
-        "branchThinkingLevel",
-      );
-    } else if (newBranchThinkingLevel !== null) {
-      throw new Error("branchThinkingLevel 不支援指定的 provider/model");
-    }
+    applyBranchUpdates(state, updates);
 
     const updatedRow = this.repository.updateReturning({
       id,
@@ -445,19 +511,7 @@ class ConnectionStore {
       sourceAnchor: existing.sourceAnchor,
       targetPodId: existing.targetPodId,
       targetAnchor: existing.targetAnchor,
-      triggerMode: newTriggerMode,
-      decideStatus: newDecideStatus,
-      decideReason: newDecideReason,
-      connectionStatus: newConnectionStatus,
-      summaryModel: newSummaryModel,
-      summaryProvider: newSummaryProvider,
-      summaryThinkingLevel: newSummaryThinkingLevel,
-      direct: newDirect,
-      label: newLabel,
-      description: newDescription,
-      branchProvider: newBranchProvider,
-      branchModel: newBranchModel,
-      branchThinkingLevel: newBranchThinkingLevel,
+      ...state,
     } satisfies UpdateConnectionRowInput);
 
     if (!updatedRow) return undefined;
@@ -467,20 +521,7 @@ class ConnectionStore {
   updateBranchSiblingSettings(
     canvasId: string,
     id: string,
-    updates: Partial<{
-      triggerMode: TriggerMode;
-      decideStatus: DecideStatus;
-      decideReason: string | null;
-      summaryModel: string;
-      summaryProvider: ProviderName | null;
-      summaryThinkingLevel: string | null;
-      direct: boolean;
-      label: string;
-      description: string | null;
-      branchProvider: ProviderName | null;
-      branchModel: string | null;
-      branchThinkingLevel: string | null;
-    }>,
+    updates: ConnectionUpdateData,
   ):
     | { targetConnection: Connection; updatedConnections: Connection[] }
     | undefined {
