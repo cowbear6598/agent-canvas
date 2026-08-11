@@ -26,6 +26,11 @@ interface PendingToolCall {
   input: Record<string, unknown>;
 }
 
+interface OpencodeStreamEvent {
+  type: string;
+  props: Record<string, unknown>;
+}
+
 export interface OpencodeStreamNormalizerOptions {
   stream: AsyncGenerator<unknown>;
   sessionId: string;
@@ -188,39 +193,32 @@ class OpencodeToolEventCollector {
       if (!this.currentMessageIds.has(msg.info.id)) continue;
 
       for (const part of msg.parts) {
-        if (part.type !== "tool") continue;
-
-        const callID = part.callID ?? "";
-        if (!callID || this.yieldedToolCallIDs.has(callID)) continue;
-
-        const toolName = part.tool ?? "";
-        const state = part.state;
-        const input = (state?.input as Record<string, unknown>) ?? {};
-
-        if (state?.status === "completed") {
-          this.yieldedToolCallIDs.add(callID);
-          yield { type: "tool_call_start", toolUseId: callID, toolName, input };
-          yield {
-            type: "tool_call_result",
-            toolUseId: callID,
-            toolName,
-            output: state.output ?? "",
-          };
-          continue;
-        }
-
-        if (state?.status === "error") {
-          this.yieldedToolCallIDs.add(callID);
-          yield { type: "tool_call_start", toolUseId: callID, toolName, input };
-          yield {
-            type: "tool_call_result",
-            toolUseId: callID,
-            toolName,
-            output: `[Error] ${state.error ?? "tool failed"}`,
-          };
-        }
+        yield* this.collectPendingToolPart(part);
       }
     }
+  }
+
+  private *collectPendingToolPart(
+    part: OpencodeMessageItem["parts"][number],
+  ): Generator<NormalizedEvent> {
+    if (part.type !== "tool") return;
+
+    const callID = part.callID ?? "";
+    if (!callID || this.yieldedToolCallIDs.has(callID)) return;
+
+    const state = part.state;
+    if (state?.status !== "completed" && state?.status !== "error") return;
+
+    const toolName = part.tool ?? "";
+    const input = (state.input as Record<string, unknown>) ?? {};
+    const output =
+      state.status === "completed"
+        ? (state.output ?? "")
+        : `[Error] ${state.error ?? "tool failed"}`;
+
+    this.yieldedToolCallIDs.add(callID);
+    yield { type: "tool_call_start", toolUseId: callID, toolName, input };
+    yield { type: "tool_call_result", toolUseId: callID, toolName, output };
   }
 
   collectToolCalled(
@@ -298,6 +296,118 @@ class OpencodeToolEventCollector {
   }
 }
 
+function parseOpencodeStreamEvent(
+  rawEvent: unknown,
+  sessionId: string,
+): OpencodeStreamEvent | null {
+  const event = rawEvent as {
+    type?: string;
+    properties?: Record<string, unknown>;
+  };
+  if (!event?.type) return null;
+
+  const props = event.properties ?? {};
+  const eventSessionID = props.sessionID as string | undefined;
+  if (eventSessionID !== undefined && eventSessionID !== sessionId) return null;
+
+  return { type: event.type, props };
+}
+
+async function* normalizeDeltaEvent(
+  type: string,
+  props: Record<string, unknown>,
+  collector: OpencodeToolEventCollector,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  if (type === "message.part.delta") {
+    collector.addMessageId(props.messageID as string | undefined);
+    yield* collector.collectOnPartBoundary(props.partID as string | undefined);
+
+    const delta = props.delta;
+    if (typeof delta !== "string" || delta.length === 0) return true;
+
+    const field = props.field as string | undefined;
+    if (field === "text") yield { type: "text", content: delta };
+    if (field === "reasoning") yield { type: "thinking", content: delta };
+    return true;
+  }
+
+  if (
+    type !== "session.next.text.delta" &&
+    type !== "session.next.reasoning.delta"
+  ) {
+    return false;
+  }
+
+  const delta = props.delta;
+  if (typeof delta === "string" && delta.length > 0) {
+    yield {
+      type: type === "session.next.text.delta" ? "text" : "thinking",
+      content: delta,
+    };
+  }
+  return true;
+}
+
+function collectToolEvent(
+  type: string,
+  props: Record<string, unknown>,
+  collector: OpencodeToolEventCollector,
+): { handled: boolean; event: NormalizedEvent | null } {
+  switch (type) {
+    case "session.next.tool.called":
+      return { handled: true, event: collector.collectToolCalled(props) };
+    case "session.next.tool.success":
+      return { handled: true, event: collector.collectToolSuccess(props) };
+    case "session.next.tool.failed":
+      return { handled: true, event: collector.collectToolFailed(props) };
+    default:
+      return { handled: false, event: null };
+  }
+}
+
+async function* normalizeTerminalEvent(
+  type: string,
+  props: Record<string, unknown>,
+  providerID: string,
+  collector: OpencodeToolEventCollector,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  switch (type) {
+    case "permission.asked":
+      yield buildPermissionAskedEvent(props);
+      return true;
+    case "question.asked":
+      yield buildQuestionAskedEvent(props);
+      return true;
+    case "workspace.failed":
+      yield buildWorkspaceFailedEvent(props);
+      return true;
+    case "session.next.step.failed": {
+      const stepError = props.error as
+        | { type?: string; message?: string }
+        | undefined;
+      yield buildSanitizedSessionFailureEvent({
+        rawMessage: stepError?.message ?? "未知錯誤",
+        providerID,
+        source: "session.next.step.failed",
+      });
+      return true;
+    }
+    case "session.idle":
+      yield* collector.collectPendingToolParts();
+      yield { type: "turn_complete" };
+      return true;
+    case "session.error":
+      yield buildSanitizedSessionFailureEvent({
+        rawMessage: extractErrorMessage(props.error),
+        providerID,
+        source: "session.error",
+      });
+      return true;
+    default:
+      return false;
+  }
+}
+
 export async function* normalizeOpencodeStream(
   options: OpencodeStreamNormalizerOptions,
 ): AsyncIterable<NormalizedEvent> {
@@ -333,127 +443,26 @@ export async function* normalizeOpencodeStream(
       }
       if (raceResult.result.done) break;
 
-      const rawEvent = raceResult.result.value;
-      const event = rawEvent as {
-        type?: string;
-        properties?: Record<string, unknown>;
-      };
-      if (!event || !event.type) continue;
+      const event = parseOpencodeStreamEvent(raceResult.result.value, sessionId);
+      if (!event) continue;
 
-      const type = event.type;
-      const props = event.properties ?? {};
-      const eventSessionID = props.sessionID as string | undefined;
-      if (eventSessionID !== undefined && eventSessionID !== sessionId) {
-        continue;
+      const { type, props } = event;
+
+      if (type === "session.created" && !alreadyYieldedSessionStarted) {
+        const createdSessionId =
+          (props.sessionID as string | undefined) ?? sessionId;
+        yield { type: "session_started", sessionId: createdSessionId };
+        alreadyYieldedSessionStarted = true;
       }
+      if (type === "session.created") continue;
 
-      if (type === "session.created") {
-        if (!alreadyYieldedSessionStarted) {
-          const createdSessionId =
-            (props.sessionID as string | undefined) ?? sessionId;
-          yield { type: "session_started", sessionId: createdSessionId };
-          alreadyYieldedSessionStarted = true;
-        }
-        continue;
-      }
+      if (yield* normalizeDeltaEvent(type, props, collector)) continue;
 
-      if (type === "message.part.delta") {
-        collector.addMessageId(props.messageID as string | undefined);
-        yield* collector.collectOnPartBoundary(
-          props.partID as string | undefined,
-        );
+      const toolEvent = collectToolEvent(type, props, collector);
+      if (toolEvent.event) yield toolEvent.event;
+      if (toolEvent.handled) continue;
 
-        const field = props.field as string | undefined;
-        const delta = props.delta;
-        if (typeof delta !== "string" || delta.length === 0) continue;
-
-        if (field === "text") {
-          yield { type: "text", content: delta };
-          continue;
-        }
-
-        if (field === "reasoning") {
-          yield { type: "thinking", content: delta };
-        }
-        continue;
-      }
-
-      if (type === "session.next.text.delta") {
-        const delta = props.delta;
-        if (typeof delta === "string" && delta.length > 0) {
-          yield { type: "text", content: delta };
-        }
-        continue;
-      }
-
-      if (type === "session.next.reasoning.delta") {
-        const delta = props.delta;
-        if (typeof delta === "string" && delta.length > 0) {
-          yield { type: "thinking", content: delta };
-        }
-        continue;
-      }
-
-      if (type === "session.next.tool.called") {
-        const toolStartEvent = collector.collectToolCalled(props);
-        if (toolStartEvent) yield toolStartEvent;
-        continue;
-      }
-
-      if (type === "session.next.tool.success") {
-        const toolResultEvent = collector.collectToolSuccess(props);
-        if (toolResultEvent) yield toolResultEvent;
-        continue;
-      }
-
-      if (type === "session.next.tool.failed") {
-        const toolResultEvent = collector.collectToolFailed(props);
-        if (toolResultEvent) yield toolResultEvent;
-        continue;
-      }
-
-      if (type === "permission.asked") {
-        yield buildPermissionAskedEvent(props);
-        break;
-      }
-
-      if (type === "question.asked") {
-        yield buildQuestionAskedEvent(props);
-        break;
-      }
-
-      if (type === "workspace.failed") {
-        yield buildWorkspaceFailedEvent(props);
-        break;
-      }
-
-      if (type === "session.next.step.failed") {
-        const stepError = props.error as
-          | { type?: string; message?: string }
-          | undefined;
-        const rawMessage = stepError?.message ?? "未知錯誤";
-        yield buildSanitizedSessionFailureEvent({
-          rawMessage,
-          providerID,
-          source: "session.next.step.failed",
-        });
-        break;
-      }
-
-      if (type === "session.idle") {
-        yield* collector.collectPendingToolParts();
-        yield { type: "turn_complete" };
-        break;
-      }
-
-      if (type === "session.error") {
-        const error = props.error;
-        const rawMessage = extractErrorMessage(error);
-        yield buildSanitizedSessionFailureEvent({
-          rawMessage,
-          providerID,
-          source: "session.error",
-        });
+      if (yield* normalizeTerminalEvent(type, props, providerID, collector)) {
         break;
       }
     }

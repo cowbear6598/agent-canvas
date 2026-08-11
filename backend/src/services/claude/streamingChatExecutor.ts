@@ -514,6 +514,131 @@ async function executeChatTurn(
   }
 }
 
+interface TurnFlowResult {
+  outcome: ChatTurnOutcome;
+  stopped: boolean;
+}
+
+async function recoverCodexTransport(
+  options: StreamingChatExecutorOptions,
+  pod: Pod,
+  turnOutcome: ChatTurnOutcome,
+  callbacks?: StreamingChatExecutorCallbacks,
+): Promise<TurnFlowResult> {
+  if (!shouldRetryCodexTransport(pod, turnOutcome)) {
+    return { outcome: turnOutcome, stopped: false };
+  }
+
+  await options.strategy.addUserMessage(
+    options.podId,
+    CODEX_TRANSPORT_RECOVERY_MESSAGE,
+  );
+  const recoveryOutcome = await executeChatTurn(
+    options,
+    pod,
+    CODEX_TRANSPORT_RECOVERY_MESSAGE,
+    callbacks,
+  );
+  if (recoveryOutcome.finished === "aborted_or_errored") {
+    return { outcome: recoveryOutcome, stopped: true };
+  }
+
+  if (!shouldRetryCodexTransport(pod, recoveryOutcome)) {
+    return { outcome: recoveryOutcome, stopped: false };
+  }
+
+  if (callbacks?.onError) {
+    await callbacks.onError(
+      options.canvasId,
+      options.podId,
+      new Error(CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE),
+    );
+  }
+  return { outcome: recoveryOutcome, stopped: true };
+}
+
+async function stopForUnrecoverablePendingGoal(
+  options: StreamingChatExecutorOptions,
+  callbacks: StreamingChatExecutorCallbacks | undefined,
+): Promise<void> {
+  if (callbacks?.onError) {
+    await callbacks.onError(
+      options.canvasId,
+      options.podId,
+      new Error(PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE),
+    );
+  }
+}
+
+async function runGoalCompletionGate(
+  options: StreamingChatExecutorOptions,
+  pod: Pod,
+  runContext: RunContext | undefined,
+  initialOutcome: ChatTurnOutcome,
+  callbacks?: StreamingChatExecutorCallbacks,
+): Promise<TurnFlowResult> {
+  if (!runContext) return { outcome: initialOutcome, stopped: false };
+
+  let turnOutcome = initialOutcome;
+  let retryCount = 0;
+  let noProgressCount = 0;
+
+  while (true) {
+    if (
+      turnOutcome.finished === "completed_with_unrecoverable_provider_error"
+    ) {
+      if (!hasPendingGoalRuntime(runContext, options.podId)) {
+        return { outcome: turnOutcome, stopped: false };
+      }
+      await stopForUnrecoverablePendingGoal(options, callbacks);
+      return { outcome: turnOutcome, stopped: true };
+    }
+
+    const decision = evaluateGoalGate(runContext, options.podId, {
+      retryCount,
+      noProgressCount,
+    });
+    if (decision.action === "proceed") {
+      return { outcome: turnOutcome, stopped: false };
+    }
+
+    if (decision.action === "stop_blocked") {
+      await stopWorkflowForBlockedGoal(options, callbacks, decision.reason);
+      return { outcome: turnOutcome, stopped: true };
+    }
+
+    if (decision.action === "force_block") {
+      autoForceBlock(runContext, pod, decision.reason);
+      await stopWorkflowForBlockedGoal(options, callbacks, decision.reason);
+      return { outcome: turnOutcome, stopped: true };
+    }
+
+    await options.strategy.addUserMessage(options.podId, decision.nudgeMessage);
+    turnOutcome = await executeChatTurn(
+      options,
+      pod,
+      decision.nudgeMessage,
+      callbacks,
+    );
+    if (turnOutcome.finished === "aborted_or_errored") {
+      return { outcome: turnOutcome, stopped: true };
+    }
+
+    noProgressCount = nextNoProgressCount(
+      runContext,
+      options.podId,
+      decision.completedCountBefore,
+      noProgressCount,
+    );
+    retryCount++;
+
+    // evaluateGoalGate 已有同一上限；保留第二道保險避免未來計數改動造成無限迴圈。
+    if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) {
+      return { outcome: turnOutcome, stopped: false };
+    }
+  }
+}
+
 /**
  * 統一的串流聊天執行器，透過 ChatExecutionStrategy 管理 Run mode 的執行行為。
  *
@@ -567,109 +692,24 @@ export async function executeStreamingChat(
       return turnOutcome.result;
     }
 
-    if (shouldRetryCodexTransport(podResult.pod, turnOutcome)) {
-      await effectiveOptions.strategy.addUserMessage(
-        podId,
-        CODEX_TRANSPORT_RECOVERY_MESSAGE,
-      );
-      turnOutcome = await executeChatTurn(
-        effectiveOptions,
-        podResult.pod,
-        CODEX_TRANSPORT_RECOVERY_MESSAGE,
-        callbacks,
-      );
-      if (turnOutcome.finished === "aborted_or_errored") {
-        return turnOutcome.result;
-      }
+    const transportResult = await recoverCodexTransport(
+      effectiveOptions,
+      podResult.pod,
+      turnOutcome,
+      callbacks,
+    );
+    turnOutcome = transportResult.outcome;
+    if (transportResult.stopped) return turnOutcome.result;
 
-      if (shouldRetryCodexTransport(podResult.pod, turnOutcome)) {
-        if (callbacks?.onError) {
-          await callbacks.onError(
-            canvasId,
-            podId,
-            new Error(CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE),
-          );
-        }
-        return turnOutcome.result;
-      }
-    }
-
-    // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
-    let retryCount = 0;
-    let noProgressCount = 0;
-
-    while (true) {
-      if (!runContext) break;
-
-      if (
-        turnOutcome.finished === "completed_with_unrecoverable_provider_error"
-      ) {
-        if (hasPendingGoalRuntime(runContext, podId)) {
-          if (callbacks?.onError) {
-            await callbacks.onError(
-              canvasId,
-              podId,
-              new Error(PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE),
-            );
-          }
-          return turnOutcome.result;
-        }
-        break;
-      }
-
-      const decision = evaluateGoalGate(runContext, podId, {
-        retryCount,
-        noProgressCount,
-      });
-
-      if (decision.action === "proceed") break;
-
-      if (decision.action === "stop_blocked") {
-        await stopWorkflowForBlockedGoal(
-          effectiveOptions,
-          callbacks,
-          decision.reason,
-        );
-        return turnOutcome.result;
-      }
-
-      if (decision.action === "force_block") {
-        autoForceBlock(runContext, podResult.pod, decision.reason);
-        await stopWorkflowForBlockedGoal(
-          effectiveOptions,
-          callbacks,
-          decision.reason,
-        );
-        return turnOutcome.result;
-      }
-
-      // decision.action === "retry"
-      await effectiveOptions.strategy.addUserMessage(
-        podId,
-        decision.nudgeMessage,
-      );
-      turnOutcome = await executeChatTurn(
-        effectiveOptions,
-        podResult.pod,
-        decision.nudgeMessage,
-        callbacks,
-      );
-      if (turnOutcome.finished === "aborted_or_errored") {
-        return turnOutcome.result;
-      }
-
-      noProgressCount = nextNoProgressCount(
-        runContext,
-        podId,
-        decision.completedCountBefore,
-        noProgressCount,
-      );
-      retryCount++;
-
-      // 防呆：理論上 evaluateGoalGate 會在 retryCount >= hardRetryLimit 時回 force_block；
-      // 此處再次檢查避免任何遞增邏輯改動造成意外無限迴圈
-      if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) break;
-    }
+    const goalGateResult = await runGoalCompletionGate(
+      effectiveOptions,
+      podResult.pod,
+      runContext,
+      turnOutcome,
+      callbacks,
+    );
+    turnOutcome = goalGateResult.outcome;
+    if (goalGateResult.stopped) return turnOutcome.result;
 
     persistGoalRoundDivider(effectiveOptions);
 

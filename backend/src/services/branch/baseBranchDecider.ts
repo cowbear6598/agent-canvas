@@ -41,21 +41,148 @@ function pickFallbackLabel(labels: string[]): string {
   return fallbackLabel;
 }
 
+type BranchDecisionAttemptNumber = 1 | 2;
+
+interface BranchDecisionAttemptContext {
+  input: BranchDecisionInput;
+  systemPrompt: string;
+  userMessage: string;
+  validLabels: string[];
+  fallbackLabel: string;
+  failures: BranchDecisionFailureAttempt[];
+}
+
+interface BranchDecisionAttemptResult {
+  decision: BranchDecisionOutput | null;
+  receivedResponse: boolean;
+}
+
+function logProviderFailure(
+  attempt: BranchDecisionAttemptNumber,
+  message: string,
+  thrown: boolean,
+): void {
+  const ordinal = attempt === 1 ? "第一次" : "第二次";
+  const action = thrown ? "發生例外" : "失敗";
+  const retrySuffix = attempt === 1 ? "，將進行重試" : "";
+  logger.warn(
+    "Workflow",
+    "Warn",
+    `[BaseBranchDecider] ${ordinal} executeDisposableChat ${action}${retrySuffix}：${message}`,
+  );
+}
+
+function resolveParsedDecision(
+  rawResponse: string,
+  attempt: BranchDecisionAttemptNumber,
+  context: BranchDecisionAttemptContext,
+): BranchDecisionOutput | null {
+  const parsed = parseBranchDecision(rawResponse, context.validLabels);
+  if (parsed.ok) {
+    if (!parsed.noSelection) {
+      return { kind: "success", selectedLabel: parsed.selectedLabel };
+    }
+
+    const message =
+      attempt === 1
+        ? "模型回傳不選擇 branch"
+        : "重試後仍未選擇 branch";
+    logger.warn(
+      "Workflow",
+      "Warn",
+      `[BaseBranchDecider] ${message}，改用第一條 branch fallback：${context.fallbackLabel}`,
+    );
+    return { kind: "success", selectedLabel: context.fallbackLabel };
+  }
+
+  context.failures.push({
+    attempt,
+    kind: "parse_error",
+    message: parsed.reason,
+  });
+  const action = attempt === 1 ? "進行重試" : "回傳結構化失敗";
+  const prefix = attempt === 1 ? "第一次解析失敗" : "重試後仍解析失敗";
+  logger.warn(
+    "Workflow",
+    "Warn",
+    `[BaseBranchDecider] ${prefix}（原因：${parsed.reason}），${action}`,
+  );
+  return null;
+}
+
+async function executeBranchDecisionAttempt(
+  attempt: BranchDecisionAttemptNumber,
+  context: BranchDecisionAttemptContext,
+): Promise<BranchDecisionAttemptResult> {
+  const { input } = context;
+  let rawResponse: string | null = null;
+
+  try {
+    const result = await executeDisposableChat({
+      provider: input.provider,
+      model: input.model,
+      systemPrompt: context.systemPrompt,
+      userMessage: context.userMessage,
+      workspacePath: input.workspacePath,
+      sourcePod: input.sourcePod,
+      runContext: input.runContext,
+      thinkingLevel: input.thinkingLevel,
+    });
+    if (result.success) {
+      rawResponse = result.content;
+    } else {
+      const message =
+        result.error ??
+        (attempt === 1 ? "第一次模型呼叫失敗" : "第二次模型呼叫失敗");
+      context.failures.push({ attempt, kind: "provider_error", message });
+      logProviderFailure(attempt, result.error ?? "未知錯誤", false);
+    }
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+
+    const message = error instanceof Error ? error.message : String(error);
+    context.failures.push({ attempt, kind: "provider_error", message });
+    logProviderFailure(attempt, message, true);
+  }
+
+  // 第一輪原有的 abort 時點位於 provider 回應後、解析前。
+  if (attempt === 1) checkAbort(input.abortSignal);
+
+  return {
+    decision:
+      rawResponse === null
+        ? null
+        : resolveParsedDecision(rawResponse, attempt, context),
+    receivedResponse: rawResponse !== null,
+  };
+}
+
+function buildFailedDecision(
+  failures: BranchDecisionFailureAttempt[],
+): BranchDecisionOutput {
+  return {
+    kind: "failed",
+    failure: {
+      kind: failures.every((failure) => failure.kind === "parse_error")
+        ? "parse_error"
+        : failures.every((failure) => failure.kind === "provider_error")
+          ? "provider_error"
+          : "mixed",
+      message: failures.at(-1)?.message ?? "Branch 決策失敗",
+      attempts: failures,
+    },
+  };
+}
+
 // ─── 實作 ─────────────────────────────────────────────────────────────────────
 
 export class BaseBranchDecider implements BranchDecider {
   async decide(input: BranchDecisionInput): Promise<BranchDecisionOutput> {
     const {
       sourcePodName,
-      sourcePod,
       branches,
       persistedSummary,
       recentMessages,
-      provider,
-      model,
-      thinkingLevel,
-      workspacePath,
-      runContext,
       abortSignal,
     } = input;
 
@@ -81,152 +208,23 @@ export class BaseBranchDecider implements BranchDecider {
       branches,
     });
 
-    const failureAttempts: BranchDecisionFailureAttempt[] = [];
-    let rawResponse: string | null = null;
-    try {
-      const result = await executeDisposableChat({
-        provider,
-        model,
-        systemPrompt,
-        userMessage,
-        workspacePath,
-        sourcePod,
-        runContext,
-        thinkingLevel,
-      });
-      if (result.success) {
-        rawResponse = result.content;
-      } else {
-        failureAttempts.push({
-          attempt: 1,
-          kind: "provider_error",
-          message: result.error ?? "第一次模型呼叫失敗",
-        });
-        logger.warn(
-          "Workflow",
-          "Warn",
-          `[BaseBranchDecider] 第一次 executeDisposableChat 失敗，將進行重試：${result.error ?? "未知錯誤"}`,
-        );
-      }
-    } catch (err) {
-      // AbortError：中止訊號觸發，直接向上拋出（不走 fallback）
-      if (isAbortError(err)) {
-        throw err;
-      }
-      failureAttempts.push({
-        attempt: 1,
-        kind: "provider_error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      logger.warn(
-        "Workflow",
-        "Warn",
-        `[BaseBranchDecider] 第一次 executeDisposableChat 發生例外，將進行重試：${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    const context: BranchDecisionAttemptContext = {
+      input,
+      systemPrompt,
+      userMessage,
+      validLabels,
+      fallbackLabel,
+      failures: [],
+    };
+    const firstAttempt = await executeBranchDecisionAttempt(1, context);
+    if (firstAttempt.decision) return firstAttempt.decision;
 
     checkAbort(abortSignal);
 
-    if (rawResponse !== null) {
-      const parsed = parseBranchDecision(rawResponse, validLabels);
-      if (parsed.ok) {
-        if (parsed.noSelection) {
-          logger.warn(
-            "Workflow",
-            "Warn",
-            `[BaseBranchDecider] 模型回傳不選擇 branch，改用第一條 branch fallback：${fallbackLabel}`,
-          );
-          return { kind: "success", selectedLabel: fallbackLabel };
-        }
+    const secondAttempt = await executeBranchDecisionAttempt(2, context);
+    if (secondAttempt.decision) return secondAttempt.decision;
 
-        return { kind: "success", selectedLabel: parsed.selectedLabel };
-      }
-
-      failureAttempts.push({
-        attempt: 1,
-        kind: "parse_error",
-        message: parsed.reason,
-      });
-
-      logger.warn(
-        "Workflow",
-        "Warn",
-        `[BaseBranchDecider] 第一次解析失敗（原因：${parsed.reason}），進行重試`,
-      );
-    }
-
-    checkAbort(abortSignal);
-
-    let retryRawResponse: string | null = null;
-    try {
-      const retryResult = await executeDisposableChat({
-        provider,
-        model,
-        systemPrompt,
-        userMessage,
-        workspacePath,
-        sourcePod,
-        runContext,
-        thinkingLevel,
-      });
-      if (retryResult.success) {
-        retryRawResponse = retryResult.content;
-      } else {
-        failureAttempts.push({
-          attempt: 2,
-          kind: "provider_error",
-          message: retryResult.error ?? "第二次模型呼叫失敗",
-        });
-        logger.warn(
-          "Workflow",
-          "Warn",
-          `[BaseBranchDecider] 第二次 executeDisposableChat 失敗：${retryResult.error ?? "未知錯誤"}`,
-        );
-      }
-    } catch (err) {
-      // AbortError：中止訊號觸發，直接向上拋出（不走 fallback）
-      if (isAbortError(err)) {
-        throw err;
-      }
-      failureAttempts.push({
-        attempt: 2,
-        kind: "provider_error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      logger.warn(
-        "Workflow",
-        "Warn",
-        `[BaseBranchDecider] 第二次 executeDisposableChat 發生例外：${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-
-    if (retryRawResponse !== null) {
-      const retryParsed = parseBranchDecision(retryRawResponse, validLabels);
-      if (retryParsed.ok) {
-        if (retryParsed.noSelection) {
-          logger.warn(
-            "Workflow",
-            "Warn",
-            `[BaseBranchDecider] 重試後仍未選擇 branch，改用第一條 branch fallback：${fallbackLabel}`,
-          );
-          return { kind: "success", selectedLabel: fallbackLabel };
-        }
-
-        return { kind: "success", selectedLabel: retryParsed.selectedLabel };
-      }
-
-      failureAttempts.push({
-        attempt: 2,
-        kind: "parse_error",
-        message: retryParsed.reason,
-      });
-
-      logger.warn(
-        "Workflow",
-        "Warn",
-        `[BaseBranchDecider] 重試後仍解析失敗（原因：${retryParsed.reason}），回傳結構化失敗`,
-      );
-    } else {
+    if (!secondAttempt.receivedResponse) {
       logger.warn(
         "Workflow",
         "Warn",
@@ -234,17 +232,6 @@ export class BaseBranchDecider implements BranchDecider {
       );
     }
 
-    return {
-      kind: "failed",
-      failure: {
-        kind: failureAttempts.every((attempt) => attempt.kind === "parse_error")
-          ? "parse_error"
-          : failureAttempts.every((attempt) => attempt.kind === "provider_error")
-            ? "provider_error"
-            : "mixed",
-        message: failureAttempts.at(-1)?.message ?? "Branch 決策失敗",
-        attempts: failureAttempts,
-      },
-    };
+    return buildFailedDecision(context.failures);
   }
 }

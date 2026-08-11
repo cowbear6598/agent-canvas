@@ -12,7 +12,7 @@ import {
   BRANCH_DESCRIPTION_MAX_LENGTH,
   BRANCH_RESERVED_LABEL,
 } from "@/types/connection";
-import type { PodProvider } from "@/types/pod";
+import type { Pod, PodProvider } from "@/types/pod";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import {
@@ -69,6 +69,23 @@ import {
 } from "@/stores/connection/connectionEventReducers";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
+
+interface NewConnectionSummaryDefaults {
+  sourcePod: Pod | undefined;
+  provider: PodProvider | undefined;
+  model: string;
+  thinkingLevel: string | null | undefined;
+}
+
+interface NewConnectionPayload {
+  sourceAnchor: AnchorPosition;
+  targetPodId: string;
+  targetAnchor: AnchorPosition;
+  sourcePodId?: string;
+  summaryProvider?: PodProvider;
+  summaryModel?: string;
+  summaryThinkingLevel?: string | null;
+}
 
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
@@ -310,6 +327,56 @@ export const useConnectionStore = defineStore("connection", () => {
     return true;
   }
 
+  function resolveNewConnectionSummary(
+    sourcePodId: string | undefined | null,
+  ): NewConnectionSummaryDefaults {
+    const sourcePod = sourcePodId
+      ? podStore.getPodById(sourcePodId)
+      : undefined;
+    const provider = sourcePod?.provider;
+    const configuredModel = sourcePod?.providerConfig?.model;
+    const sourcePodModel =
+      typeof configuredModel === "string" && configuredModel.trim().length > 0
+        ? configuredModel
+        : undefined;
+    const model =
+      (provider === "opencode" ? sourcePodModel : undefined) ??
+      (provider
+        ? providerCapabilityStore.getDefaultModel(provider)
+        : undefined) ??
+      DEFAULT_SUMMARY_MODEL;
+    const configuredThinkingLevel = sourcePod?.providerConfig?.thinkingLevel;
+    const thinkingLevel = provider
+      ? typeof configuredThinkingLevel === "string"
+        ? configuredThinkingLevel
+        : resolveDefaultThinkingLevel(providerCapabilityStore, provider, model)
+      : undefined;
+
+    return { sourcePod, provider, model, thinkingLevel };
+  }
+
+  function buildNewConnectionPayload(
+    sourcePodId: string | undefined | null,
+    sourceAnchor: AnchorPosition,
+    targetPodId: string,
+    targetAnchor: AnchorPosition,
+    summary: NewConnectionSummaryDefaults,
+  ): NewConnectionPayload {
+    return {
+      sourceAnchor,
+      targetPodId,
+      targetAnchor,
+      ...(sourcePodId ? { sourcePodId } : {}),
+      ...(summary.provider
+        ? {
+            summaryProvider: summary.provider,
+            summaryModel: summary.model,
+            summaryThinkingLevel: summary.thinkingLevel,
+          }
+        : {}),
+    };
+  }
+
   async function createConnection(
     sourcePodId: string | undefined | null,
     sourceAnchor: AnchorPosition,
@@ -318,53 +385,14 @@ export const useConnectionStore = defineStore("connection", () => {
   ): Promise<Connection | null> {
     if (!validateNewConnection(sourcePodId, targetPodId)) return null;
 
-    // 依上游 Pod 的 provider 建立預設 Summary 設定。
-    // OpenCode 優先使用 Pod 目前的 providerConfig.model，避免 alias/capability
-    // 尚未載入時把 OpenCode 連線暫時建立成 Claude 或載入中狀態。
-    const sourcePod = sourcePodId
-      ? podStore.getPodById(sourcePodId)
-      : undefined;
-    const resolvedSummaryProvider = sourcePod?.provider;
-    const sourcePodModel =
-      typeof sourcePod?.providerConfig?.model === "string" &&
-      sourcePod.providerConfig.model.trim().length > 0
-        ? sourcePod.providerConfig.model
-        : undefined;
-    const resolvedSummaryModel: string =
-      (sourcePod?.provider === "opencode" ? sourcePodModel : undefined) ??
-      (sourcePod
-        ? providerCapabilityStore.getDefaultModel(sourcePod.provider)
-        : undefined) ??
-      DEFAULT_SUMMARY_MODEL;
-
-    const basePayload: {
-      sourceAnchor: AnchorPosition;
-      targetPodId: string;
-      targetAnchor: AnchorPosition;
-      sourcePodId?: string;
-      summaryProvider?: PodProvider;
-      summaryModel?: string;
-      summaryThinkingLevel?: string | null;
-    } = {
+    const summary = resolveNewConnectionSummary(sourcePodId);
+    const payload = buildNewConnectionPayload(
+      sourcePodId,
       sourceAnchor,
       targetPodId,
       targetAnchor,
-    };
-    if (sourcePodId) {
-      basePayload.sourcePodId = sourcePodId;
-    }
-    if (resolvedSummaryProvider) {
-      basePayload.summaryProvider = resolvedSummaryProvider;
-      basePayload.summaryModel = resolvedSummaryModel;
-      basePayload.summaryThinkingLevel =
-        typeof sourcePod?.providerConfig?.thinkingLevel === "string"
-          ? sourcePod.providerConfig.thinkingLevel
-          : resolveDefaultThinkingLevel(
-              providerCapabilityStore,
-              resolvedSummaryProvider,
-              resolvedSummaryModel,
-            );
-    }
+      summary,
+    );
 
     const result = await executeAction<
       ConnectionCreatePayload,
@@ -373,7 +401,7 @@ export const useConnectionStore = defineStore("connection", () => {
       {
         requestEvent: WebSocketRequestEvents.CONNECTION_CREATE,
         responseEvent: WebSocketResponseEvents.CONNECTION_CREATED,
-        payload: basePayload,
+        payload,
       },
       {
         errorCategory: "Connection",
@@ -389,11 +417,11 @@ export const useConnectionStore = defineStore("connection", () => {
     // 後端若未帶回 summaryModel，以上游 provider 預設模型填入
     const rawConnection = result.data.connection;
     if (!rawConnection.summaryModel) {
-      rawConnection.summaryModel = resolvedSummaryModel;
+      rawConnection.summaryModel = summary.model;
     }
 
     showSuccessToast("Connection", t("common.success.create"));
-    return normalizeConnection(rawConnection, sourcePod?.provider);
+    return normalizeConnection(rawConnection, summary.sourcePod?.provider);
   }
 
   async function deleteConnection(connectionId: string): Promise<void> {

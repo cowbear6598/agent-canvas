@@ -251,6 +251,133 @@ function buildMcpToolOutput(item: CodexMcpToolCallItem): string {
   return serializeMcpToolOutputValue(item.result) ?? "";
 }
 
+function normalizeItemStarted(
+  event: CodexItemStartedEvent,
+): NormalizedEvent | null {
+  if (event.item.type === "command_execution") {
+    const command = event.item as CodexCommandExecutionItem;
+    return {
+      type: "tool_call_start",
+      toolUseId: command.id,
+      toolName: "shell",
+      input: { command: command.command },
+    };
+  }
+
+  if (event.item.type !== "mcp_tool_call") return null;
+
+  const item = event.item as CodexMcpToolCallItem;
+  const input = buildMcpToolInput(item);
+  return {
+    type: "tool_call_start",
+    toolUseId: item.id,
+    toolName: canonicalizeGoalRuntimeToolName(
+      buildMcpToolName(item),
+      input,
+      null,
+    ),
+    input,
+  };
+}
+
+function normalizeCompletedItemError(
+  item: CodexItemError,
+): NormalizedEvent | null {
+  const rawContent = item.message ?? item.error ?? item.text ?? "";
+  if (!rawContent) return null;
+
+  if (isCodexTransportFallbackMessage(rawContent)) {
+    return buildCodexTransportFallbackError(rawContent);
+  }
+
+  return buildCodexSystemError({
+    content: rawContent,
+    fatal: false,
+    code: "ITEM_ERROR",
+    rawContent,
+  });
+}
+
+function normalizeItemCompleted(
+  event: CodexItemCompletedEvent,
+): NormalizedEvent | null {
+  switch (event.item.type) {
+    case "agent_message": {
+      const message = event.item as CodexAgentMessageItem;
+      return message.text ? { type: "text", content: message.text } : null;
+    }
+    case "reasoning": {
+      const reasoning = event.item as CodexReasoningItem;
+      return reasoning.text
+        ? { type: "thinking", content: reasoning.text }
+        : null;
+    }
+    case "command_execution": {
+      const command = event.item as CodexCommandExecutionItem;
+      return {
+        type: "tool_call_result",
+        toolUseId: command.id,
+        toolName: "shell",
+        output: command.aggregated_output ?? "",
+      };
+    }
+    case "mcp_tool_call": {
+      const item = event.item as CodexMcpToolCallItem;
+      const input = buildMcpToolInput(item);
+      return {
+        type: "tool_call_result",
+        toolUseId: item.id,
+        toolName: canonicalizeGoalRuntimeToolName(
+          buildMcpToolName(item),
+          input,
+          item.result ?? null,
+        ),
+        output: buildMcpToolOutput(item),
+      };
+    }
+    case "error":
+      return normalizeCompletedItemError(event.item as CodexItemError);
+    default:
+      return null;
+  }
+}
+
+function normalizeStreamError(event: CodexStreamErrorEvent): NormalizedEvent {
+  const rawContent = event.message ?? "Codex 串流發生不可恢復的錯誤";
+
+  if (isCodexReconnectProgressMessage(rawContent)) {
+    return buildCodexSystemError({
+      content: rawContent,
+      fatal: false,
+      code: "STREAM_RECONNECTING",
+      rawContent,
+      recovery: "recoverable",
+    });
+  }
+
+  if (isCodexTransportFallbackMessage(rawContent)) {
+    return buildCodexTransportFallbackError(rawContent);
+  }
+
+  if (isCodexTerminalTransportDisconnectMessage(rawContent)) {
+    return buildCodexSystemError({
+      content: rawContent,
+      fatal: true,
+      code: "STREAM_DISCONNECTED",
+      rawContent,
+      recovery: "recoverable",
+    });
+  }
+
+  return buildCodexSystemError({
+    content: rawContent,
+    fatal: true,
+    code: "STREAM_ERROR",
+    rawContent,
+    recovery: "unrecoverable",
+  });
+}
+
 // ── 主要解析函式 ──────────────────────────────────────────────────
 
 /**
@@ -282,153 +409,19 @@ export function normalize(line: string): NormalizedEvent | null {
   }
 
   switch (event.type) {
-    case "thread.started": {
-      const e = event as CodexThreadStartedEvent;
+    case "thread.started":
       return {
         type: "session_started",
-        sessionId: e.thread_id,
+        sessionId: (event as CodexThreadStartedEvent).thread_id,
       };
-    }
-
-    case "item.started": {
-      const e = event as CodexItemStartedEvent;
-      if (e.item.type === "command_execution") {
-        const cmd = e.item as CodexCommandExecutionItem;
-        return {
-          type: "tool_call_start",
-          toolUseId: cmd.id,
-          toolName: "shell",
-          input: { command: cmd.command },
-        };
-      }
-      if (e.item.type === "mcp_tool_call") {
-        const item = e.item as CodexMcpToolCallItem;
-        const input = buildMcpToolInput(item);
-        return {
-          type: "tool_call_start",
-          toolUseId: item.id,
-          toolName: canonicalizeGoalRuntimeToolName(
-            buildMcpToolName(item),
-            input,
-            null,
-          ),
-          input,
-        };
-      }
-      // 其他 item.started 類型目前不映射
-      return null;
-    }
-
-    case "item.completed": {
-      const e = event as CodexItemCompletedEvent;
-
-      if (e.item.type === "agent_message") {
-        const msg = e.item as CodexAgentMessageItem;
-        if (!msg.text) return null;
-        return {
-          type: "text",
-          content: msg.text,
-        };
-      }
-
-      if (e.item.type === "reasoning") {
-        const r = e.item as CodexReasoningItem;
-        if (!r.text) return null;
-        return {
-          type: "thinking",
-          content: r.text,
-        };
-      }
-
-      if (e.item.type === "command_execution") {
-        const cmd = e.item as CodexCommandExecutionItem;
-        return {
-          type: "tool_call_result",
-          toolUseId: cmd.id,
-          toolName: "shell",
-          output: cmd.aggregated_output ?? "",
-        };
-      }
-
-      if (e.item.type === "mcp_tool_call") {
-        const item = e.item as CodexMcpToolCallItem;
-        const input = buildMcpToolInput(item);
-        const output = buildMcpToolOutput(item);
-        return {
-          type: "tool_call_result",
-          toolUseId: item.id,
-          toolName: canonicalizeGoalRuntimeToolName(
-            buildMcpToolName(item),
-            input,
-            item.result ?? null,
-          ),
-          output,
-        };
-      }
-
-      if (e.item.type === "error") {
-        const itemError = e.item as CodexItemError;
-        const rawContent =
-          itemError.message ?? itemError.error ?? itemError.text ?? "";
-        if (!rawContent) return null;
-
-        if (isCodexTransportFallbackMessage(rawContent)) {
-          return buildCodexTransportFallbackError(rawContent);
-        }
-
-        return buildCodexSystemError({
-          content: rawContent,
-          fatal: false,
-          code: "ITEM_ERROR",
-          rawContent,
-        });
-      }
-
-      // 其他 item.completed 類型（file_change 等）目前不映射
-      return null;
-    }
-
-    case "turn.completed": {
+    case "item.started":
+      return normalizeItemStarted(event as CodexItemStartedEvent);
+    case "item.completed":
+      return normalizeItemCompleted(event as CodexItemCompletedEvent);
+    case "turn.completed":
       return { type: "turn_complete" };
-    }
-
-    case "error": {
-      const e = event as CodexStreamErrorEvent;
-      const rawContent = e.message ?? "Codex 串流發生不可恢復的錯誤";
-
-      if (isCodexReconnectProgressMessage(rawContent)) {
-        return buildCodexSystemError({
-          content: rawContent,
-          fatal: false,
-          code: "STREAM_RECONNECTING",
-          rawContent,
-          recovery: "recoverable",
-        });
-      }
-
-      if (isCodexTransportFallbackMessage(rawContent)) {
-        return buildCodexTransportFallbackError(rawContent);
-      }
-
-      if (isCodexTerminalTransportDisconnectMessage(rawContent)) {
-        return buildCodexSystemError({
-          content: rawContent,
-          fatal: true,
-          code: "STREAM_DISCONNECTED",
-          rawContent,
-          recovery: "recoverable",
-        });
-      }
-
-      return buildCodexSystemError({
-        content: rawContent,
-        fatal: true,
-        code: "STREAM_ERROR",
-        rawContent,
-        recovery: "unrecoverable",
-      });
-    }
-
+    case "error":
+      return normalizeStreamError(event as CodexStreamErrorEvent);
     default:
       // 未知頂層事件（turn.started、item.updated 等）→ 忽略
       return null;
