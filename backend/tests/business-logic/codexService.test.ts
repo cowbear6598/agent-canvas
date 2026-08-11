@@ -144,6 +144,30 @@ describe("codexService.executeDisposableChat", () => {
     ).toBe(false);
   });
 
+  it("重連進度後收到 turn_complete → 繼續等待並回 success", async () => {
+    const reconnectLine = JSON.stringify({
+      type: "error",
+      message:
+        "Reconnecting... 2/5 (stream disconnected before completion: websocket closed by server before response.completed)",
+    });
+    const mockProc = makeMockProc(
+      [reconnectLine, AGENT_MESSAGE_LINE, TURN_COMPLETE_LINE],
+      [],
+      0,
+    );
+    spawnSpy.mockReturnValue(mockProc as any);
+
+    const result = await codexService.executeDisposableChat(BASE_OPTIONS);
+
+    expect(result.success).toBe(true);
+    expect(result.content).not.toBe("");
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Chat",
+      "Warn",
+      expect.stringContaining("Reconnecting... 2/5"),
+    );
+  });
+
   it("啟動一次性查詢 log 應包含 thinking level", async () => {
     const mockProc = makeMockProc(
       [AGENT_MESSAGE_LINE, TURN_COMPLETE_LINE],

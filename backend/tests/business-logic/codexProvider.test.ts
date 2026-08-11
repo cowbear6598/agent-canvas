@@ -33,6 +33,7 @@ vi.mock("../../src/services/mcp/codexMcpReader.js", () => ({
 }));
 
 import { readCodexMcpServers } from "../../src/services/mcp/codexMcpReader.js";
+import { logger } from "../../src/utils/logger.js";
 
 const REMOVED_CODEX_SANDBOX_FLAG = ["--", "sandbox"].join("");
 const REMOVED_CODEX_SANDBOX_MODE = ["workspace", "write"].join("-");
@@ -489,6 +490,69 @@ describe("CodexProvider", () => {
 
     expect(errorEvent.recovery).toBe("unrecoverable");
     expect(errorEvent.systemMessage?.metadata.recovery).toBe("unrecoverable");
+  });
+
+  it("Codex CLI 重連進度後成功時應繼續消費串流，且不推出 error event", async () => {
+    const stdoutLines = [
+      JSON.stringify({
+        type: "error",
+        message:
+          "Reconnecting... 2/5 (stream disconnected before completion: websocket closed by server before response.completed)",
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: { id: "msg-after-reconnect", type: "agent_message", text: "完成" },
+      }),
+      JSON.stringify({ type: "turn.completed" }),
+    ];
+    const mockProc = makeMockProc(stdoutLines, [], 0);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
+
+    expect(events.some((event) => event.type === "error")).toBe(false);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "text", content: "完成" }),
+        expect.objectContaining({ type: "turn_complete" }),
+      ]),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Chat",
+      "Warn",
+      expect.stringContaining("Codex CLI 正在重新連線"),
+    );
+  });
+
+  it("Codex CLI 重連耗盡後的終態錯誤仍應標記為 unrecoverable", async () => {
+    const stdoutLines = [
+      JSON.stringify({
+        type: "error",
+        message:
+          "Reconnecting... 5/5 (stream disconnected before completion: websocket closed by server before response.completed)",
+      }),
+      JSON.stringify({
+        type: "error",
+        message:
+          "stream disconnected before completion: websocket closed by server before response.completed",
+      }),
+    ];
+    const mockProc = makeMockProc(stdoutLines, [], 1);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const collected: NormalizedEvent[] = [];
+    for await (const event of codexProvider.chat(makeCtx())) {
+      collected.push(event);
+      if (event.type === "error" && event.fatal) break;
+    }
+
+    expect(collected).toHaveLength(1);
+    expect(collected[0]).toMatchObject({
+      type: "error",
+      fatal: true,
+      recovery: "unrecoverable",
+      code: "STREAM_ERROR",
+    });
   });
 
   // ── 補充：exit code 非 0 但已發 turn_complete → 不推 error event ───

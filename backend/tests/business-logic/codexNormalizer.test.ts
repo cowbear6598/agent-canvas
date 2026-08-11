@@ -295,6 +295,27 @@ describe("CodexNormalizer - normalize()", () => {
     expect(e.systemMessage?.metadata.recovery).toBe("unrecoverable");
   });
 
+  it("Codex CLI 重連進度應映射為 non-fatal recoverable error", () => {
+    const line = toLine({
+      type: "error",
+      message:
+        "Reconnecting... 2/5 (stream disconnected before completion: websocket closed by server before response.completed)",
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e.fatal).toBe(false);
+    expect(e.recovery).toBe("recoverable");
+    expect(e.code).toBe("STREAM_RECONNECTING");
+    expect(e.systemMessage?.metadata).toMatchObject({
+      code: "STREAM_RECONNECTING",
+      severity: "error",
+      recovery: "recoverable",
+    });
+  });
+
   it("item.completed 且 item_type=error 應映射為 non-fatal system error", () => {
     const line = toLine({
       type: "item.completed",

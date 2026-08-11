@@ -43,6 +43,17 @@ interface CodexStreamErrorEvent {
   message: string;
 }
 
+/**
+ * Codex CLI 會用頂層 error envelope 回報內部重連進度；這不是 turn 終態錯誤。
+ * 目前 wire format 沒有獨立欄位可判斷，只能依 CLI 的固定訊息前綴辨識。
+ */
+const CODEX_RECONNECT_PROGRESS_RE =
+  /^Reconnecting\.\.\.\s+\d+\/\d+(?:\s|$)/;
+
+function isCodexReconnectProgressMessage(message: string): boolean {
+  return CODEX_RECONNECT_PROGRESS_RE.test(message.trim());
+}
+
 interface CodexItemError {
   id: string;
   type: "error";
@@ -355,6 +366,17 @@ export function normalize(line: string): NormalizedEvent | null {
     case "error": {
       const e = event as CodexStreamErrorEvent;
       const rawContent = e.message ?? "Codex 串流發生不可恢復的錯誤";
+
+      if (isCodexReconnectProgressMessage(rawContent)) {
+        return buildCodexSystemError({
+          content: rawContent,
+          fatal: false,
+          code: "STREAM_RECONNECTING",
+          rawContent,
+          recovery: "recoverable",
+        });
+      }
+
       return buildCodexSystemError({
         content: rawContent,
         fatal: true,

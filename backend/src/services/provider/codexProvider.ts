@@ -519,25 +519,39 @@ async function* processStdoutLines(
 
     for (const line of lines) {
       const event = normalize(line);
-      if (event !== null) {
-        if (event.type === "turn_complete") {
-          out.hasTurnComplete = true;
-        }
-        yield event;
+      if (event === null || consumeReconnectProgress(event)) {
+        continue;
       }
-    }
-  }
-
-  // 處理 stdout 結束時剩餘的 buffer 內容
-  if (buffer.trim()) {
-    const event = normalize(buffer);
-    if (event !== null) {
       if (event.type === "turn_complete") {
         out.hasTurnComplete = true;
       }
       yield event;
     }
   }
+
+  // 處理 stdout 結束時剩餘的 buffer 內容
+  if (buffer.trim()) {
+    const event = normalize(buffer);
+    if (event !== null && !consumeReconnectProgress(event)) {
+      if (event.type === "turn_complete") {
+        out.hasTurnComplete = true;
+      }
+      yield event;
+    }
+  }
+}
+
+function consumeReconnectProgress(event: NormalizedEvent): boolean {
+  if (event.type !== "error" || event.code !== "STREAM_RECONNECTING") {
+    return false;
+  }
+
+  logger.warn(
+    "Chat",
+    "Warn",
+    `[CodexProvider] Codex CLI 正在重新連線：${event.message}`,
+  );
+  return true;
 }
 
 /**
