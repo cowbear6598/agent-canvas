@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.0] - 2026-08-12
+
+### 修正
+- 修正混合自動與直接路徑的 Run 已完成後，Pod 仍可能停留在 running 狀態的問題
+
+### 優化
+- 拆分 OpenCode、Codex 串流事件處理與 Claude 串流 transport retry、Goal gate 流程，降低巢狀結構與重複邏輯
+- 拆分 Branch 首次決策與重試流程，以及畫布 Pod、Repository、Memory、Branch 操作職責
+- 簡化 Connection 狀態更新、Managed MCP 內部契約、外掛安裝與 ZIP 解析流程，移除無謂防護並共用中央目錄解析
+
 ## [2.2.11] - 2026-08-11
 
 ### 優化
