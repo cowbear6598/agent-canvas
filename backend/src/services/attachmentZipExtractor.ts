@@ -325,6 +325,50 @@ function unzipArchive(bytes: Uint8Array): Map<string, Uint8Array> {
   return normalizedEntries;
 }
 
+function resolveArchiveDirectoryName(archiveName: string): string {
+  const baseName = archiveName.replace(/\.zip$/i, "").trim();
+  return baseName === "" || baseName === "." || baseName === ".."
+    ? "archive"
+    : baseName;
+}
+
+async function writeZipEntries(
+  entries: ParsedZipEntry[],
+  extractedFiles: Map<string, Uint8Array>,
+  directoryPath: string,
+): Promise<void> {
+  for (const entry of entries) {
+    const targetPath = resolveSafeTargetPath(directoryPath, entry.name);
+    if (entry.isDirectory) {
+      await fs.mkdir(targetPath, { recursive: true });
+      continue;
+    }
+
+    const fileBytes = extractedFiles.get(entry.fflateName);
+    if (
+      fileBytes === undefined ||
+      fileBytes.byteLength !== entry.uncompressedSize
+    ) {
+      throw new AttachmentInvalidArchiveError(
+        `ZIP 內檔案大小驗證失敗：${entry.name}`,
+      );
+    }
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, fileBytes);
+  }
+}
+
+function normalizeExtractionError(error: unknown): Error {
+  if (
+    error instanceof AttachmentInvalidArchiveError ||
+    error instanceof AttachmentArchiveTooLargeError ||
+    error instanceof AttachmentWriteError
+  ) {
+    return error;
+  }
+  return new AttachmentWriteError(error instanceof Error ? error : undefined);
+}
+
 /**
  * 將 ZIP 安全解壓到 staging session 內的同名資料夾。
  * 解壓前先讀取中央目錄驗證大小與路徑，避免 zip bomb 與路徑穿越。
@@ -335,52 +379,20 @@ export async function extractZipAttachment(
   archiveName: string,
 ): Promise<ExtractZipResult> {
   const entries = parseZipEntries(bytes);
-  const archiveBaseName = archiveName.replace(/\.zip$/i, "").trim();
-  const desiredName =
-    archiveBaseName === "" || archiveBaseName === "." || archiveBaseName === ".."
-      ? "archive"
-      : archiveBaseName;
-  const reserved = await reserveUniqueDirectory(sessionDirectory, desiredName);
+  const reserved = await reserveUniqueDirectory(
+    sessionDirectory,
+    resolveArchiveDirectoryName(archiveName),
+  );
 
   try {
     const extractedFiles = unzipArchive(bytes);
-    for (const entry of entries) {
-      const targetPath = resolveSafeTargetPath(
-        reserved.directoryPath,
-        entry.name,
-      );
-      if (entry.isDirectory) {
-        await fs.mkdir(targetPath, { recursive: true });
-        continue;
-      }
-
-      const fileBytes = extractedFiles.get(entry.fflateName);
-      if (
-        fileBytes === undefined ||
-        fileBytes.byteLength !== entry.uncompressedSize
-      ) {
-        throw new AttachmentInvalidArchiveError(
-          `ZIP 內檔案大小驗證失敗：${entry.name}`,
-        );
-      }
-      await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.writeFile(targetPath, fileBytes);
-    }
+    await writeZipEntries(entries, extractedFiles, reserved.directoryPath);
 
     return { directoryName: reserved.directoryName };
   } catch (error) {
     await fs
       .rm(reserved.directoryPath, { recursive: true, force: true })
       .catch(() => void 0);
-    if (
-      error instanceof AttachmentInvalidArchiveError ||
-      error instanceof AttachmentArchiveTooLargeError ||
-      error instanceof AttachmentWriteError
-    ) {
-      throw error;
-    }
-    throw new AttachmentWriteError(
-      error instanceof Error ? error : undefined,
-    );
+    throw normalizeExtractionError(error);
   }
 }

@@ -539,6 +539,23 @@ describe("updatePlugin", () => {
     expect(result.success).toBe(false);
     expect(mockClone).toHaveBeenCalledTimes(1);
     expect(managedPluginStore.update).not.toHaveBeenCalled();
+    expect(mockRename).not.toHaveBeenCalled();
+  });
+
+  it("啟用新版本失敗時恢復既有 plugin 目錄", async () => {
+    mockAccess.mockResolvedValue(undefined);
+    vi.mocked(fsOperation)
+      .mockResolvedValueOnce(ok(undefined))
+      .mockResolvedValueOnce(err("FS_ERROR"));
+
+    const result = await updatePlugin("owner/repo");
+
+    expect(result.success).toBe(false);
+    expect(managedPluginStore.update).not.toHaveBeenCalled();
+    expect(mockRename).toHaveBeenCalledWith(
+      expect.stringContaining("agent-canvas-bundle-backup-"),
+      originalRecord.installPath,
+    );
   });
 
   it("舊安裝目錄存在且 backup 失敗時不覆蓋既有 plugin", async () => {
@@ -560,6 +577,26 @@ describe("updatePlugin", () => {
 
     expect(result.success).toBe(false);
     expect(managedPluginStore.update).not.toHaveBeenCalled();
+  });
+
+  it("registry 更新失敗時移除新版本並恢復既有 plugin 目錄", async () => {
+    mockAccess.mockResolvedValue(undefined);
+    vi.mocked(managedPluginStore.update).mockReturnValue(null);
+
+    const result = await updatePlugin("owner/repo");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe("PLUGIN_UPDATE_FAILED");
+    }
+    expect(mockRm).toHaveBeenCalledWith(originalRecord.installPath, {
+      recursive: true,
+      force: true,
+    });
+    expect(mockRename).toHaveBeenCalledWith(
+      expect.stringContaining("agent-canvas-bundle-backup-"),
+      originalRecord.installPath,
+    );
   });
 });
 

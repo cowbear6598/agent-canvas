@@ -4,7 +4,7 @@ import os from "os";
 import { createHash, randomUUID } from "crypto";
 import { unzipSync } from "fflate";
 import { simpleGit } from "simple-git";
-import { ok, err } from "../../types/result.js";
+import { err, getResultErrorString, ok } from "../../types/result.js";
 import type { Result } from "../../types/result.js";
 import {
   gitOperation,
@@ -650,11 +650,7 @@ export async function installPlugin(
     `clone bundle ${fullName}`,
   );
   if (!cloneResult.success) {
-    return err(
-      typeof cloneResult.error === "string"
-        ? cloneResult.error
-        : cloneResult.error.key,
-    );
+    return err(getResultErrorString(cloneResult.error));
   }
 
   const metadataResult = await ensureBundleHasSkillsOrRollback(installPath, repo);
@@ -742,15 +738,94 @@ export async function removePlugin(id: string): Promise<Result<void>> {
     `rm bundle dir ${record.installPath}`,
   );
   if (!rmResult.success) {
-    return err(
-      typeof rmResult.error === "string" ? rmResult.error : rmResult.error.key,
-    );
+    return err(getResultErrorString(rmResult.error));
   }
 
   getDb().prepare("DELETE FROM pod_plugin_ids WHERE plugin_id = ?").run(id);
   managedPluginStore.delete(id);
 
   return ok();
+}
+
+interface PluginInstallBackup {
+  backupPath: string;
+  installPathExisted: boolean;
+}
+
+async function backupPluginInstall(
+  installPath: string,
+): Promise<Result<PluginInstallBackup>> {
+  const backupPath = path.join(
+    os.tmpdir(),
+    `agent-canvas-bundle-backup-${randomUUID()}`,
+  );
+  const installPathExisted = await pathExists(installPath);
+  if (!installPathExisted) {
+    return ok({ backupPath, installPathExisted });
+  }
+
+  const moveResult = await fsOperation(
+    () => fs.promises.rename(installPath, backupPath),
+    `backup bundle dir ${installPath}`,
+  );
+  if (!moveResult.success) {
+    return err(getResultErrorString(moveResult.error));
+  }
+
+  return ok({ backupPath, installPathExisted });
+}
+
+async function restorePluginInstall(
+  installPath: string,
+  backup: PluginInstallBackup,
+): Promise<void> {
+  if (!backup.installPathExisted) return;
+  await fs.promises
+    .rename(backup.backupPath, installPath)
+    .catch(() => void 0);
+}
+
+async function activatePluginInstall(
+  stagingPath: string,
+  installPath: string,
+  sourceRef: string,
+  backup: PluginInstallBackup,
+): Promise<Result<void>> {
+  const activateResult = await fsOperation(
+    async () => {
+      await fs.promises.mkdir(path.dirname(installPath), { recursive: true });
+      await fs.promises.rename(stagingPath, installPath);
+    },
+    `activate updated bundle ${sourceRef}`,
+  );
+  if (activateResult.success) return ok();
+
+  await restorePluginInstall(installPath, backup);
+  return err(getResultErrorString(activateResult.error));
+}
+
+async function commitPluginUpdate(
+  id: string,
+  record: ManagedPluginRecord,
+  metadata: ExtractedBundleMetadata,
+  backup: PluginInstallBackup,
+): Promise<Result<ManagedPluginRecord>> {
+  const updatedRecord = managedPluginStore.update(id, {
+    displayName: metadata.displayName,
+    description: metadata.description,
+    updatedAt: new Date().toISOString(),
+  });
+
+  if (!updatedRecord) {
+    await removeDirectoryIfExists(record.installPath).catch(() => void 0);
+    await restorePluginInstall(record.installPath, backup);
+    return err("PLUGIN_UPDATE_FAILED");
+  }
+
+  if (backup.installPathExisted) {
+    await removeDirectoryIfExists(backup.backupPath).catch(() => void 0);
+  }
+  return ok(updatedRecord);
 }
 
 export async function updatePlugin(
@@ -782,11 +857,7 @@ export async function updatePlugin(
       `update clone bundle ${source.ref}`,
     );
     if (!cloneResult.success) {
-      return err(
-        typeof cloneResult.error === "string"
-          ? cloneResult.error
-          : cloneResult.error.key,
-      );
+      return err(getResultErrorString(cloneResult.error));
     }
 
     const metadataResult = await ensureBundleHasSkillsOrRollback(
@@ -797,69 +868,28 @@ export async function updatePlugin(
       return err(metadataResult.error);
     }
 
-    const backupPath = path.join(
-      os.tmpdir(),
-      `agent-canvas-bundle-backup-${randomUUID()}`,
-    );
-    const installPathExisted = await pathExists(record.installPath);
-
-    if (installPathExisted) {
-      const backupMoveResult = await fsOperation(
-        () => fs.promises.rename(record.installPath, backupPath),
-        `backup bundle dir ${record.installPath}`,
-      );
-      if (!backupMoveResult.success) {
-        return err(
-          typeof backupMoveResult.error === "string"
-            ? backupMoveResult.error
-            : backupMoveResult.error.key,
-        );
-      }
+    const backupResult = await backupPluginInstall(record.installPath);
+    if (!backupResult.success) {
+      return backupResult;
     }
 
-    const activateResult = await fsOperation(
-      async () => {
-        await fs.promises.mkdir(path.dirname(record.installPath), {
-          recursive: true,
-        });
-        await fs.promises.rename(stagingPath, record.installPath);
-      },
-      `activate updated bundle ${source.ref}`,
+    const activateResult = await activatePluginInstall(
+      stagingPath,
+      record.installPath,
+      source.ref,
+      backupResult.data,
     );
     if (!activateResult.success) {
-      if (installPathExisted) {
-        await fs.promises.rename(backupPath, record.installPath).catch(
-          () => void 0,
-        );
-      }
-      return err(
-        typeof activateResult.error === "string"
-          ? activateResult.error
-          : activateResult.error.key,
-      );
+      return activateResult;
     }
 
-    const updatedRecord = managedPluginStore.update(id, {
-      displayName: metadataResult.data.displayName,
-      description: metadataResult.data.description,
-      updatedAt: new Date().toISOString(),
-    });
-
-    if (!updatedRecord) {
-      await removeDirectoryIfExists(record.installPath).catch(() => void 0);
-      if (installPathExisted) {
-        await fs.promises.rename(backupPath, record.installPath).catch(
-          () => void 0,
-        );
-      }
-      return err("PLUGIN_UPDATE_FAILED");
-    }
-
-    if (installPathExisted) {
-      await removeDirectoryIfExists(backupPath).catch(() => void 0);
-    }
-
-    return ok(updatedRecord);
+    const commitResult = await commitPluginUpdate(
+      id,
+      record,
+      metadataResult.data,
+      backupResult.data,
+    );
+    return commitResult;
   } finally {
     await removeDirectoryIfExists(stagingPath).catch(() => void 0);
   }
