@@ -62,12 +62,12 @@ export type ManagedMcpRegistryInput =
  */
 export interface PodMcpAvailabilityItem {
   name: string;
-  transport?: McpTransport;
-  status?: McpDisplayStatus;
-  selected?: boolean;
-  selectable?: boolean;
-  disabledReason?: string | null;
-  lastError?: string | null;
+  transport: McpTransport;
+  status: McpDisplayStatus;
+  selected: boolean;
+  selectable: boolean;
+  disabledReason: string | null;
+  lastError: string | null;
   system?: boolean;
   locked?: boolean;
   description?: string;

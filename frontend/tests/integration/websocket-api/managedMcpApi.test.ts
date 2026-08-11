@@ -8,10 +8,32 @@ import {
   saveManagedMcpRegistry,
 } from "@/services/managedMcpApi";
 import { createWebSocketRequest } from "@/services/websocket/createWebSocketRequest";
+import type { ManagedMcpRegistryItem } from "@/types/mcp";
 
 vi.mock("@/services/websocket/createWebSocketRequest", () => ({
   createWebSocketRequest: vi.fn(),
 }));
+
+function makeRegistryItem(
+  overrides: Partial<ManagedMcpRegistryItem> = {},
+): ManagedMcpRegistryItem {
+  return {
+    id: "registry-1",
+    name: "context7",
+    transport: "stdio",
+    enabled: true,
+    command: null,
+    args: [],
+    cwd: null,
+    env: {},
+    url: null,
+    status: "unknown",
+    lastError: null,
+    createdAt: null,
+    updatedAt: null,
+    ...overrides,
+  };
+}
 
 describe("managedMcpApi", () => {
   beforeEach(() => {
@@ -20,20 +42,17 @@ describe("managedMcpApi", () => {
     invalidatePodMcpAvailabilityCache();
   });
 
-  it("registry list 會正規化 transport 與 status", async () => {
+  it("registry list 直接使用後端契約", async () => {
     vi.mocked(createWebSocketRequest).mockResolvedValue({
       items: [
-        {
-          id: "registry-1",
-          name: "context7",
-          transport: " HTTP ",
-          enabled: true,
+        makeRegistryItem({
+          transport: "http",
           url: "https://example.com/mcp",
-          status: " HEALTHY ",
-          last_error: "boom",
-          created_at: "2025-01-01T00:00:00.000Z",
-          updated_at: "2025-01-02T00:00:00.000Z",
-        },
+          status: "healthy",
+          lastError: "boom",
+          createdAt: "2025-01-01T00:00:00.000Z",
+          updatedAt: "2025-01-02T00:00:00.000Z",
+        }),
       ],
     } as never);
 
@@ -56,30 +75,6 @@ describe("managedMcpApi", () => {
         updatedAt: "2025-01-02T00:00:00.000Z",
       },
     ]);
-  });
-
-  it("registry list 遇到外部未知 status 時顯示 unknown 狀態", async () => {
-    vi.mocked(createWebSocketRequest).mockResolvedValue({
-      items: [
-        {
-          id: "registry-1",
-          name: "context7",
-          transport: "stdio",
-          enabled: true,
-          command: "npx",
-          status: "third-party-warming-up",
-        },
-      ],
-    } as never);
-
-    const result = await listManagedMcpRegistry();
-
-    expect(result[0]).toEqual(
-      expect.objectContaining({
-        name: "context7",
-        status: "unknown",
-      }),
-    );
   });
 
   it("pod availability 會保留 selected / disabledReason", async () => {
@@ -165,15 +160,11 @@ describe("managedMcpApi", () => {
     vi.mocked(createWebSocketRequest)
       .mockResolvedValueOnce({
         items: [
-          {
-            id: "registry-1",
-            name: "context7",
-            transport: "stdio",
-            enabled: true,
+          makeRegistryItem({
             command: "npx",
             args: ["-y", "@upstash/context7-mcp"],
             status: "healthy",
-          },
+          }),
         ],
       } as never)
       .mockResolvedValueOnce({
@@ -190,35 +181,26 @@ describe("managedMcpApi", () => {
         ],
       } as never)
       .mockResolvedValueOnce({
-        item: {
-          id: "registry-1",
-          name: "context7",
-          transport: "stdio",
-          enabled: true,
+        item: makeRegistryItem({
           command: "npx",
           args: ["-y", "@upstash/context7-mcp"],
           status: "healthy",
-        },
+        }),
       } as never)
       .mockResolvedValueOnce({
         items: [
-          {
-            id: "registry-1",
-            name: "context7",
-            transport: "stdio",
-            enabled: true,
+          makeRegistryItem({
             command: "npx",
             args: ["-y", "@upstash/context7-mcp"],
             status: "healthy",
-          },
-          {
+          }),
+          makeRegistryItem({
             id: "registry-2",
             name: "fresh-server",
             transport: "http",
-            enabled: true,
             url: "https://example.com/mcp",
             status: "starting",
-          },
+          }),
         ],
       } as never)
       .mockResolvedValueOnce({

@@ -11,7 +11,11 @@ import type {
   PathwayState,
   RunMessagesPageInfo,
 } from "../run";
-import type { ManagedMcpRegistryItem, PodMcpAvailabilityItem } from "../mcp";
+import type {
+  ManagedMcpRegistryItem,
+  McpDisplayStatus,
+  PodMcpAvailabilityItem,
+} from "../mcp";
 import type { MessageRole, SystemMessageMetadata } from "../chat";
 
 export interface ConnectionReadyPayload {
@@ -386,21 +390,21 @@ export interface CursorMovedPayload {
 }
 
 export interface ManagedMcpRegistryListResultPayload extends ResultPayload {
-  items?: ManagedMcpRegistryItem[];
+  items: ManagedMcpRegistryItem[];
 }
 
 export interface ManagedMcpRegistrySavedPayload extends ResultPayload {
-  item?: ManagedMcpRegistryItem;
+  item: ManagedMcpRegistryItem;
 }
 
 export interface ManagedMcpRegistryDeletedPayload extends ResultPayload {
-  registryId?: string;
+  registryId: string;
 }
 
 export interface ManagedMcpRegistryTestResultPayload extends ResultPayload {
-  registryId?: string;
-  status?: string;
-  lastError?: string | null;
+  registryId: string;
+  status: McpDisplayStatus;
+  lastError: string | null;
 }
 
 export interface ManagedMcpRegistryUpdatedPayload extends ResultPayload {
@@ -423,8 +427,8 @@ export interface ManagedMcpSurfaceTargetsIgnoredPayload extends ResultPayload {
 }
 
 export interface PodMcpAvailabilityListResultPayload extends ResultPayload {
-  podId?: string;
-  items?: PodMcpAvailabilityItem[];
+  podId: string;
+  items: PodMcpAvailabilityItem[];
 }
 
 /** Pod 的 MCP server 名稱清單已更新 */
