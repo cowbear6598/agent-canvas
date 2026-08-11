@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.2.8] - 2026-08-11
+
+### 新增
+- Pod 新增 Fast Mode 閃電控制項、充電動畫、狀態持久化與 WebSocket 同步
+- 支援 Claude Opus 與 Codex GPT-5.6 系列快速模式，聊天或 Run 執行中會鎖定切換
+
+### 優化
+- Claude Agent SDK 升級至 0.3.227
+- 移除 Codex GPT-5.5，改用 GPT-5.6 Luna 與 high thinking level，並自動遷移既有設定
+
 ## [2.2.7] - 2026-08-11
 
 ### 修正
