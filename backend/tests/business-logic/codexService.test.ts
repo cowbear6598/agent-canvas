@@ -124,7 +124,10 @@ describe("codexService.executeDisposableChat", () => {
 
     expect(result.success).toBe(true);
     expect(spawnSpy).toHaveBeenCalledOnce();
-    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    const [spawnArgs, spawnOptions] = spawnSpy.mock.calls[0] as [
+      string[],
+      { env?: Record<string, string | undefined> },
+    ];
     expect(spawnArgs).toEqual([
       "codex",
       "exec",
@@ -142,6 +145,7 @@ describe("codexService.executeDisposableChat", () => {
     expect(
       spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
     ).toBe(false);
+    expect(spawnOptions.env).toBe(process.env);
   });
 
   it("重連進度後收到 turn_complete → 繼續等待並回 success", async () => {

@@ -12,7 +12,7 @@ import type {
   DisposableChatOptions,
   DisposableChatResult,
 } from "../shared/disposableChatTypes.js";
-import { buildCodexEnv, collectStderr } from "./codexHelpers.js";
+import { collectStderr } from "./codexHelpers.js";
 
 export type {
   DisposableChatOptions,
@@ -266,14 +266,12 @@ function spawnCodexProcess(
 ): Bun.Subprocess<"pipe", "pipe", "pipe"> | DisposableChatResult {
   const codexArgs = buildDisposableArgs(model, workspacePath, thinkingLevel);
   try {
-    // 每次 spawn 時動態建構 env，確保讀到當下的 process.env
-    // （dotenv 延遲載入、單元測試 mock、credential rotation 皆能正確生效）
     return Bun.spawn(["codex", ...codexArgs], {
       cwd: workspacePath,
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: buildCodexEnv(),
+      env: process.env,
     });
   } catch (err: unknown) {
     const isEnoent =

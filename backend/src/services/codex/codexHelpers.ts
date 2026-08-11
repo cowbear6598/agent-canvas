@@ -2,43 +2,10 @@
  * codexHelpers
  *
  * codexProvider 與 codexService 共用的底層 helper 函數與常數。
- * 涵蓋環境變數篩選、敏感資訊遮蔽、stderr 收集等重複邏輯。
+ * 涵蓋敏感資訊遮蔽、stderr 收集等重複邏輯。
  */
 
 import { logger } from "../../utils/logger.js";
-
-// ─── 環境變數白名單 ──────────────────────────────────────────────────────────
-
-/** 傳入 codex subprocess 的環境變數白名單，僅傳遞 codex 實際需要的 key */
-export const CODEX_ENV_WHITELIST = new Set([
-  "PATH",
-  "HOME",
-  "LANG",
-  "LC_ALL",
-  "OPENAI_API_KEY",
-  "TERM",
-]);
-
-/** CODEX 專屬環境變數額外允許清單 */
-export const CODEX_ENV_EXTRA_WHITELIST: ReadonlySet<string> = new Set([
-  "CODEX_DISABLE_TELEMETRY",
-  "CODEX_LOG_LEVEL",
-]);
-
-/**
- * 篩選環境變數白名單，建構傳入 codex subprocess 的環境物件。
- * 每次呼叫時動態讀取 process.env，確保測試 mock 及 credential rotation 正確生效。
- */
-export function buildCodexEnv(): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value === undefined) continue;
-    if (CODEX_ENV_WHITELIST.has(key) || CODEX_ENV_EXTRA_WHITELIST.has(key)) {
-      out[key] = value;
-    }
-  }
-  return out;
-}
 
 // ─── 敏感資訊遮蔽 ────────────────────────────────────────────────────────────
 

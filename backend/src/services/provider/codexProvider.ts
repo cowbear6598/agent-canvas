@@ -40,7 +40,7 @@ import {
   managedMcpSurfaceService,
   type PodMcpEntry,
 } from "../mcp/managedMcpSurfaceService.js";
-import { buildCodexEnv, collectStderr } from "../codex/codexHelpers.js";
+import { collectStderr } from "../codex/codexHelpers.js";
 import { isEnoentError } from "./utils.js";
 
 /**
@@ -449,7 +449,7 @@ function spawnCodexProcess(
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: buildCodexEnv(),
+    env: process.env,
   });
 }
 

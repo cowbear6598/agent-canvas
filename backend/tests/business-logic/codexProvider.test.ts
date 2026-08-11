@@ -141,7 +141,10 @@ describe("CodexProvider", () => {
     await collectEvents(provider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
-    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    const [spawnArgs, spawnOptions] = spawnSpy.mock.calls[0] as [
+      string[],
+      { env?: Record<string, string | undefined> },
+    ];
     expect(spawnArgs).toEqual([
       "codex",
       "exec",
@@ -159,6 +162,7 @@ describe("CodexProvider", () => {
     expect(
       spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
     ).toBe(false);
+    expect(spawnOptions.env).toBe(process.env);
   });
 
   // ── Case 2：resume 時 spawn 指令包含 resume <id>、model 與 bypass，不含 --cd ──
