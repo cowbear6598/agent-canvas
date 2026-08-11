@@ -428,7 +428,11 @@ class RunExecutionService {
     );
   }
 
-  startPodInstance(runContext: RunContext, podId: string): void {
+  startPodInstance(
+    runContext: RunContext,
+    podId: string,
+    allowSkippedReentry: boolean = false,
+  ): void {
     const instance = runStore.getPodInstance(runContext.runId, podId);
     if (!instance) {
       logger.warn(
@@ -438,10 +442,12 @@ class RunExecutionService {
       );
       return;
     }
-    const nextStatus =
-      this.isCyclicPod(runContext, podId) && instance.status === "completed"
-        ? "running"
-        : decidePodStartStatus(instance.status);
+    const canReenter =
+      (allowSkippedReentry && instance.status === "skipped") ||
+      (this.isCyclicPod(runContext, podId) && instance.status === "completed");
+    const nextStatus = canReenter
+      ? "running"
+      : decidePodStartStatus(instance.status);
     if (!nextStatus) return;
     this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus);
   }
@@ -498,6 +504,7 @@ class RunExecutionService {
     runContext: RunContext,
     podId: string,
     pathway: SettlementPathway,
+    options: { evaluateRun?: boolean } = {},
   ): void {
     const updated = this.settlePathwayAndRefresh(
       runContext,
@@ -511,12 +518,11 @@ class RunExecutionService {
     const nextStatus = decidePodStatusAfterTriggerSettlement(
       updated,
       runQueueService.getQueueSize(key),
-      this.isCyclicPod(runContext, podId),
     );
     if (!nextStatus) return;
 
     this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus, {
-      evaluateRun: true,
+      evaluateRun: options.evaluateRun ?? true,
     });
   }
 
@@ -675,6 +681,8 @@ class RunExecutionService {
   }
 
   decidingPodInstance(runContext: RunContext, podId: string): void {
+    const instance = runStore.getPodInstance(runContext.runId, podId);
+    if (instance && isTerminalPodStatus(instance.status)) return;
     this.updateAndEmitPodInstanceStatus(runContext, podId, "deciding");
   }
 
@@ -840,6 +848,10 @@ class RunExecutionService {
         completedAt: updatedRun?.completedAt ?? undefined,
       } as RunStatusChangedPayload,
     );
+  }
+
+  evaluateRun(runContext: RunContext): void {
+    this.evaluateRunStatus(runContext.runId, runContext.canvasId);
   }
 
   registerActiveStream(runId: string, podId: string): void {

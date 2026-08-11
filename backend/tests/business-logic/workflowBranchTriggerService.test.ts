@@ -25,6 +25,7 @@ import { workflowStateService } from "../../src/services/workflow/workflowStateS
 import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
 import { workflowPipeline } from "../../src/services/workflow/workflowPipeline.js";
 import { workflowMultiInputService } from "../../src/services/workflow/workflowMultiInputService.js";
+import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { podStore } from "../../src/services/podStore.js";
 import { logger } from "../../src/utils/logger.js";
 import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
@@ -205,6 +206,44 @@ describe("WorkflowBranchTriggerService", () => {
           triggerMode: "branch",
         }),
         workflowBranchTriggerService,
+      );
+    });
+
+    it("run mode 拒絕 direct-enabled branch 時結算 direct pathway", async () => {
+      const runContext = makeRunContext();
+      const selected = makeConnection({
+        id: "conn-success",
+        label: "success",
+        targetPodId: "pod-done",
+        direct: true,
+      });
+      const rejected = makeConnection({
+        id: "conn-fail",
+        label: "fail",
+        targetPodId: "pod-loop-target",
+        direct: true,
+      });
+      const settleSpy = vi
+        .spyOn(runExecutionService, "settleAndSkipPath")
+        .mockImplementation(() => {});
+
+      vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "selected",
+        selectedConnectionId: selected.id,
+        rejectedConnectionIds: [rejected.id],
+      });
+
+      await workflowBranchTriggerService.processBranchConnections(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        [selected, rejected],
+        runContext,
+      );
+
+      expect(settleSpy).toHaveBeenCalledWith(
+        runContext,
+        rejected.targetPodId,
+        "direct",
       );
     });
 

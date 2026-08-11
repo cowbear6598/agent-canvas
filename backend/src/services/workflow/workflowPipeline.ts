@@ -30,6 +30,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
    */
   private isRunInstanceTriggerable(
     runContext: PipelineContext["runContext"],
+    sourcePodId: string,
     targetPodId: string,
   ): boolean {
     const targetInstance = runStore.getPodInstance(
@@ -38,6 +39,12 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     );
     if (!targetInstance) return true;
     if (TRIGGERABLE_STATUSES.has(targetInstance.status)) return true;
+    if (
+      targetInstance.status === "skipped" &&
+      this.deps.executionService.isCyclicPod(runContext, sourcePodId)
+    ) {
+      return true;
+    }
     return (
       this.deps.executionService.isCyclicPod(runContext, targetPodId) &&
       (targetInstance.status === "summarizing" ||
@@ -65,6 +72,17 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     context: PipelineContext,
     strategy: TriggerStrategy,
   ): Promise<void> {
+    try {
+      await this.executeStages(context, strategy);
+    } finally {
+      context.delegate.evaluateRun();
+    }
+  }
+
+  private async executeStages(
+    context: PipelineContext,
+    strategy: TriggerStrategy,
+  ): Promise<void> {
     const { canvasId, sourcePodId, connection, triggerMode, runContext } =
       context;
     const { targetPodId, id: connectionId } = connection;
@@ -81,7 +99,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       return;
     }
 
-    if (!this.isRunInstanceTriggerable(runContext, targetPodId)) {
+    if (!this.isRunInstanceTriggerable(runContext, sourcePodId, targetPodId)) {
       const targetInstance = runStore.getPodInstance(
         runContext.runId,
         targetPodId,

@@ -107,7 +107,7 @@ describe("RunExecutionService", () => {
   });
 
   describe("createRun", () => {
-    it("循環 chain 中的 Pod 完成一輪後維持 waiting，Run 持續 running", async () => {
+    it("循環 Pod 完成一輪後標記 completed，回連時可再次進入 running", async () => {
       const targetPodId = "pod-loop-target";
       insertConnection(CANVAS_ID, SOURCE_POD_ID, targetPodId, "auto");
       insertConnection(CANVAS_ID, targetPodId, SOURCE_POD_ID, "auto");
@@ -127,9 +127,15 @@ describe("RunExecutionService", () => {
       runExecutionService.settlePodTrigger(ctx, SOURCE_POD_ID, "auto");
 
       expect(runStore.getPodInstance(ctx.runId, SOURCE_POD_ID)?.status).toBe(
-        "waiting",
+        "completed",
       );
       expect(runStore.getRun(ctx.runId)?.status).toBe("running");
+
+      runExecutionService.startPodInstance(ctx, SOURCE_POD_ID);
+
+      expect(runStore.getPodInstance(ctx.runId, SOURCE_POD_ID)?.status).toBe(
+        "running",
+      );
     });
 
     it("建立 Run 並為 chain 中所有 pod 建立 instance", async () => {
@@ -430,6 +436,19 @@ describe("RunExecutionService", () => {
       );
     });
 
+    it("循環來源再次選中先前 skipped 的 branch target 時可進入 running", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const instance = runStore.createPodInstance(run.id, "pod-success-target");
+      runStore.updatePodInstanceStatus(instance.id, "skipped");
+      const ctx = makeRunContext({ runId: run.id });
+
+      runExecutionService.startPodInstance(ctx, "pod-success-target", true);
+
+      expect(
+        runStore.getPodInstance(run.id, "pod-success-target")?.status,
+      ).toBe("running");
+    });
+
     it("找不到 instance 時 log warning 不拋錯", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
       const ctx = makeRunContext({ runId: run.id });
@@ -461,6 +480,30 @@ describe("RunExecutionService", () => {
   });
 
   describe("settlePodTrigger", () => {
+    it("可先完成 Pod，再於 downstream dispatch 後評估 Run", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const instance = runStore.createPodInstance(
+        run.id,
+        SOURCE_POD_ID,
+        "pending",
+      );
+      runStore.updatePodInstanceStatus(instance.id, "running");
+      const ctx = makeRunContext({ runId: run.id });
+
+      runExecutionService.settlePodTrigger(ctx, SOURCE_POD_ID, "auto", {
+        evaluateRun: false,
+      });
+
+      expect(runStore.getPodInstance(run.id, SOURCE_POD_ID)?.status).toBe(
+        "completed",
+      );
+      expect(runStore.getRun(run.id)?.status).toBe("running");
+
+      runExecutionService.evaluateRun(ctx);
+
+      expect(runStore.getRun(run.id)?.status).toBe("completed");
+    });
+
     it("settle auto pathway 後狀態非 pending → 更新 status 為 completed 並評估 run 狀態", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
       const inst = runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending");
@@ -777,6 +820,29 @@ describe("RunExecutionService", () => {
   });
 
   describe("run status transition business logic: deciding instances", () => {
+    it("已完成的循環 target 不會被 branch 決策降回 deciding", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const instance = runStore.createPodInstance(
+        run.id,
+        SOURCE_POD_ID,
+        "settled",
+      );
+      runStore.updatePodInstanceStatus(instance.id, "completed");
+      vi.mocked(socketService.emitToCanvas).mockClear();
+      const ctx = makeRunContext({ runId: run.id });
+
+      runExecutionService.decidingPodInstance(ctx, SOURCE_POD_ID);
+
+      expect(runStore.getPodInstance(run.id, SOURCE_POD_ID)?.status).toBe(
+        "completed",
+      );
+      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+        expect.objectContaining({ status: "deciding" }),
+      );
+    });
+
     it("decidingPodInstance 將 pod 狀態更新為 deciding", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
       runStore.createPodInstance(run.id, SOURCE_POD_ID);

@@ -218,6 +218,9 @@ describe("WorkflowPipeline", () => {
           ready: true,
         }),
       });
+      const evaluateRunSpy = vi
+        .spyOn(baseContext.delegate, "evaluateRun")
+        .mockImplementation(() => {});
 
       await workflowPipeline.execute(baseContext, mockStrategy);
 
@@ -242,6 +245,10 @@ describe("WorkflowPipeline", () => {
         summary: "摘要",
         runContext: baseRunContext,
       });
+      expect(
+        vi.mocked(mockExecutionService.triggerWorkflowWithSummary).mock
+          .invocationCallOrder[0] ?? 0,
+      ).toBeLessThan(evaluateRunSpy.mock.invocationCallOrder[0] ?? 0);
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
@@ -733,6 +740,22 @@ describe("WorkflowPipeline", () => {
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).not.toHaveBeenCalled();
+    });
+
+    it("循環來源後續選中的 skipped branch target 可重新觸發", async () => {
+      const mockStrategy = makeStrategy("branch");
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue(
+        makeRunInstance("skipped"),
+      );
+      mockExecutionService.isCyclicPod.mockImplementation(
+        (_runContext: RunContext, podId: string) => podId === SOURCE_POD_ID,
+      );
+
+      await workflowPipeline.execute(runContextPipelineBase, mockStrategy);
+
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalled();
     });
 
     it("errored target instances are not triggered again", async () => {

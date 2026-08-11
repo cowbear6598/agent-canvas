@@ -37,6 +37,7 @@ function makeDelegate(): WorkflowStatusDelegate {
     onSummaryFailed: vi.fn(),
     onChatComplete: vi.fn(),
     onChatError: vi.fn(),
+    evaluateRun: vi.fn(),
     shouldEnqueue: vi.fn().mockReturnValue(true),
     isBusy: vi.fn().mockReturnValue(false),
     enqueue: vi.fn(),
@@ -97,5 +98,16 @@ describe("Workflow loop execution", () => {
       "direct",
     );
     expect(checkAndTriggerWorkflows).toHaveBeenCalledOnce();
+    expect(delegate.evaluateRun).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(delegate.onChatComplete).mock.invocationCallOrder[0] ?? 0,
+    ).toBeLessThan(
+      checkAndTriggerWorkflows.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(
+      checkAndTriggerWorkflows.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(delegate.evaluateRun).mock.invocationCallOrder[0] ?? 0,
+    );
   });
 });

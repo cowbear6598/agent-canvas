@@ -412,7 +412,11 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       canvasId,
       connectionId,
       beforeLaunch: () => {
-        delegate.startPodExecution(canvasId, targetPodId);
+        if (this.isCyclicPod(runContext, sourcePodId)) {
+          delegate.startPodExecution(canvasId, targetPodId, true);
+        } else {
+          delegate.startPodExecution(canvasId, targetPodId);
+        }
       },
       createQueryPromise: () =>
         this.executeClaudeQuery({

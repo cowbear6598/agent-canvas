@@ -214,6 +214,7 @@ describe("WorkflowExecutionService", () => {
         onSummaryFailed: vi.fn(),
         onChatComplete: vi.fn(),
         onChatError: vi.fn(),
+        evaluateRun: vi.fn(),
         shouldEnqueue: vi.fn().mockReturnValue(true),
         isBusy: vi.fn().mockReturnValue(false),
         enqueue: vi.fn(),
@@ -262,6 +263,7 @@ describe("WorkflowExecutionService", () => {
         onSummaryFailed: vi.fn(),
         onChatComplete: vi.fn(),
         onChatError: vi.fn(),
+        evaluateRun: vi.fn(),
         shouldEnqueue: vi.fn().mockReturnValue(true),
         isBusy: vi.fn().mockReturnValue(false),
         enqueue: vi.fn(),
@@ -322,6 +324,7 @@ describe("WorkflowExecutionService", () => {
         onSummaryFailed: vi.fn(),
         onChatComplete: vi.fn(),
         onChatError: vi.fn(),
+        evaluateRun: vi.fn(),
         shouldEnqueue: vi.fn().mockReturnValue(true),
         isBusy: vi.fn().mockReturnValue(false),
         enqueue: vi.fn(),
@@ -402,6 +405,7 @@ describe("WorkflowExecutionService", () => {
         onSummaryFailed: vi.fn(),
         onChatComplete: vi.fn(),
         onChatError: vi.fn(),
+        evaluateRun: vi.fn(),
         shouldEnqueue: vi.fn().mockReturnValue(true),
         isBusy: vi.fn().mockReturnValue(true),
         enqueue: vi.fn(),
@@ -468,6 +472,7 @@ describe("WorkflowExecutionService", () => {
         onSummaryFailed: vi.fn(),
         onChatComplete: vi.fn(),
         onChatError: vi.fn(),
+        evaluateRun: vi.fn(),
         shouldEnqueue: vi.fn().mockReturnValue(true),
         isBusy: vi.fn().mockReturnValue(true),
         enqueue: vi.fn(),
@@ -689,6 +694,7 @@ describe("WorkflowExecutionService.generateSummaryWithFallback runContext 狀態
           mockRunContext,
           SOURCE_POD_ID,
           pathway,
+          { evaluateRun: false },
         );
       }
       if (expectError) {

@@ -139,14 +139,13 @@ describe("runStatusMachine", () => {
       ).toBeNull();
     });
 
-    it("循環 Pod 的 trigger settlement 完成後回到 waiting", () => {
+    it("Pod 的 trigger settlement 完成後一律回到 completed", () => {
       expect(
         decidePodStatusAfterTriggerSettlement(
           makeInstance("running", "settled", "not-applicable"),
           0,
-          true,
         ),
-      ).toBe("waiting");
+      ).toBe("completed");
     });
 
     it("run queue settlement 保留既有 active stream、empty 與 process-next 決策", () => {

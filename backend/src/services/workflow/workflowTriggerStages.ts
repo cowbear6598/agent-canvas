@@ -139,6 +139,7 @@ export async function completeWorkflowChatStage(params: {
     resolveSettlementPathway(params.triggerMode),
   );
   await params.checkAndTriggerWorkflows();
+  params.delegate.evaluateRun();
   params.delegate.scheduleNextInQueue(params.canvasId, params.targetPodId);
 }
 

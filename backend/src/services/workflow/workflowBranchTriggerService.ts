@@ -9,6 +9,7 @@ import type {
   CompletionContext,
   QueuedContext,
   QueueProcessedContext,
+  SettlementPathway,
 } from "./types.js";
 import type { RunContext } from "../../types/run.js";
 import type { ConnectionUpdatedPayload } from "../../types/index.js";
@@ -30,6 +31,7 @@ import {
   createMultiInputCompletionHandlers,
   emitQueueProcessed,
   resolvePendingKey,
+  resolveSettlementPathway,
 } from "./workflowHelpers.js";
 import { logger } from "../../utils/logger.js";
 import { getErrorMessage, isAbortError } from "../../utils/errorHelpers.js";
@@ -57,6 +59,14 @@ interface BranchTriggerDependencies {
   pendingTargetStore: PendingTargetStore;
   pipeline: WorkflowPipeline;
   multiInputService: WorkflowMultiInputService;
+}
+
+function resolveConnectionSettlementPathway(
+  connection: Connection,
+): SettlementPathway {
+  return resolveSettlementPathway(
+    connection.direct ? "direct" : connection.triggerMode,
+  );
 }
 
 class WorkflowBranchTriggerService
@@ -397,7 +407,11 @@ class WorkflowBranchTriggerService
       );
       this.broadcastConnectionUpdated(canvasId, connection.id);
     } else {
-      delegate.settleAndSkipPath(canvasId, connection.targetPodId, "auto");
+      delegate.settleAndSkipPath(
+        canvasId,
+        connection.targetPodId,
+        resolveConnectionSettlementPathway(connection),
+      );
     }
     this.logBranchRejection(canvasId, connection, sourcePodId, runContext);
 
@@ -499,7 +513,7 @@ class WorkflowBranchTriggerService
             delegate.settleAndSkipPath(
               canvasId,
               connection.targetPodId,
-              "auto",
+              resolveConnectionSettlementPathway(connection),
             );
           }
         }

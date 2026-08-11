@@ -1,0 +1,34 @@
+description: >
+  Cyclic workflows currently represent a completed Pod turn as waiting solely
+  because the Pod belongs to a structural cycle, while rejected direct-enabled
+  branches settle the wrong pathway. Each Pod turn should become completed as
+  soon as it finishes and hands control downstream, with cycle membership used
+  only to permit a later completed-to-running re-entry. This keeps per-Pod status
+  truthful and lets the Run finish when an active branch exits the loop.
+goal:
+  - Mark every successfully finished Pod turn completed after its downstream handoff work is settled, including turns from structurally cyclic Pods.
+  - Allow a cyclic Pod that is reached again to transition from completed back to running for the next turn.
+  - Complete a Run when the selected branch exits a workflow loop and no stream, dispatch, or queued work remains.
+  - Settle rejected branch connections against their effective auto or direct pathway.
+  - Preserve existing acyclic, queue, multi-input, blocked, error, cancellation, and transcript behavior.
+related:
+  - backend/src/services/workflow/runStatusMachine.ts
+  - backend/src/services/workflow/runExecutionService.ts
+  - backend/src/services/workflow/workflowExecutionService.ts
+  - backend/src/services/workflow/workflowPipeline.ts
+  - backend/src/services/workflow/workflowTriggerStages.ts
+  - backend/src/services/workflow/workflowStatusDelegate.ts
+  - backend/src/services/workflow/workflowBranchTriggerService.ts
+  - backend/src/services/workflow/workflowLoopPolicy.ts
+  - backend/src/services/workflow/runQueueService.ts
+  - backend/src/services/workflow/runActiveStreamRegistry.ts
+  - backend/src/services/workflow/types.ts
+  - backend/tests/business-logic/workflowLoopExecution.test.ts
+  - backend/tests/business-logic/workflowBranchTriggerService.test.ts
+  - backend/tests/business-logic/runStatusMachine.test.ts
+  - backend/tests/business-logic/runExecutionService.test.ts
+  - backend/tests/business-logic/triggerSettlement.test.ts
+  - backend/tests/business-logic/workflowExecutionService.test.ts
+  - backend/tests/business-logic/workflowPipeline.test.ts
+verify:
+  - bun run test -- tests/business-logic/workflowLoopExecution.test.ts tests/business-logic/workflowBranchTriggerService.test.ts tests/business-logic/runStatusMachine.test.ts tests/business-logic/runExecutionService.test.ts tests/business-logic/triggerSettlement.test.ts tests/business-logic/workflowExecutionService.test.ts tests/business-logic/workflowPipeline.test.ts

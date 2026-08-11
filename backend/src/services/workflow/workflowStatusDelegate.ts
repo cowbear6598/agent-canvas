@@ -21,7 +21,11 @@ export interface EnqueueItem {
 
 export interface WorkflowStatusDelegate {
   isRunMode(): boolean;
-  startPodExecution(canvasId: string, podId: string): void;
+  startPodExecution(
+    canvasId: string,
+    podId: string,
+    allowSkippedReentry?: boolean,
+  ): void;
   markSummarizing(canvasId: string, podId: string): void;
   markDeciding(canvasId: string, podId: string): void;
   markWaiting(canvasId: string, podId: string): void;
@@ -37,6 +41,7 @@ export interface WorkflowStatusDelegate {
     pathway: SettlementPathway,
   ): void;
   onChatError(canvasId: string, podId: string, errorMessage: string): void;
+  evaluateRun(): void;
   shouldEnqueue(): boolean;
   isBusy(canvasId: string, targetPodId: string): boolean;
   enqueue(item: EnqueueItem): void;
@@ -55,8 +60,16 @@ class RunDelegate implements WorkflowStatusDelegate {
     return true;
   }
 
-  startPodExecution(_canvasId: string, podId: string): void {
-    runExecutionService.startPodInstance(this.runContext, podId);
+  startPodExecution(
+    _canvasId: string,
+    podId: string,
+    allowSkippedReentry: boolean = false,
+  ): void {
+    runExecutionService.startPodInstance(
+      this.runContext,
+      podId,
+      allowSkippedReentry,
+    );
   }
 
   markSummarizing(_canvasId: string, podId: string): void {
@@ -77,7 +90,7 @@ class RunDelegate implements WorkflowStatusDelegate {
     pathway?: SettlementPathway,
   ): void {
     if (pathway) {
-      runExecutionService.settlePodTrigger(this.runContext, podId, pathway);
+      this.settlePodWithoutRunEvaluation(podId, pathway);
     }
   }
 
@@ -94,11 +107,24 @@ class RunDelegate implements WorkflowStatusDelegate {
     podId: string,
     pathway: SettlementPathway,
   ): void {
-    runExecutionService.settlePodTrigger(this.runContext, podId, pathway);
+    this.settlePodWithoutRunEvaluation(podId, pathway);
+  }
+
+  private settlePodWithoutRunEvaluation(
+    podId: string,
+    pathway: SettlementPathway,
+  ): void {
+    runExecutionService.settlePodTrigger(this.runContext, podId, pathway, {
+      evaluateRun: false,
+    });
   }
 
   onChatError(_canvasId: string, podId: string, errorMessage: string): void {
     runExecutionService.errorPodInstance(this.runContext, podId, errorMessage);
+  }
+
+  evaluateRun(): void {
+    runExecutionService.evaluateRun(this.runContext);
   }
 
   shouldEnqueue(): boolean {
