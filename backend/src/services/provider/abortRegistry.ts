@@ -45,11 +45,9 @@ class AbortRegistry {
     // 有 podId 時才建立二級索引（供 abortByPodId 使用）
     if (podId !== undefined) {
       this.keyToPodId.set(queryKey, podId);
-
-      if (!this.podIndex.has(podId)) {
-        this.podIndex.set(podId, new Set());
-      }
-      this.podIndex.get(podId)!.add(queryKey);
+      const queryKeys = this.podIndex.get(podId) ?? new Set<string>();
+      queryKeys.add(queryKey);
+      this.podIndex.set(podId, queryKeys);
     }
 
     return controller;

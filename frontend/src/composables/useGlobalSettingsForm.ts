@@ -15,10 +15,16 @@ interface ModelSettingsValue {
   thinkingLevel: string | null;
 }
 
+interface OptionalModelSettingsValue {
+  provider: PodProvider | undefined;
+  model: string | undefined;
+  thinkingLevel: string | null | undefined;
+}
+
 interface GlobalConfigStoreLike {
   setTimezoneOffset(offset: number): void;
-  setMemoryConfig?(config: ModelSettingsValue): void;
-  setConnectionLineConfig?(config: ModelSettingsValue): void;
+  setMemoryConfig(config: ModelSettingsValue): void;
+  setConnectionLineConfig(config: ModelSettingsValue): void;
 }
 
 interface UseGlobalSettingsFormOptions {
@@ -97,6 +103,56 @@ function createSnapshot(
   };
 }
 
+function shouldSaveModelSettings(
+  hasLoaded: boolean,
+  settings: ModelSettingsValue,
+): boolean {
+  return (
+    hasLoaded ||
+    settings.provider !== null ||
+    settings.model !== "" ||
+    settings.thinkingLevel !== null
+  );
+}
+
+function hasAnyConfigField(
+  config: ConfigGetResultPayload,
+  fields: readonly (keyof ConfigGetResultPayload)[],
+): boolean {
+  return fields.some((field) => field in config);
+}
+
+function createModelSettings(
+  provider: PodProvider | null | undefined,
+  model: string | undefined,
+  thinkingLevel: string | null | undefined,
+): ModelSettingsValue {
+  return {
+    provider: provider ?? null,
+    model: model ?? "",
+    thinkingLevel: thinkingLevel ?? null,
+  };
+}
+
+function createOptionalModelSettings(
+  settings: ModelSettingsValue,
+  shouldSave: boolean,
+): OptionalModelSettingsValue {
+  if (!shouldSave) {
+    return {
+      provider: undefined,
+      model: undefined,
+      thinkingLevel: undefined,
+    };
+  }
+
+  return {
+    provider: settings.provider ?? undefined,
+    model: settings.model,
+    thinkingLevel: settings.thinkingLevel,
+  };
+}
+
 export function useGlobalSettingsForm({
   configStore,
   t,
@@ -120,22 +176,25 @@ export function useGlobalSettingsForm({
   const loadFailed = ref<boolean>(false);
   const hasLoadedMemorySettings = ref<boolean>(false);
   const hasLoadedConnectionLineSettings = ref<boolean>(false);
-  const lastSavedSnapshot = ref<SettingsSnapshot>(
+
+  const getMemorySettings = (): ModelSettingsValue => ({
+    provider: memoryProvider.value,
+    model: memoryModel.value,
+    thinkingLevel: memoryThinkingLevel.value,
+  });
+  const getConnectionLineSettings = (): ModelSettingsValue => ({
+    provider: connectionLineProvider.value,
+    model: connectionLineModel.value,
+    thinkingLevel: connectionLineThinkingLevel.value,
+  });
+  const getCurrentSnapshot = (): SettingsSnapshot =>
     createSnapshot(
       timezoneOffset.value,
       currentLocale.value,
-      {
-        provider: memoryProvider.value,
-        model: memoryModel.value,
-        thinkingLevel: memoryThinkingLevel.value,
-      },
-      {
-        provider: connectionLineProvider.value,
-        model: connectionLineModel.value,
-        thinkingLevel: connectionLineThinkingLevel.value,
-      },
-    ),
-  );
+      getMemorySettings(),
+      getConnectionLineSettings(),
+    );
+  const lastSavedSnapshot = ref<SettingsSnapshot>(getCurrentSnapshot());
 
   const isDirty = computed<boolean>(
     () =>
@@ -174,62 +233,41 @@ export function useGlobalSettingsForm({
         timezoneOffset.value = String(result.timezoneOffset);
         configStore.setTimezoneOffset(result.timezoneOffset);
       }
-      hasLoadedMemorySettings.value =
-        "memoryProvider" in result ||
-        "memoryModel" in result ||
-        "memoryThinkingLevel" in result;
-      hasLoadedConnectionLineSettings.value =
-        "connectionLineProvider" in result ||
-        "connectionLineModel" in result ||
-        "connectionLineThinkingLevel" in result;
+      hasLoadedMemorySettings.value = hasAnyConfigField(result, [
+        "memoryProvider",
+        "memoryModel",
+        "memoryThinkingLevel",
+      ]);
+      hasLoadedConnectionLineSettings.value = hasAnyConfigField(result, [
+        "connectionLineProvider",
+        "connectionLineModel",
+        "connectionLineThinkingLevel",
+      ]);
+      const memorySettings = createModelSettings(
+        result.memoryProvider,
+        result.memoryModel,
+        result.memoryThinkingLevel,
+      );
+      const connectionLineSettings = createModelSettings(
+        result.connectionLineProvider,
+        result.connectionLineModel,
+        result.connectionLineThinkingLevel,
+      );
+      memoryProvider.value = memorySettings.provider;
+      memoryModel.value = memorySettings.model;
+      memoryThinkingLevel.value = memorySettings.thinkingLevel;
+      connectionLineProvider.value = connectionLineSettings.provider;
+      connectionLineModel.value = connectionLineSettings.model;
+      connectionLineThinkingLevel.value = connectionLineSettings.thinkingLevel;
+
       if (hasLoadedMemorySettings.value) {
-        memoryProvider.value = result.memoryProvider ?? null;
-        memoryModel.value = result.memoryModel ?? "";
-        memoryThinkingLevel.value = result.memoryThinkingLevel ?? null;
-      } else {
-        memoryProvider.value = null;
-        memoryModel.value = "";
-        memoryThinkingLevel.value = null;
+        configStore.setMemoryConfig(getMemorySettings());
       }
       if (hasLoadedConnectionLineSettings.value) {
-        connectionLineProvider.value = result.connectionLineProvider ?? null;
-        connectionLineModel.value = result.connectionLineModel ?? "";
-        connectionLineThinkingLevel.value =
-          result.connectionLineThinkingLevel ?? null;
-      } else {
-        connectionLineProvider.value = null;
-        connectionLineModel.value = "";
-        connectionLineThinkingLevel.value = null;
-      }
-      if (hasLoadedMemorySettings.value) {
-        configStore.setMemoryConfig?.({
-          provider: memoryProvider.value,
-          model: memoryModel.value,
-          thinkingLevel: memoryThinkingLevel.value,
-        });
-      }
-      if (hasLoadedConnectionLineSettings.value) {
-        configStore.setConnectionLineConfig?.({
-          provider: connectionLineProvider.value,
-          model: connectionLineModel.value,
-          thinkingLevel: connectionLineThinkingLevel.value,
-        });
+        configStore.setConnectionLineConfig(getConnectionLineSettings());
       }
       options.onLoaded?.(result);
-      lastSavedSnapshot.value = createSnapshot(
-        timezoneOffset.value,
-        currentLocale.value,
-        {
-          provider: memoryProvider.value,
-          model: memoryModel.value,
-          thinkingLevel: memoryThinkingLevel.value,
-        },
-        {
-          provider: connectionLineProvider.value,
-          model: connectionLineModel.value,
-          thinkingLevel: connectionLineThinkingLevel.value,
-        },
-      );
+      lastSavedSnapshot.value = getCurrentSnapshot();
     } finally {
       isLoading.value = false;
     }
@@ -243,79 +281,56 @@ export function useGlobalSettingsForm({
     isSaving.value = true;
     try {
       const tzOffset = Number(timezoneOffset.value);
-      const shouldSaveMemorySettings =
-        hasLoadedMemorySettings.value ||
-        memoryProvider.value !== null ||
-        memoryModel.value !== "" ||
-        memoryThinkingLevel.value !== null;
-      const shouldSaveConnectionLineSettings =
-        hasLoadedConnectionLineSettings.value ||
-        connectionLineProvider.value !== null ||
-        connectionLineModel.value !== "" ||
-        connectionLineThinkingLevel.value !== null;
+      const memorySettings = getMemorySettings();
+      const connectionLineSettings = getConnectionLineSettings();
+      const shouldSaveMemorySettings = shouldSaveModelSettings(
+        hasLoadedMemorySettings.value,
+        memorySettings,
+      );
+      const shouldSaveConnectionLineSettings = shouldSaveModelSettings(
+        hasLoadedConnectionLineSettings.value,
+        connectionLineSettings,
+      );
+      const memoryPayload = createOptionalModelSettings(
+        memorySettings,
+        shouldSaveMemorySettings,
+      );
+      const connectionLinePayload = createOptionalModelSettings(
+        connectionLineSettings,
+        shouldSaveConnectionLineSettings,
+      );
       const result = await withErrorToast(
         updateConfig({
           timezoneOffset: tzOffset,
           backupGitRemoteUrl: backupPayload.backupGitRemoteUrl,
           backupTime: backupPayload.backupTime,
           backupEnabled: backupPayload.backupEnabled,
-          memoryProvider: shouldSaveMemorySettings
-            ? (memoryProvider.value ?? undefined)
-            : undefined,
-          memoryModel: shouldSaveMemorySettings ? memoryModel.value : undefined,
-          memoryThinkingLevel: shouldSaveMemorySettings
-            ? memoryThinkingLevel.value
-            : undefined,
-          connectionLineProvider: shouldSaveConnectionLineSettings
-            ? (connectionLineProvider.value ?? undefined)
-            : undefined,
-          connectionLineModel: shouldSaveConnectionLineSettings
-            ? connectionLineModel.value
-            : undefined,
-          connectionLineThinkingLevel: shouldSaveConnectionLineSettings
-            ? connectionLineThinkingLevel.value
-            : undefined,
+          memoryProvider: memoryPayload.provider,
+          memoryModel: memoryPayload.model,
+          memoryThinkingLevel: memoryPayload.thinkingLevel,
+          connectionLineProvider: connectionLinePayload.provider,
+          connectionLineModel: connectionLinePayload.model,
+          connectionLineThinkingLevel: connectionLinePayload.thinkingLevel,
         }),
         "Config",
         t("settings.saveFailed"),
         { swallow: true },
       );
-      if (result) {
-        configStore.setTimezoneOffset(tzOffset);
-        if (shouldSaveMemorySettings) {
-          hasLoadedMemorySettings.value = true;
-          configStore.setMemoryConfig?.({
-            provider: memoryProvider.value,
-            model: memoryModel.value,
-            thinkingLevel: memoryThinkingLevel.value,
-          });
-        }
-        if (shouldSaveConnectionLineSettings) {
-          hasLoadedConnectionLineSettings.value = true;
-          configStore.setConnectionLineConfig?.({
-            provider: connectionLineProvider.value,
-            model: connectionLineModel.value,
-            thinkingLevel: connectionLineThinkingLevel.value,
-          });
-        }
-        onBackupSaved?.(backupPayload);
-        lastSavedSnapshot.value = createSnapshot(
-          timezoneOffset.value,
-          currentLocale.value,
-          {
-            provider: memoryProvider.value,
-            model: memoryModel.value,
-            thinkingLevel: memoryThinkingLevel.value,
-          },
-          {
-            provider: connectionLineProvider.value,
-            model: connectionLineModel.value,
-            thinkingLevel: connectionLineThinkingLevel.value,
-          },
-        );
-        showSuccessToast("Config", t("settings.saveSuccess"));
-        onSaved?.();
+      if (!result) return;
+
+      configStore.setTimezoneOffset(tzOffset);
+      if (shouldSaveMemorySettings) {
+        hasLoadedMemorySettings.value = true;
+        configStore.setMemoryConfig(memorySettings);
       }
+      if (shouldSaveConnectionLineSettings) {
+        hasLoadedConnectionLineSettings.value = true;
+        configStore.setConnectionLineConfig(connectionLineSettings);
+      }
+      onBackupSaved?.(backupPayload);
+      lastSavedSnapshot.value = getCurrentSnapshot();
+      showSuccessToast("Config", t("settings.saveSuccess"));
+      onSaved?.();
     } finally {
       isSaving.value = false;
     }

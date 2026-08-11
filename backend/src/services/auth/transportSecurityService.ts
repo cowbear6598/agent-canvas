@@ -135,19 +135,9 @@ export function isTrustedProxy(
     return false;
   }
 
-  for (const entry of trustedList) {
-    if (entry.includes("/")) {
-      if (ipInCidr(ip, entry)) {
-        return true;
-      }
-    } else {
-      if (ip === entry) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return trustedList.some((entry) =>
+    entry.includes("/") ? ipInCidr(ip, entry) : ip === entry,
+  );
 }
 
 class TransportSecurityService {

@@ -10,17 +10,28 @@ type ConnectionMaps = {
   targetMap: Map<string, string[]>;
 };
 
+function appendConnection(
+  map: Map<string, string[]>,
+  podId: string,
+  connectedPodId: string,
+): void {
+  const connectedPodIds = map.get(podId);
+  if (connectedPodIds) {
+    connectedPodIds.push(connectedPodId);
+    return;
+  }
+
+  map.set(podId, [connectedPodId]);
+}
+
 function buildConnectionMaps(canvasId: string): ConnectionMaps {
   const connections = connectionStore.list(canvasId);
   const sourceMap = new Map<string, string[]>();
   const targetMap = new Map<string, string[]>();
 
   for (const conn of connections) {
-    if (!sourceMap.has(conn.sourcePodId)) sourceMap.set(conn.sourcePodId, []);
-    sourceMap.get(conn.sourcePodId)!.push(conn.targetPodId);
-
-    if (!targetMap.has(conn.targetPodId)) targetMap.set(conn.targetPodId, []);
-    targetMap.get(conn.targetPodId)!.push(conn.sourcePodId);
+    appendConnection(sourceMap, conn.sourcePodId, conn.targetPodId);
+    appendConnection(targetMap, conn.targetPodId, conn.sourcePodId);
   }
 
   return { sourceMap, targetMap };

@@ -199,7 +199,11 @@ class ConnectionStore {
       branchThinkingLevel: resolvedBranchThinkingLevel,
     });
 
-    return this.getById(canvasId, id) as Connection;
+    const createdConnection = this.getById(canvasId, id);
+    if (!createdConnection) {
+      throw new Error("建立連線後找不到連線資料");
+    }
+    return createdConnection;
   }
 
   getById(canvasId: string, id: string): Connection | undefined {
@@ -510,8 +514,9 @@ class ConnectionStore {
       id,
     );
 
-    const branchUpdates: Partial<{ direct: boolean }> = {};
-    branchUpdates.direct = updates.direct;
+    const branchUpdates: Partial<{ direct: boolean }> = {
+      direct: updates.direct,
+    };
 
     const syncBranchSiblings = getDb().transaction(() => {
       const updatedConnections: Connection[] = [];

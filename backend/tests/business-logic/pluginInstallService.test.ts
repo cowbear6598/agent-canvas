@@ -35,7 +35,6 @@ vi.mock("simple-git", () => ({
 vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
   managedPluginStore: {
     getBySource: vi.fn(),
-    getByGithubRepo: vi.fn(),
     getById: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
@@ -218,7 +217,6 @@ describe("installPlugin", () => {
 
     // 預設：無重複安裝
     vi.mocked(managedPluginStore.getBySource).mockReturnValue(null);
-    vi.mocked(managedPluginStore.getByGithubRepo).mockReturnValue(null);
 
     // 預設：insert 回傳 record
     vi.mocked(managedPluginStore.insert).mockImplementation((r) => r);
@@ -293,7 +291,6 @@ describe("installPlugin", () => {
 
   it("F4：已存在相同 repo 時直接回 PLUGIN_ALREADY_INSTALLED，不呼叫 clone", async () => {
     vi.mocked(managedPluginStore.getBySource).mockReturnValue(makeRecord());
-    vi.mocked(managedPluginStore.getByGithubRepo).mockReturnValue(makeRecord());
 
     const result = await installPlugin("owner/repo");
 

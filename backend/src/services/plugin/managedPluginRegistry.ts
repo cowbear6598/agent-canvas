@@ -104,13 +104,6 @@ class ManagedPluginStore {
     return row ? rowToRecord(row) : null;
   }
 
-  getByGithubRepo(repo: string): ManagedPluginRecord | null {
-    const row = this.stmts.selectByGithubRepo.get(repo) as
-      | ManagedPluginRow
-      | undefined;
-    return row ? rowToRecord(row) : null;
-  }
-
   private nextSortIndex(): number {
     const row = this.stmts.selectMaxSortIndex.get() as { max_index: number };
     return row.max_index + 1;
@@ -131,7 +124,11 @@ class ManagedPluginStore {
       $installedAt: record.installedAt,
       $updatedAt: record.updatedAt,
     });
-    return this.getById(record.id)!;
+    const inserted = this.getById(record.id);
+    if (!inserted) {
+      throw new Error(`新增 managed plugin 後找不到資料：${record.id}`);
+    }
+    return inserted;
   }
 
   update(

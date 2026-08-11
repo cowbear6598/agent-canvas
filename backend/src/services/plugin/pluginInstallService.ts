@@ -602,23 +602,6 @@ function resolveRecordSource(
   return createGithubSource(record.githubRepo || record.id);
 }
 
-function getExistingRecordBySource(
-  source: ManagedBundleSource,
-): ManagedPluginRecord | null {
-  if (typeof managedPluginStore.getBySource === "function") {
-    return managedPluginStore.getBySource(source);
-  }
-
-  if (
-    source.type === "github" &&
-    typeof managedPluginStore.getByGithubRepo === "function"
-  ) {
-    return managedPluginStore.getByGithubRepo(source.ref);
-  }
-
-  return null;
-}
-
 async function createRecord(
   source: ManagedBundleSource,
   installPath: string,
@@ -650,7 +633,7 @@ export async function installPlugin(
 
   const { owner, repo, fullName } = parsed;
   const source = createGithubSource(fullName);
-  if (getExistingRecordBySource(source)) {
+  if (managedPluginStore.getBySource(source)) {
     return err("PLUGIN_ALREADY_INSTALLED");
   }
 
@@ -723,7 +706,7 @@ export async function importBundleArchive(
 
     const sourceRef = createUploadSourceRef(archiveBytes);
     const source = createUploadSource(sourceRef);
-    if (getExistingRecordBySource(source)) {
+    if (managedPluginStore.getBySource(source)) {
       return err("PLUGIN_ALREADY_INSTALLED");
     }
 

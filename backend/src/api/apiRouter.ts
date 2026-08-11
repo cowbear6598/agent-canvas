@@ -40,7 +40,7 @@ function matchRoute(
     if (result) {
       return {
         route,
-        params: (result.pathname.groups ?? {}) as Record<string, string>,
+        params: result.pathname.groups as Record<string, string>,
       };
     }
   }
@@ -85,7 +85,7 @@ async function authorizeRoute(
   }
 
   const rawCanvasId =
-    (await route.resolveCanvasId?.(req, params)) ?? params.id ?? null;
+    (await route.resolveCanvasId?.(req, params)) ?? params.id;
 
   // 將 canvas name 或 UUID 解析成實際的 UUID，不存在時為 undefined
   const resolvedCanvas = rawCanvasId ? resolveCanvas(rawCanvasId) : null;

@@ -202,6 +202,14 @@ class ManagedMcpStore {
     return row ? this.rowToRecord(row) : undefined;
   }
 
+  private getRequiredById(id: string): ManagedMcpServerRecord {
+    const record = this.getById(id);
+    if (!record) {
+      throw new Error(`寫入 managed MCP 後找不到資料：${id}`);
+    }
+    return record;
+  }
+
   /**
    * 將 canvas.db 舊版 env_json 內的值搬到 secrets.db。
    */
@@ -272,7 +280,7 @@ class ManagedMcpStore {
           $updatedAt: now,
           $secretStorageVersion: SECRET_STORAGE_VERSION,
         });
-        return this.getById(existing.id)!;
+        return this.getRequiredById(existing.id);
       }
 
       this.assertUniqueName(name);
@@ -292,7 +300,7 @@ class ManagedMcpStore {
         $lastError: null,
         $secretStorageVersion: SECRET_STORAGE_VERSION,
       });
-      return this.getById(id)!;
+      return this.getRequiredById(id);
     } catch (error) {
       if (previousSecret) {
         secretStore.set("managed-mcp", id, previousSecret);
