@@ -220,6 +220,9 @@ export interface PasteConnectionItem {
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
+  branchProvider?: PodProvider | null;
+  branchModel?: string | null;
+  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionUpdatePayload {

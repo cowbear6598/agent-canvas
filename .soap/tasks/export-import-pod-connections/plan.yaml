@@ -1,0 +1,68 @@
+description: >
+  目前框選 Pod 的複製與貼上只使用頁面記憶體，無法將 Pod、選區內的連線及其執行相依項目攜帶到另一台裝置。需要一套可版本化且可驗證的 `.podpack` 匯出與匯入能力，重用現有貼上資料模型並安全處理 Plugin Skill 與 managed MCP，讓使用者能在另一個環境重建相同的 Agent 拓撲而不必逐項手動設定。
+goal:
+  - 讓使用者能將匡選的 Pod 與選區內部連線匯出成可跨裝置使用、具格式版本的檔案，並匯入到目前畫布。
+  - 以內部為 ZIP 的 `.podpack` 封裝格式，透過版本化 manifest 完整描述 Pod、連線、managed MCP 與內嵌 Plugin bundle。
+  - 匯入時保持整組 Pod 的相對位置，以滑鼠所在位置作為落點，並沿用既有貼上流程避免 Pod 名稱衝突。
+  - 在畫面底部中央提供可擴充的情境操作工具列，僅在目前選取內容有可用動作時由底部上浮，並以帶有多語系提示與無障礙名稱的圖示及分隔線排列動作；沒有可用動作時向下收回。
+  - 選取內容只要包含至少一個 Pod 即提供匯出動作；混合選取中的 Repository Note 不納入匯出內容。
+  - 在畫布空白處的右鍵選單提供 `.podpack` 匯入動作，並以開啟選單的位置作為匯入落點。
+  - 保留現有 Pod 的 Provider、模型、Fast、Goal、Plugin 與 MCP 選用狀態，以及連線的模式、摘要與 Branch 設定。
+  - 將所選 Pod 使用的 Plugin Skill 完整內容封裝在匯出檔中，使 GitHub 與本機上傳來源都能在另一台安裝成相同版本。
+  - 讓使用者能在建立 Pod 前檢視並確認將安裝或重用的 Plugin Skill、managed MCP 及 Plugin 內含的可執行內容。
+  - 匯入相依項目時以內容指紋判斷是否重用；名稱相同但內容不同時保留既有設定、替匯入項目產生新名稱，並將新 Pod 綁定映射到匯入版本。
+  - 保證匯入的原子性，任一必要相依項目或畫布資料建立失敗時不留下本次新增內容，也不修改既有相依項目。
+  - 匯出 managed MCP 的 transport、command、args 與非秘密連線設定，環境變數只保留名稱而不攜帶值，匯入後以空值保留欄位且不新增憑證提醒或強制補填流程。
+  - 匯入 managed MCP 時只重建 registry 設定與 Pod 綁定，不猜測套件管理器或執行額外安裝命令；npx、uvx 與本機 binary 沿用既有首次執行及錯誤狀態機制。
+  - 將第一版限制為 Pod 拓撲與執行設定，不匯出 Repository 綁定、排程、對話、記憶或 Integration 帳號。
+  - 排除或正規化 cwd 等裝置限定路徑及工作階段狀態，避免在目標裝置套用無效的來源機器資訊。
+  - 驗證匯入檔版本、內容大小、路徑與資料契約，並以清楚的多語系結果呈現成功、略過、衝突與失敗項目。
+  - 不改變既有同一頁面內的複製貼上行為及其選區內連線規則。
+related:
+  - frontend/src/App.vue
+  - frontend/src/stores/pod/selectionStore.ts
+  - frontend/src/composables/canvas/useCopyPaste.ts
+  - frontend/src/composables/canvas/copyPaste/collectCopyData.ts
+  - frontend/src/composables/canvas/copyPaste/calculatePaste.ts
+  - frontend/src/composables/canvas/usePodPack.ts
+  - frontend/src/stores/clipboardStore.ts
+  - frontend/src/types/clipboard.ts
+  - frontend/src/types/podPack.ts
+  - frontend/src/components/canvas/CanvasContainer.vue
+  - frontend/src/components/canvas/CanvasContextActionToolbar.vue
+  - frontend/src/components/canvas/PodTypeMenu.vue
+  - frontend/src/services/podPackApi.ts
+  - frontend/src/services/pluginApi.ts
+  - frontend/src/services/managedMcpApi.ts
+  - frontend/src/types/plugin.ts
+  - frontend/src/types/mcp.ts
+  - frontend/src/locales/en.json
+  - frontend/src/locales/ja.json
+  - frontend/src/locales/zh-TW.json
+  - frontend/tests/business-logic/lib/collectCopyData.test.ts
+  - frontend/tests/business-logic/components/canvas/CanvasContextActionToolbar.test.ts
+  - frontend/tests/business-logic/services/podPackApi.test.ts
+  - frontend/tests/userflows/copy-paste/copyPasteFlow.test.ts
+  - frontend/tests/userflows/canvas/podPackFlow.test.ts
+  - backend/src/api/podPackApi.ts
+  - backend/src/services/podPack/podPackService.ts
+  - backend/src/schemas/podPackSchemas.ts
+  - backend/src/handlers/pasteHandlers.ts
+  - backend/src/handlers/paste/pasteHelpers.ts
+  - backend/src/schemas/pasteSchemas.ts
+  - backend/src/services/plugin/managedPluginRegistry.ts
+  - backend/src/services/plugin/pluginInstallService.ts
+  - backend/src/services/mcp/managedMcpStore.ts
+  - backend/src/handlers/mcpHandlers.ts
+  - backend/src/schemas/mcpSchemas.ts
+  - backend/src/api/restRouteManifest.ts
+  - backend/tests/userflows/paste.test.ts
+  - backend/tests/business-logic/pluginInstallService.test.ts
+  - backend/tests/business-logic/managedMcpStore.test.ts
+  - backend/tests/business-logic/managedMcpSchema.test.ts
+  - backend/tests/business-logic/podPackService.test.ts
+  - backend/tests/business-logic/restRouteManifest.test.ts
+  - backend/tests/userflows/podPack.test.ts
+verify:
+  - cd backend && bun run test
+  - cd frontend && bun run test:run

@@ -25,6 +25,9 @@ import CanvasModalHost from "./CanvasModalHost.vue";
 import RepositoryContextMenu from "./RepositoryContextMenu.vue";
 import ConnectionContextMenu from "./ConnectionContextMenu.vue";
 import PodContextMenu from "./PodContextMenu.vue";
+import CanvasContextActionToolbar from "./CanvasContextActionToolbar.vue";
+import PodPackImportDialog from "./PodPackImportDialog.vue";
+import { usePodPack } from "@/composables/canvas/usePodPack";
 import { POD_WIDTH, POD_HEIGHT } from "@/lib/constants";
 
 const {
@@ -35,6 +38,17 @@ const {
   connectionStore,
 } = useCanvasContext();
 const { t } = useI18n();
+
+const {
+  canExport,
+  isExporting,
+  isImporting,
+  pendingImport,
+  exportSelection,
+  chooseImportFile,
+  confirmImport,
+  cancelImport,
+} = usePodPack();
 
 useDeleteSelection();
 useRemoteCursors();
@@ -266,6 +280,7 @@ const visiblePods = computed(() => {
     @open-modal="handleOpenModal"
     @clone-started="handleCloneStarted"
     @open-delete-modal="handleOpenDeleteModal"
+    @import-pod-pack="chooseImportFile"
     @close="podStore.hideTypeMenu"
   />
 
@@ -273,6 +288,20 @@ const visiblePods = computed(() => {
     ref="trashZoneRef"
     :visible="showTrashZone"
     :is-highlighted="isTrashHighlighted"
+  />
+
+  <CanvasContextActionToolbar
+    :visible="canExport"
+    :busy="isExporting"
+    @export="exportSelection"
+  />
+
+  <PodPackImportDialog
+    v-if="pendingImport"
+    :preview="pendingImport.preview"
+    :busy="isImporting"
+    @confirm="confirmImport"
+    @cancel="cancelImport"
   />
 
   <PodContextMenu

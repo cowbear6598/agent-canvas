@@ -3,6 +3,11 @@ import { handleInternalIntegrationReply } from "./internalIntegrationReplyApi.js
 import { handleDownloadPodDirectory } from "./podDownloadApi.js";
 import { handleRedeemReconnectGrant } from "./reconnectGrantApi.js";
 import { handleUpload } from "./uploadApi.js";
+import {
+  handleExportPodPack,
+  handleImportPodPack,
+  handlePreviewPodPack,
+} from "./podPackApi.js";
 
 export type ApiHandler = (
   req: Request,
@@ -36,6 +41,34 @@ export interface RestRouteManifestEntry {
 }
 
 export const REST_ROUTE_DEFINITIONS: readonly RestRouteDefinition[] = [
+  {
+    method: "POST",
+    path: "/api/pod-packs/export",
+    handlerName: "handleExportPodPack",
+    handler: handleExportPodPack,
+    scope: "workspace",
+    requestSchema: "PodPackExportRequest",
+    responseSchema: "application/vnd.agent-canvas.podpack+zip",
+  },
+  {
+    method: "POST",
+    path: "/api/pod-packs/preview",
+    handlerName: "handlePreviewPodPack",
+    handler: handlePreviewPodPack,
+    scope: "workspace",
+    requestSchema: "multipart/form-data(podpack=File)",
+    responseSchema: "{ preview }",
+  },
+  {
+    method: "POST",
+    path: "/api/pod-packs/import",
+    handlerName: "handleImportPodPack",
+    handler: handleImportPodPack,
+    scope: "canvas",
+    requestSchema: "multipart/form-data(podpack=File); query(canvasId,targetX,targetY)",
+    responseSchema: "PodPackImportResult",
+    resolveCanvasId: (req) => new URL(req.url).searchParams.get("canvasId"),
+  },
   {
     method: "GET",
     path: "/api/canvas/:id/pods/:podId/download",

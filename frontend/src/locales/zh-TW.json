@@ -1216,6 +1216,39 @@
       }
     }
   },
+  "podPack": {
+    "export": {
+      "action": "匯出所選 Pod",
+      "title": "匯出 Pod 封裝",
+      "success": "已匯出 {count} 個 Pod",
+      "failed": "無法匯出所選 Pod"
+    },
+    "import": {
+      "action": "匯入 .podpack",
+      "title": "匯入 Pod 封裝",
+      "summary": "此封裝將建立 {pods} 個 Pod 與 {connections} 條連線。",
+      "plugins": "Plugin Skill",
+      "managedMcps": "Managed MCP 伺服器",
+      "skills": "Skill",
+      "executableFiles": "包含 {count} 個可執行檔或指令稿",
+      "emptyEnv": "下列環境變數會以空值建立：{names}",
+      "confirm": "確認並匯入",
+      "importing": "匯入中...",
+      "success": "已匯入 {pods} 個 Pod 與 {connections} 條連線",
+      "result": "相依項目：安裝 {installed}、重用 {reused}、因衝突重新命名 {renamed}",
+      "failed": "Pod 封裝未匯入",
+      "previewFailed": "無法檢查此 Pod 封裝"
+    },
+    "action": { "reuse": "重用既有項目", "install": "安裝", "rename": "以新名稱安裝" },
+    "errors": {
+      "tooLarge": "Pod 封裝超過允許大小。",
+      "invalidManifest": "Pod 封裝的 manifest 或版本無效。",
+      "invalidArchive": "Pod 封裝 ZIP 已損毀或包含不安全路徑。",
+      "missingDependency": "Pod 封裝缺少必要相依項目。",
+      "atomicFailed": "匯入失敗，本次新增的項目已全部回滾。",
+      "failed": "Pod 封裝操作失敗。"
+    }
+  },
   "shared": {
     "providerModelSelector": {
       "providerLabel": "Provider",

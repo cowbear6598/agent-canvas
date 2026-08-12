@@ -43,6 +43,9 @@ export interface Connection {
   label?: string;
   /** Branch 模式下的連線描述，最多 200 字元 */
   description?: string;
+  branchProvider?: PodProvider | null;
+  branchModel?: string | null;
+  branchThinkingLevel?: string | null;
 }
 
 export interface DraggingConnection {

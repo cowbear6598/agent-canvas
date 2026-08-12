@@ -45,4 +45,8 @@ export interface CopiedConnection {
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
+  /** Branch 決策使用的 Provider、模型與 thinking level。 */
+  branchProvider?: PodProvider | null;
+  branchModel?: string | null;
+  branchThinkingLevel?: string | null;
 }

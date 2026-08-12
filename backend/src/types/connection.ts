@@ -56,18 +56,8 @@ export interface Connection {
   branchThinkingLevel: string | null;
 }
 
-export type ConnectionPublic = Omit<
-  Connection,
-  "branchProvider" | "branchModel" | "branchThinkingLevel"
->;
+export type ConnectionPublic = Connection;
 
 export function toConnectionPublic(connection: Connection): ConnectionPublic {
-  const {
-    branchProvider: _branchProvider,
-    branchModel: _branchModel,
-    branchThinkingLevel: _branchThinkingLevel,
-    ...publicConnection
-  } = connection;
-
-  return publicConnection;
+  return connection;
 }

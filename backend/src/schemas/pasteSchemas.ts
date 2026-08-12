@@ -109,6 +109,21 @@ export const pasteConnectionItemSchema = z
     label: labelSchema.optional(),
     /** paste 時保留 branch 連線的描述（若有） */
     description: descriptionSchema,
+    branchProvider: providerSchema.nullable().optional(),
+    branchModel: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-zA-Z0-9._/-]+$/, "branchModel 格式不合法")
+      .nullable()
+      .optional(),
+    branchThinkingLevel: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-zA-Z0-9._/-]+$/, "thinkingLevel 格式不合法")
+      .nullable()
+      .optional(),
   })
   .strict()
   .transform(normalizeLegacyDirectToggle);

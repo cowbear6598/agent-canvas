@@ -190,6 +190,9 @@ function transformConnections(
       summaryModel: connection.summaryModel,
       summaryThinkingLevel: connection.summaryThinkingLevel,
       description: connection.description,
+      branchProvider: connection.branchProvider,
+      branchModel: connection.branchModel,
+      branchThinkingLevel: connection.branchThinkingLevel,
     };
 
     if (connection.label !== "") {

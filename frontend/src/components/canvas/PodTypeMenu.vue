@@ -8,7 +8,8 @@ import {
   watchEffect,
   type Component,
 } from "vue";
-import { FolderOpen, Github, FolderPlus } from "lucide-vue-next";
+import { FolderOpen, Github, FolderPlus, FileUp } from "lucide-vue-next";
+import { useI18n } from "vue-i18n";
 import type { Position, PodTypeConfig, Repository } from "@/types";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { podTypes } from "@/data/podTypes";
@@ -49,7 +50,10 @@ const emit = defineEmits<{
   /** 開啟各種 Modal（repository 建立/clone、MCP Server Modal） */
   "open-modal": [payload: OpenModalPayload];
   close: [];
+  "import-pod-pack": [position: Position];
 }>();
+
+const { t } = useI18n();
 
 const { repositoryStore, podStore } = useCanvasContext();
 
@@ -116,6 +120,11 @@ const handleNewRepository = (): void => {
 const handleCloneRepository = (): void => {
   openMenuType.value = null;
   emit("open-modal", { type: "cloneRepository" });
+  emit("close");
+};
+
+const handleImportPodPack = (): void => {
+  emit("import-pod-pack", props.position);
   emit("close");
 };
 
@@ -332,5 +341,19 @@ const { menuStyle } = useMenuPosition({
         </template>
       </PodTypeMenuSubmenu>
     </div>
+
+    <div class="my-1 border-t border-doodle-ink/30" />
+    <button
+      type="button"
+      class="flex w-full items-center gap-3 rounded px-3 py-2 text-left transition-colors hover:bg-secondary"
+      :title="t('podPack.import.action')"
+      :aria-label="t('podPack.import.action')"
+      @click="handleImportPodPack"
+    >
+      <span class="flex h-8 w-8 items-center justify-center rounded-full border border-doodle-ink bg-muted">
+        <FileUp :size="16" />
+      </span>
+      <span class="font-mono text-sm text-foreground">{{ t("podPack.import.action") }}</span>
+    </button>
   </div>
 </template>

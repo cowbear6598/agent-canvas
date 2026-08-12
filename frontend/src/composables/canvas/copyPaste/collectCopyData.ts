@@ -304,6 +304,9 @@ export function collectRelatedConnections(
     summaryThinkingLevel?: string | null;
     label?: string;
     description?: string;
+    branchProvider?: PodProvider | null;
+    branchModel?: string | null;
+    branchThinkingLevel?: string | null;
   }[],
 ): CopiedConnection[] {
   const copiedConnections: CopiedConnection[] = [];
@@ -326,6 +329,9 @@ export function collectRelatedConnections(
         summaryThinkingLevel: connection.summaryThinkingLevel,
         label: connection.label,
         description: connection.description,
+        branchProvider: connection.branchProvider,
+        branchModel: connection.branchModel,
+        branchThinkingLevel: connection.branchThinkingLevel,
       });
     }
   }

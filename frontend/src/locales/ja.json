@@ -1216,6 +1216,39 @@
       }
     }
   },
+  "podPack": {
+    "export": {
+      "action": "選択した Pod をエクスポート",
+      "title": "Pod パックをエクスポート",
+      "success": "{count} 個の Pod をエクスポートしました",
+      "failed": "選択した Pod をエクスポートできませんでした"
+    },
+    "import": {
+      "action": ".podpack をインポート",
+      "title": "Pod パックをインポート",
+      "summary": "このパックから {pods} 個の Pod と {connections} 本の接続を作成します。",
+      "plugins": "Plugin Skill",
+      "managedMcps": "Managed MCP サーバー",
+      "skills": "Skill",
+      "executableFiles": "実行可能ファイルまたはスクリプトが {count} 件含まれます",
+      "emptyEnv": "次の環境変数は空の値で作成されます: {names}",
+      "confirm": "確認してインポート",
+      "importing": "インポート中...",
+      "success": "{pods} 個の Pod と {connections} 本の接続をインポートしました",
+      "result": "依存項目: {installed} 件をインストール、{reused} 件を再利用、競合した {renamed} 件を改名",
+      "failed": "Pod パックをインポートできませんでした",
+      "previewFailed": "この Pod パックを確認できませんでした"
+    },
+    "action": { "reuse": "既存を再利用", "install": "インストール", "rename": "新しい名前でインストール" },
+    "errors": {
+      "tooLarge": "Pod パックが許可されたサイズを超えています。",
+      "invalidManifest": "Pod パックの manifest またはバージョンが無効です。",
+      "invalidArchive": "Pod パックの ZIP が壊れているか、安全でないパスを含んでいます。",
+      "missingDependency": "Pod パックに必要な依存項目がありません。",
+      "atomicFailed": "インポートに失敗し、新しく作成した項目をすべてロールバックしました。",
+      "failed": "Pod パックの処理に失敗しました。"
+    }
+  },
   "shared": {
     "providerModelSelector": {
       "providerLabel": "Provider",

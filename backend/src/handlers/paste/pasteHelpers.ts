@@ -488,6 +488,9 @@ export function createPastedConnections(
         summaryThinkingLevel: connItem.summaryThinkingLevel,
         label: connItem.label,
         description: connItem.description,
+        branchProvider: connItem.branchProvider ?? undefined,
+        branchModel: connItem.branchModel ?? undefined,
+        branchThinkingLevel: connItem.branchThinkingLevel,
       }),
     );
 

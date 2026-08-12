@@ -20,8 +20,23 @@ describe("REST route manifest", () => {
     }
   });
 
-  it("只保留仍需維持的五條 HTTP route", () => {
+  it("只保留產品目前需要的 HTTP route", () => {
     expect(REST_ROUTE_MANIFEST).toEqual([
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/pod-packs/export",
+        handlerName: "handleExportPodPack",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/pod-packs/preview",
+        handlerName: "handlePreviewPodPack",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/pod-packs/import",
+        handlerName: "handleImportPodPack",
+      }),
       expect.objectContaining({
         method: "GET",
         path: "/api/canvas/:id/pods/:podId/download",
