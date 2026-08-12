@@ -243,7 +243,6 @@ watch(
           />
           {{ t("agentAccess.title") }}
         </DialogTitle>
-        <DialogDescription>{{ t("agentAccess.description") }}</DialogDescription>
       </DialogHeader>
 
       <ScrollArea class="h-[620px] pr-4">

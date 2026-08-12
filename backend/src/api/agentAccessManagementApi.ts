@@ -204,13 +204,15 @@ export async function handleAgentAccessTokenRevoke(
   return jsonResponse({ success: true }, HTTP_STATUS.OK);
 }
 
+const AGENT_CANVAS_SKILL_NAME = "agent-canvas";
+
 export function buildSkillFiles(apiBaseUrl: string): Record<string, Uint8Array> {
   const skill = `---
-name: operate-agent-canvas
+name: ${AGENT_CANVAS_SKILL_NAME}
 description: Create, inspect, edit, and run authorized Agent Canvas workflows through the versioned REST API. Use when a user asks to draft or operate an Agent Canvas workflow.
 ---
 
-# Operate Agent Canvas
+# Agent Canvas
 
 Base URL: \`${apiBaseUrl}\`
 
@@ -258,11 +260,13 @@ Scopes:
 2. Read existing state before editing. A token with \`canvas:write\` also permits reads.
 3. For a new draft, create a new Canvas; never overwrite an existing Canvas as the draft target.
 4. Prefer a minimal workflow of 2–6 single-responsibility Pods. Add branches only when needed.
-5. Keep the global provider/model defaults unless the user explicitly requests a supported alternative.
-6. Bind repositories, skills, MCP servers, or integrations only when explicitly requested.
-7. If details are missing, make conservative assumptions and report them after creating the draft. Ask only when no usable workflow can be formed.
-8. Do not attempt deletion endpoints. Stopping a running Run deletes that Run using the same semantics as the human UI.
-9. Never expose or write the bearer token into Canvas content, Pod prompts, logs, or shared files.
+5. Before creating or moving Pods, read existing coordinates and choose clear space. Unless the user specifies an exact or compact layout, align coordinates to a 20 px grid, use columns at least 640 px apart, and use rows at least 280 px apart. A Pod body is 224 × 112 px, but its left Skill/MCP notches, right Goal/Repository notches, and top model controls expand its conservative visual footprint to about 480 × 180 px. Never calculate spacing from the body alone, overlap visual footprints, or place notches edge-to-edge.
+6. Lay out linear Workflows from left to right. Put parallel branches on separate rows and keep related stages in the same column.
+7. Keep the global provider/model defaults unless the user explicitly requests a supported alternative.
+8. Bind repositories, skills, MCP servers, or integrations only when explicitly requested.
+9. If details are missing, make conservative assumptions and report them after creating the draft. Ask only when no usable workflow can be formed.
+10. Do not attempt deletion endpoints. Stopping a running Run deletes that Run using the same semantics as the human UI.
+11. Never expose or write the bearer token into Canvas content, Pod prompts, logs, or shared files.
 `;
   const canvas = `# Canvas operations
 
@@ -293,7 +297,7 @@ Canvas with its Pods and Connections. It never updates an existing Canvas.
   "assumptions": ["The final output should be concise."],
   "pods": [
     { "key": "research", "name": "Research", "x": 80, "y": 120 },
-    { "key": "summary", "name": "Summarize", "x": 420, "y": 120 }
+    { "key": "summary", "name": "Summarize", "x": 720, "y": 120 }
   ],
   "connections": [
     {
@@ -311,6 +315,10 @@ Each Pod may declare a unique \`key\`; draft Connection IDs may refer to those
 keys. If omitted, the Pod's zero-based array index as a string is its key. The
 response is \`{ "canvas": Canvas, "pods": Pod[], "connections": Connection[],
 "assumptions": string[] }\` with HTTP 201. Return assumptions to the user.
+
+Use the layout rules in \`SKILL.md\`. Keep linear stages in increasing x columns,
+place parallel branches in separate y rows, and inspect occupied coordinates
+before adding a Pod to an existing Canvas.
 
 See \`pod.md\` for fields accepted by each object in \`pods\`.
 
@@ -365,7 +373,7 @@ Example create request:
 \`\`\`json
 {
   "name": "Summarize",
-  "x": 420,
+  "x": 720,
   "y": 120,
   "goal": {
     "todos": [{ "id": "write", "text": "Write a concise summary" }]
@@ -442,10 +450,10 @@ Errors: 401 invalid token; 403 missing scope or grant; 404 missing Run; 409 the
 Pod is not an entry point or the Run is no longer running; 422 invalid request.
 `;
   return {
-    "operate-agent-canvas/SKILL.md": strToU8(skill),
-    "operate-agent-canvas/references/canvas.md": strToU8(canvas),
-    "operate-agent-canvas/references/pod.md": strToU8(pod),
-    "operate-agent-canvas/references/workflow.md": strToU8(workflow),
+    [`${AGENT_CANVAS_SKILL_NAME}/SKILL.md`]: strToU8(skill),
+    [`${AGENT_CANVAS_SKILL_NAME}/references/canvas.md`]: strToU8(canvas),
+    [`${AGENT_CANVAS_SKILL_NAME}/references/pod.md`]: strToU8(pod),
+    [`${AGENT_CANVAS_SKILL_NAME}/references/workflow.md`]: strToU8(workflow),
   };
 }
 
@@ -457,7 +465,7 @@ export async function handleAgentAccessSkillDownload(
     status: HTTP_STATUS.OK,
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": 'attachment; filename="agent-canvas-skill.zip"',
+      "Content-Disposition": `attachment; filename="${AGENT_CANVAS_SKILL_NAME}.zip"`,
       "Cache-Control": "no-store",
     },
   });

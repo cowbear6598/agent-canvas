@@ -466,7 +466,6 @@
   },
   "agentAccess": {
     "title": "AI アクセス",
-    "description": "外部 AI クライアント向けの REST API 接続、Token、ダウンロード可能な Skill を管理します。",
     "connection": {
       "title": "接続情報",
       "advertisedPlaceholder": "https://canvas.example.com",

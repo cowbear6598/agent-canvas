@@ -466,7 +466,6 @@
   },
   "agentAccess": {
     "title": "AI Access",
-    "description": "Manage REST API connections, tokens, and the downloadable skill for external AI clients.",
     "connection": {
       "title": "Connection",
       "advertisedPlaceholder": "https://canvas.example.com",

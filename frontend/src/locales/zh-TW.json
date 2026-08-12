@@ -466,7 +466,6 @@
   },
   "agentAccess": {
     "title": "AI 存取",
-    "description": "管理外部 AI 的 REST API 連線、Token 與可下載 Skill。",
     "connection": {
       "title": "連線資訊",
       "advertisedPlaceholder": "https://canvas.example.com",
