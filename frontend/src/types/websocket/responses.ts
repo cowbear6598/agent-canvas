@@ -436,6 +436,7 @@ export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
   canvasId: string;
   podId?: string;
   mcpServerNames?: string[];
+  agentCanvasMcpEnabled?: boolean;
   /**
    * self-healing 過濾掉的 MCP server name 清單。
    * 不存在於對應 provider 設定檔的 MCP server name 清單：

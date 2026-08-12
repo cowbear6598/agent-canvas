@@ -323,6 +323,7 @@
       "pluginsToggleFailed": "Update failed, rolled back",
       "pluginsCodexHint": "Codex skills are managed globally by codex",
       "mcpLabel": "MCPs",
+      "agentCanvasMcpLabel": "Agent Canvas",
       "mcpLoading": "Loading…",
       "mcpEmpty": "No MCP server installed",
       "mcpClaudeEmptyHint": "Run `claude mcp add` to install",
@@ -459,7 +460,55 @@
       "mcp": "MCP Manager",
       "plugin": "Skill Manager",
       "modelSettings": "Model Settings",
+      "agentAccess": "AI Access",
       "opencode": "OpenCode"
+    }
+  },
+  "agentAccess": {
+    "title": "AI Access",
+    "description": "Manage REST API connections, tokens, and the downloadable skill for external AI clients.",
+    "connection": {
+      "title": "Connection",
+      "advertisedPlaceholder": "https://canvas.example.com",
+      "downloadSkill": "Download Agent Canvas Skill"
+    },
+    "create": {
+      "title": "Create Token",
+      "name": "Name",
+      "expiration": "Expiration",
+      "scopes": "Permissions",
+      "canvases": "Authorized Canvases",
+      "scopeRequired": "Select at least one permission.",
+      "canvasRequired": "Select at least one Canvas.",
+      "noCanvases": "There are no Canvases to authorize. Create one first.",
+      "locked": "(unlock first)",
+      "submit": "Create Token"
+    },
+    "expirations": {
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days (default)",
+      "never": "Never"
+    },
+    "reveal": {
+      "title": "Save this token now",
+      "hint": "The full token is shown only once and cannot be viewed again after closing.",
+      "copyConnection": "Copy connection settings"
+    },
+    "tokens": {
+      "title": "Tokens",
+      "empty": "No tokens have been created",
+      "revoke": "Revoke",
+      "revoked": "Token revoked",
+      "confirmTitle": "Revoke this token?",
+      "confirmDescription": "Revoking “{name}” immediately invalidates active connections and cannot be undone."
+    },
+    "errors": {
+      "load": "Failed to load AI access settings",
+      "url": "Failed to save the advertised URL. Use a complete HTTP or HTTPS URL.",
+      "create": "Failed to create token",
+      "revoke": "Failed to revoke token",
+      "copy": "Copy failed. Check that the browser allows clipboard access."
     }
   },
   "pluginManager": {

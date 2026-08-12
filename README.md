@@ -12,6 +12,7 @@
 - [安裝](#安裝)
 - [使用方式](#使用方式)
 - [設定](#設定)
+- [AI 存取](#ai-存取)
 - [教學](#教學)
   - [什麼是 POD？](#什麼是-pod)
   - [如何切換模型？](#如何切換模型)
@@ -90,6 +91,12 @@ agent-canvas config set GITLAB_URL https://gitlab.example.com
 # 查看所有設定
 agent-canvas config list
 ```
+
+## AI 存取
+
+在 Header 的管理中心開啟「AI 存取」，即可建立可撤銷的外部 Token、設定 Advertised URL，並下載不含 Token 的 Agent Canvas Skill。Token 的 Canvas 範圍與 `canvas:read`、`canvas:create`、`canvas:write`、`canvas:execute` 權限分開管理；`canvas:write` 會包含讀取權限。
+
+Pod 的 MCP 選單另有預設關閉的內建 Agent Canvas MCP。啟用後，後端只在 Run 期間提供綁定目前 Canvas、Pod 與 Run 的短效執行權限，不會把外部管理 Token 傳給模型。
 
 ## 教學
 

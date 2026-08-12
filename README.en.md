@@ -12,6 +12,7 @@ A canvas tool for visually designing and executing AI Agent workflows, with team
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
+- [AI Access](#ai-access)
 - [Tutorials](#tutorials)
   - [What is a POD?](#what-is-a-pod)
   - [How to Switch Models?](#how-to-switch-models)
@@ -88,6 +89,12 @@ agent-canvas config set GITLAB_URL https://gitlab.example.com
 # List all configurations
 agent-canvas config list
 ```
+
+## AI Access
+
+Open **AI Access** from the Header management hub to create revocable external tokens, configure an advertised URL, and download an Agent Canvas Skill that never contains a token. Canvas grants are managed separately from the `canvas:read`, `canvas:create`, `canvas:write`, and `canvas:execute` scopes; `canvas:write` includes read access.
+
+The Pod MCP menu also provides a built-in Agent Canvas MCP that is off by default. When enabled, the backend issues a short-lived capability bound to the current Canvas, Pod, and Run without exposing an external management token to the model.
 
 ## Tutorials
 

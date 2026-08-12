@@ -12,6 +12,7 @@ AI Agent ワークフローを視覚的にデザインして実行するため�
 - [インストール](#インストール)
 - [使い方](#使い方)
 - [設定](#設定)
+- [AI アクセス](#ai-アクセス)
 - [チュートリアル](#チュートリアル)
   - [POD とは何ですか？](#pod-とは何ですか)
   - [モデルの切り替え方法](#モデルの切り替え方法)
@@ -90,6 +91,12 @@ agent-canvas config set GITLAB_URL https://gitlab.example.com
 # すべての設定を確認
 agent-canvas config list
 ```
+
+## AI アクセス
+
+Header の管理センターから「AI アクセス」を開くと、失効可能な外部 Token の作成、Advertised URL の設定、Token を含まない Agent Canvas Skill のダウンロードができます。Canvas の許可範囲と `canvas:read`、`canvas:create`、`canvas:write`、`canvas:execute` scope は個別に管理され、`canvas:write` には読み取り権限が含まれます。
+
+Pod の MCP メニューには、既定で無効な内蔵 Agent Canvas MCP もあります。有効にすると、外部管理 Token をモデルへ公開せず、現在の Canvas、Pod、Run に紐づく短期 capability が Run 中だけ発行されます。
 
 ## チュートリアル
 

@@ -110,9 +110,10 @@ function mountPod(pod: Pod) {
           template: '<div data-testid="thinking-popover" />',
         },
         PodSlots: {
+          props: ["mcpActiveCount"],
           emits: ["plugin-clicked", "mcp-clicked", "thinking-clicked"],
           template: `
-            <div>
+            <div :data-mcp-active-count="mcpActiveCount">
               <button class="plugin-slot" @click="$emit('plugin-clicked', $event)">plugins</button>
               <button class="mcp-slot" @click="$emit('mcp-clicked', $event)">mcp</button>
               <button class="thinking-slot" @click="$emit('thinking-clicked', $event)">thinking</button>
@@ -142,6 +143,19 @@ describe("CanvasPod user interactions", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("Agent Canvas MCP 啟用時會計入 Pod 的 MCP 數量", () => {
+    const wrapper = mountPod(
+      makePod({
+        mcpServerNames: [],
+        agentCanvasMcpEnabled: true,
+      }),
+    );
+
+    expect(
+      wrapper.find("[data-mcp-active-count]").attributes("data-mcp-active-count"),
+    ).toBe("1");
   });
 
   it("使用者開啟 Plugin、MCP、Thinking popover 後，移動畫布會關閉已開啟的 popover", async () => {

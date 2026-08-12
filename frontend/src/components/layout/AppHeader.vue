@@ -88,6 +88,11 @@
     :show-back-button="true"
     @back="returnFromModelSettings"
   />
+  <AgentAccessModal
+    v-model:open="isAgentAccessOpen"
+    :show-back-button="true"
+    @back="returnFromAgentAccess"
+  />
   <IntegrationsHubModal
     v-model:open="isIntegrationsHubOpen"
     @select-global-settings="openGlobalSettingsFromHub"
@@ -96,6 +101,7 @@
     @select-plugin="openPluginFromHub"
     @select-opencode="openOpenCodeFromHub"
     @select-model-settings="openModelSettingsFromHub"
+    @select-agent-access="openAgentAccessFromHub"
   />
 </template>
 
@@ -130,6 +136,9 @@ const ModelSettingsModal = defineAsyncComponent(
 const IntegrationsHubModal = defineAsyncComponent(
   () => import("@/components/settings/IntegrationsHubModal.vue"),
 );
+const AgentAccessModal = defineAsyncComponent(
+  () => import("@/components/settings/AgentAccessModal.vue"),
+);
 
 const canvasStore = useCanvasStore();
 const runStore = useRunStore();
@@ -141,6 +150,7 @@ const isManagedPluginOpen = ref<boolean>(false);
 const isOpenCodeSettingsOpen = ref<boolean>(false);
 const isModelSettingsOpen = ref<boolean>(false);
 const isIntegrationsHubOpen = ref<boolean>(false);
+const isAgentAccessOpen = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {
   isIntegrationManagerOpen.value = false;
@@ -169,6 +179,10 @@ const openOpenCodeFromHub = (): void => {
 
 const openModelSettingsFromHub = (): void => {
   isModelSettingsOpen.value = true;
+};
+
+const openAgentAccessFromHub = (): void => {
+  isAgentAccessOpen.value = true;
 };
 
 const returnFromGlobalSettings = (): void => {
@@ -208,6 +222,11 @@ const returnFromOpenCode = (): void => {
 
 const returnFromModelSettings = (): void => {
   isModelSettingsOpen.value = false;
+  isIntegrationsHubOpen.value = true;
+};
+
+const returnFromAgentAccess = (): void => {
+  isAgentAccessOpen.value = false;
   isIntegrationsHubOpen.value = true;
 };
 </script>

@@ -281,7 +281,7 @@ export async function handlePodSetMcpServerNames(
   payload: PodSetMcpServerNamesPayload,
   requestId: string,
 ): Promise<void> {
-  const { podId, mcpServerNames } = payload;
+  const { podId, mcpServerNames, agentCanvasMcpEnabled } = payload;
 
   // 取得 canvasId（未設定 active canvas 時 getCanvasId 已自動回傳 error）
   const canvasId = getCanvasId(
@@ -325,6 +325,9 @@ export async function handlePodSetMcpServerNames(
   const validNames = mcpServerNames.filter((n) => availableNameSet.has(n));
 
   podStore.setMcpServerNames(podId, validNames);
+  if (agentCanvasMcpEnabled !== undefined) {
+    podStore.update(canvasId, podId, { agentCanvasMcpEnabled });
+  }
 
   // 廣播 POD_MCP_SERVER_NAMES_UPDATED 給 canvas 所有連線
   // ignoredNames：被過濾掉的 name 清單，前端可據此提示使用者
@@ -337,6 +340,8 @@ export async function handlePodSetMcpServerNames(
       podId,
       success: true,
       mcpServerNames: validNames,
+      agentCanvasMcpEnabled:
+        agentCanvasMcpEnabled ?? pod.agentCanvasMcpEnabled,
       ignoredNames: invalidNames,
     },
   );

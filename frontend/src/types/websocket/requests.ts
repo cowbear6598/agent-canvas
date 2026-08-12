@@ -368,6 +368,7 @@ export interface PodSetMcpServerNamesPayload {
   canvasId: string;
   podId: string;
   mcpServerNames: string[];
+  agentCanvasMcpEnabled?: boolean;
 }
 
 export interface CursorMovePayload {

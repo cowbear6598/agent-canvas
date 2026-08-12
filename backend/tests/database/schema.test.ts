@@ -194,4 +194,28 @@ describe("Pod Fast mode 與退役 Codex 模型 migration", () => {
       .get() as { fast_mode_enabled: number };
     expect(defaultValue.fast_mode_enabled).toBe(0);
   });
+
+  it("內建 Agent Canvas MCP 預設關閉，並建立外部 Token 資料表", () => {
+    db.exec(
+      "INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'canvas1', 0)",
+    );
+    db.exec(
+      "INSERT INTO pods (id, canvas_id, name, workspace_path) VALUES ('p1', 'c1', 'pod1', '/ws')",
+    );
+
+    const pod = db
+      .prepare("SELECT agent_canvas_mcp_enabled FROM pods WHERE id = 'p1'")
+      .get() as { agent_canvas_mcp_enabled: number };
+    const tables = db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'agent_access_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>;
+
+    expect(pod.agent_canvas_mcp_enabled).toBe(0);
+    expect(tables.map((table) => table.name)).toEqual([
+      "agent_access_token_canvases",
+      "agent_access_tokens",
+    ]);
+  });
 });

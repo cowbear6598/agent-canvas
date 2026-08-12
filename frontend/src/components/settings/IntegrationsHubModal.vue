@@ -15,6 +15,7 @@ import {
   Puzzle,
   Settings2,
   SlidersHorizontal,
+  Network,
 } from "lucide-vue-next";
 
 interface Props {
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   "select-plugin": [];
   "select-opencode": [];
   "select-model-settings": [];
+  "select-agent-access": [];
 }>();
 
 const { t } = useI18n();
@@ -41,7 +43,8 @@ type HubAction =
   | "mcp"
   | "plugin"
   | "opencode"
-  | "model-settings";
+  | "model-settings"
+  | "agent-access";
 
 interface HubCard {
   id: string;
@@ -74,6 +77,12 @@ const sections = computed<HubSection[]>(() => [
         action: "integration-manager",
         icon: KeyRound,
         label: t("integrationsHub.cards.integrations"),
+      },
+      {
+        id: "agent-access",
+        action: "agent-access",
+        icon: Network,
+        label: t("integrationsHub.cards.agentAccess"),
       },
     ],
   },
@@ -133,6 +142,9 @@ const handleSelect = (action: HubAction): void => {
       return;
     case "model-settings":
       emit("select-model-settings");
+      return;
+    case "agent-access":
+      emit("select-agent-access");
       return;
   }
 };

@@ -23,6 +23,7 @@ export interface PodRow {
   provider: string;
   provider_config_json: string | null;
   fast_mode_enabled: number;
+  agent_canvas_mcp_enabled: number;
 }
 
 export interface IntegrationBindingRow {
@@ -109,6 +110,7 @@ export function buildPodFromRow(
     rotation: row.rotation,
     sessionId: row.session_id,
     mcpServerNames: relations.mcpServerNames.get(row.id) ?? [],
+    agentCanvasMcpEnabled: row.agent_canvas_mcp_enabled === 1,
     pluginIds: relations.pluginIds.get(row.id) ?? [],
     provider,
     providerConfig,

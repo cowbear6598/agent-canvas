@@ -19,6 +19,7 @@ export const RESERVED_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   "agent_canvas_managed_surface",
   "agent_canvas_goal",
   "agent_canvas_plugin",
+  "agent_canvas",
 ]);
 
 /**
@@ -193,6 +194,7 @@ export const podSetMcpServerNamesSchema = z
     mcpServerNames: z
       .array(z.string().min(1).max(200).regex(MCP_SERVER_NAME_PATTERN))
       .max(50),
+    agentCanvasMcpEnabled: z.boolean().optional(),
   })
   .strict();
 

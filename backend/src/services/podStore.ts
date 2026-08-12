@@ -86,6 +86,7 @@ class PodStore {
       rotation: data.rotation,
       sessionId: null,
       mcpServerNames: data.mcpServerNames ?? [],
+      agentCanvasMcpEnabled: data.agentCanvasMcpEnabled ?? false,
       pluginIds: data.pluginIds ?? [],
       provider,
       providerConfig,

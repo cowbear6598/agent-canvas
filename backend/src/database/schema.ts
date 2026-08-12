@@ -144,6 +144,23 @@ function ensurePodFastModeColumn(db: Database): void {
   })();
 }
 
+function ensurePodAgentCanvasMcpColumn(db: Database): void {
+  db.transaction(() => {
+    addColumnIfMissing(
+      db,
+      "pods",
+      "agent_canvas_mcp_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+    db.exec(
+      `UPDATE pods
+       SET agent_canvas_mcp_enabled = CASE
+         WHEN agent_canvas_mcp_enabled = 1 THEN 1
+         ELSE 0
+       END`,
+    );
+  })();
+}
+
 function migrateRetiredCodexModels(db: Database): void {
   db.transaction(() => {
     db.exec(
@@ -247,6 +264,7 @@ function createBaseTables(db: Database): void {
       "provider TEXT NOT NULL DEFAULT 'claude'," +
       "provider_config_json TEXT," +
       "fast_mode_enabled INTEGER NOT NULL DEFAULT 0," +
+      "agent_canvas_mcp_enabled INTEGER NOT NULL DEFAULT 0," +
       "UNIQUE (canvas_id, name)" +
       ")",
   );
@@ -617,11 +635,35 @@ function createBaseTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_managed_plugins_sort_index ON managed_plugins(sort_index)",
   );
+
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS agent_access_tokens (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      token_hint TEXT NOT NULL,
+      scopes_json TEXT NOT NULL,
+      expires_at TEXT,
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    )`,
+  );
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS agent_access_token_canvases (
+      token_id TEXT NOT NULL REFERENCES agent_access_tokens(id) ON DELETE CASCADE,
+      canvas_id TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
+      PRIMARY KEY (token_id, canvas_id)
+    )`,
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_agent_access_token_canvases_canvas ON agent_access_token_canvases(canvas_id)",
+  );
 }
 
 export function createTables(db: Database): void {
   createBaseTables(db);
   ensurePodFastModeColumn(db);
+  ensurePodAgentCanvasMcpColumn(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
   ensureConnectionPersistenceColumns(db);
   ensureSecretStorageVersionColumns(db);

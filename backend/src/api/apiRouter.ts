@@ -9,12 +9,17 @@ import {
   type ApiHandler,
   type RestRouteScope,
 } from "./restRouteManifest.js";
+import {
+  agentAccessTokenStore,
+  type AgentAccessScope,
+} from "../services/agentAccess/agentAccessTokenStore.js";
 
 interface Route {
   method: string;
   pattern: URLPattern;
   handler: ApiHandler;
   scope: RestRouteScope;
+  requiredAgentScope?: AgentAccessScope;
   resolveCanvasId?: (
     req: Request,
     params: Record<string, string>,
@@ -26,6 +31,7 @@ const ROUTES: Route[] = REST_ROUTE_DEFINITIONS.map((route) => ({
   pattern: new URLPattern({ pathname: route.path }),
   handler: route.handler,
   scope: route.scope,
+  requiredAgentScope: route.requiredAgentScope,
   resolveCanvasId: "resolveCanvasId" in route ? route.resolveCanvasId : undefined,
 }));
 
@@ -62,12 +68,40 @@ function forbiddenResponse(error: string, code: string): Response {
   });
 }
 
+function unauthorizedResponse(): Response {
+  return new Response(
+    JSON.stringify({ error: "Token 無效、已過期或已撤銷", code: "INVALID_TOKEN" }),
+    { status: HTTP_STATUS.UNAUTHORIZED, headers: JSON_HEADERS },
+  );
+}
+
 async function authorizeRoute(
   req: Request,
   route: Route,
   params: Record<string, string>,
 ): Promise<Response | null> {
   if (route.scope === "public") {
+    return null;
+  }
+
+  if (route.scope === "agent") {
+    const token = agentAccessTokenStore.resolveBearer(req);
+    if (!token) return unauthorizedResponse();
+    if (
+      !route.requiredAgentScope ||
+      !token.hasScope(route.requiredAgentScope)
+    ) {
+      return forbiddenResponse("Token 缺少必要的 scope", "INSUFFICIENT_SCOPE");
+    }
+
+    const rawCanvasId =
+      (await route.resolveCanvasId?.(req, params)) ?? params.id;
+    if (rawCanvasId) {
+      const canvas = resolveCanvas(rawCanvasId);
+      if (canvas && !token.canvasIds.includes(canvas.id)) {
+        return forbiddenResponse("Token 未授權此 Canvas", "CANVAS_NOT_GRANTED");
+      }
+    }
     return null;
   }
 

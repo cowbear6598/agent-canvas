@@ -107,8 +107,8 @@ async function startServer(): Promise<void> {
       const corsHeaders = origin
         ? {
             "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
             // redeem-reconnect-grant 等端點需要瀏覽器收下後端 Set-Cookie；
             // 前端用 credentials:"include" 發送時，瀏覽器會檢查此 header
             "Access-Control-Allow-Credentials": "true",

@@ -7,6 +7,7 @@ export interface CreatePodRequest {
   y: number;
   rotation: number;
   mcpServerNames?: string[];
+  agentCanvasMcpEnabled?: boolean;
   pluginIds?: string[];
   provider?: ProviderName;
   providerConfig?: Record<string, unknown>;

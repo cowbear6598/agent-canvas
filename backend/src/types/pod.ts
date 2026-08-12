@@ -37,6 +37,8 @@ export interface Pod {
   rotation: number;
   sessionId: string | null;
   mcpServerNames: string[];
+  /** 是否啟用只限目前 Run／Canvas 的內建 Agent Canvas MCP。 */
+  agentCanvasMcpEnabled: boolean;
   pluginIds: string[];
   provider: ProviderName;
   /** providerConfig.model 是 model 的唯一來源（Claude 用短名如 "opus"，Codex 用完整名如 "gpt-5.6-luna"） */

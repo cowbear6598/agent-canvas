@@ -323,6 +323,7 @@
       "pluginsToggleFailed": "変更に失敗しました。ロールバックされました",
       "pluginsCodexHint": "Codex skills は codex 側でグローバル管理されています",
       "mcpLabel": "MCP",
+      "agentCanvasMcpLabel": "Agent Canvas",
       "mcpLoading": "読み込み中…",
       "mcpEmpty": "MCP server がインストールされていません",
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",
@@ -459,7 +460,55 @@
       "mcp": "MCP 管理",
       "plugin": "Skill 管理",
       "modelSettings": "Model 設定",
+      "agentAccess": "AI アクセス",
       "opencode": "OpenCode"
+    }
+  },
+  "agentAccess": {
+    "title": "AI アクセス",
+    "description": "外部 AI クライアント向けの REST API 接続、Token、ダウンロード可能な Skill を管理します。",
+    "connection": {
+      "title": "接続情報",
+      "advertisedPlaceholder": "https://canvas.example.com",
+      "downloadSkill": "Agent Canvas Skill をダウンロード"
+    },
+    "create": {
+      "title": "Token を作成",
+      "name": "名前",
+      "expiration": "有効期限",
+      "scopes": "権限",
+      "canvases": "許可する Canvas",
+      "scopeRequired": "権限を 1 つ以上選択してください。",
+      "canvasRequired": "Canvas を 1 つ以上選択してください。",
+      "noCanvases": "許可できる Canvas がありません。先に Canvas を作成してください。",
+      "locked": "（先にロック解除してください）",
+      "submit": "Token を作成"
+    },
+    "expirations": {
+      "7d": "7 日",
+      "30d": "30 日",
+      "90d": "90 日（既定）",
+      "never": "無期限"
+    },
+    "reveal": {
+      "title": "今すぐ Token を保存してください",
+      "hint": "完全な Token は一度だけ表示され、閉じた後は再表示できません。",
+      "copyConnection": "接続設定をコピー"
+    },
+    "tokens": {
+      "title": "Token 一覧",
+      "empty": "Token はまだありません",
+      "revoke": "失効",
+      "revoked": "Token を失効しました",
+      "confirmTitle": "Token を失効しますか？",
+      "confirmDescription": "「{name}」を失効すると、使用中の接続は直ちに無効になり、元に戻せません。"
+    },
+    "errors": {
+      "load": "AI アクセス設定の読み込みに失敗しました",
+      "url": "Advertised URL の保存に失敗しました。完全な HTTP または HTTPS URL を指定してください。",
+      "create": "Token の作成に失敗しました",
+      "revoke": "Token の失効に失敗しました",
+      "copy": "コピーに失敗しました。ブラウザのクリップボード権限を確認してください。"
     }
   },
   "pluginManager": {

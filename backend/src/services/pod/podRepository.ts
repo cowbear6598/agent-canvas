@@ -180,6 +180,14 @@ export class PodRepository {
   }
 
   private updateJoinTables(podId: string, updates: PodUpdates): void {
+    if (updates.mcpServerNames !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podMcpServerNames,
+        updates.mcpServerNames,
+        (valueId) => ({ $podId: podId, $mcpServerName: valueId }),
+      );
+    }
     if (updates.pluginIds !== undefined) {
       this.replaceJoinTableIds(
         podId,
@@ -231,6 +239,7 @@ export class PodRepository {
         $provider: pod.provider,
         $providerConfigJson: JSON.stringify(pod.providerConfig),
         $fastModeEnabled: pod.fastModeEnabled ? 1 : 0,
+        $agentCanvasMcpEnabled: pod.agentCanvasMcpEnabled ? 1 : 0,
       });
       this.insertJoinTableIds(id, pod);
     })();
@@ -315,6 +324,7 @@ export class PodRepository {
         $provider: updatedPod.provider,
         $providerConfigJson: sanitizedProviderConfigJson,
         $fastModeEnabled: updatedPod.fastModeEnabled ? 1 : 0,
+        $agentCanvasMcpEnabled: updatedPod.agentCanvasMcpEnabled ? 1 : 0,
       });
       this.updateJoinTables(podId, updates);
     })();

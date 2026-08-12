@@ -1,0 +1,90 @@
+description: >
+  Agent Canvas 目前主要由人直接操作畫布建立與執行工作流程，尚未提供一套讓 AI 依照
+  自然語言需求建立初稿、操作畫布並交由人類精修的完整 AX。這項能力應降低工作流程的
+  起始成本，同時透過可控的遠端存取與細分權限，讓 AI 或其他客戶端安全地查詢、編輯或執行畫布。
+goal:
+  - 提供可封裝為 Skill 的專用 REST API，讓外部 AI 能以穩定、可版本化的契約安全地讀取與操作 Agent Canvas，同時保留現有 WebSocket 供前端使用。
+  - 畫布內 Pod 透過內建 Agent Canvas MCP 使用執行能力；Pod 設定中將內建 MCP 與使用者自行加入的 MCP 分區顯示，且每個 Pod 的 Agent Canvas MCP 預設關閉。
+  - REST API 與 Skill 應呈現人類 UI 已有的同等畫布能力與操作語意，不為 AI 另外建立一套功能規則；Token 的 Canvas 範圍與 scopes 只負責限制可使用的人類等價操作。
+  - 外部 AI 的完整操作範圍包含列出與讀取已授權 Canvas 的 Pod、Connection 與基本設定，建立 Canvas，建立、移動及修改 Pod，建立及修改 Connection，查詢並在需求明確時綁定可用的 Provider、Repository、Skill、MCP 與 Integration，以及啟動 Workflow、查詢 Run 狀態和停止仍在執行的 Run。
+  - 外部 AI 不操作 workspace 或 Canvas 密碼、備份、全域模型設定、Integration 憑證與其他全域安全設定，也不提供需求中未明確允許的一般刪除操作。
+  - 第一版不提供刪除 Canvas、Pod、Connection 或已完成 Run 歷程等一般破壞性 API；但具備 canvas:execute 的 AI 可刪除其授權 Canvas 中任何正在執行的 Workflow Run，不區分啟動者，並完全沿用目前人類 UI 停止執行時會中止串流、清除 queue、清理資源及刪除該 Run 的既有語意。
+  - 讓 AI 能根據使用者需求產生可用的工作流程初稿，並保留由人類在畫布上精修的空間。
+  - 自然語言理解、Pod 拆分、Connection 與版面決策由安裝 Skill 的外部 AI 負責；Skill 提供保守生成規則與 API 契約，Canvas 後端不再呼叫另一個模型，只負責授權、資料驗證及原子性寫入整張草稿。
+  - AI 產生流程初稿時建立新的草稿 Canvas，不覆寫或直接修改使用者既有的 Canvas。
+  - 草稿由 AI 決定 Pod 數量、名稱、單一職責、連線、觸發模式與版面，Provider 與 model 沿用全域預設；只有需求明確指定時才綁定 Repository、Skill、MCP 或 Integration。
+  - 需求資訊不足時，AI 不反覆追問，而是建立約二至六個 Pod 的最小可行流程、只在必要時加入分支，並向使用者說明生成時採用的假設；只有完全無法形成流程時才要求補充關鍵資訊。
+  - 在 AppHeader 的整合中心新增獨立「AI 存取」入口，提供遠端存取資訊與 Token 管理；透過可組合的 scope 分別授予查詢、建立、編輯及執行等能力，外部 AI 使用可撤銷 Token，畫布內 Pod 使用不暴露管理憑證的短效 capability token。
+  - 外部 Token 管理入口直接沿用既有 workspace 解鎖門檻：設定 workspace 密碼且目前瀏覽器 session 尚未解鎖時只顯示 WorkspaceUnlockView，不渲染 AppHeader 或 Token 管理介面；未設定 workspace 密碼時則依現行規則視為 workspace 已解鎖，不再為 Token 建立增加額外的密碼前置檢查或警告。
+  - 畫布內 Pod 不需手動建立或貼上 Token；啟用內建 Agent Canvas MCP 後，後端在每次 Run 自動簽發綁定目前 canvasId、podId、runId、執行權限與到期時間的 capability token，透過 MCP bridge 環境傳入且不暴露於模型上下文，並在 Run 結束或 Token 到期後拒絕使用。
+  - 內建 Agent Canvas MCP 只允許搜尋目前 Canvas 中的 Workflow 源頭 Pod、啟動該源頭 Pod 所代表的 Workflow、查詢 Run 狀態，以及刪除目前 Canvas 中仍在執行的 Run；後端必須再次驗證目標仍是 Workflow 源頭 Pod，不能以 ID 直接觸發中間節點，也不提供建立、讀取內容或編輯 Canvas、Pod、Connection 與設定的能力。
+  - 完全沒有 Connection 的獨立 Pod 也可由內建 MCP 搜尋與觸發；搜尋結果需區分有下游連線的 Workflow 源頭 Pod與獨立 Pod，兩者都會成為新 Run 的起點。
+  - 畫布內 Pod 觸發其他 Pod／Workflow 時採非同步 fire-and-forget；後端建立 Run 後立即回傳接受結果與 runId，不等待完成、不自動輪詢，也不將目標 Run 的輸出傳回原 Pod。
+  - 建立外部 Token 時以多選清單授權零個或多個既有 Canvas，不提供 ALL；Canvas 範圍與查詢、編輯、執行 scopes 分開控管，新 Canvas 不會自動取得授權，但該 Token 透過 canvas:create 建立的 Canvas 會自動加入自己的授權清單。
+  - 受密碼保護且尚未由目前瀏覽器 session 解鎖的 Canvas 在 Token 表單中顯示為不可選；使用者成功解鎖後才能將其加入 Token 的 Canvas 清單。
+  - 外部 Token 明確包含受密碼保護的 Canvas 時，API 以 Token 的 Canvas 範圍與 scopes 作為授權依據，不再要求 Canvas 密碼或瀏覽器 session cookie；Canvas 密碼仍用於人類瀏覽器存取。
+  - 建立 Canvas 使用獨立的 canvas:create scope，不併入 canvas:write；AI 草稿建立是此能力的一種使用情境，避免只能精修指定 Canvas 的 Token 也能在 workspace 任意建立新 Canvas。
+  - canvas:write 自動包含 canvas:read，讓 AI 能先讀取現況再安全編輯；canvas:execute 不暴露完整 Pod prompt 或 Canvas 設定，只提供列出可執行 Workflow 入口、啟動、查詢狀態與停止所需的最小資訊；canvas:create 保持獨立，未同時具備 write 時只能建立而不能繼續修改。
+  - 外部 Token 可設定七天、三十天、九十天或永不過期，預設九十天；到期或由使用者撤銷後立即停止接受新的 API 請求。
+  - 全域設定提供可直接複製的外部 AI 連線設定，包含 API Base URL 與只在 Token 建立當下顯示一次的完整 Token；關閉後只保留名稱、權限與遮罩資訊，遺失時必須撤銷並重建。
+  - API Base URL 預設使用目前頁面的 Domain 或 IP，從 localhost 開啟時可列出偵測到的區網 IP；進階 Advertised URL 可覆寫複製給外部 AI 的網址，以支援 Cloudflare Tunnel、反向代理或固定 Domain，但不負責建立 DNS、Tunnel、HTTPS 或改變伺服器監聽位置。
+  - Advertised URL 必須是完整的 HTTP 或 HTTPS URL；非 localhost 使用 HTTP 時顯示不安全傳輸警告。
+  - AI 建立的草稿是 workspace 中的一般 Canvas，沿用既有 workspace 與 Canvas 存取規則供所有具備存取資格的使用者查看，不提供私人草稿可見性。
+  - 外部 AI 使用的 Skill 可直接由 Agent Canvas 的 AI 存取介面下載，不要求使用者另外前往套件庫或手動建立 Skill 檔案；下載的 ZIP 包含 SKILL.md、API 操作說明與目前的 API URL，但不得內嵌 Token，使 Skill 可安全重複分享，而 Token 維持獨立建立、一次顯示與個別撤銷。
+  - AI 與人類或多位人類同時修改 Canvas 時沿用既有共同編輯語意，以最後一次寫入為準；第一版不新增 revision、鎖定或衝突合併機制。
+related:
+  - AGENTS.md
+  - README.md
+  - backend/src/index.ts
+  - backend/src/config/index.ts
+  - backend/src/api/apiRouter.ts
+  - backend/src/api/restRouteManifest.ts
+  - backend/src/handlers/websocketHandlerManifest.ts
+  - backend/src/services/eventRouter.ts
+  - backend/src/services/canvasStore.ts
+  - backend/src/handlers/runHandlers.ts
+  - backend/src/handlers/chatHandlers.ts
+  - backend/src/services/runStore.ts
+  - backend/src/services/workflow/runExecutionService.ts
+  - backend/src/services/workflow/runStatusMachine.ts
+  - backend/src/services/provider/abortRegistry.ts
+  - backend/src/services/podPack/podPackService.ts
+  - backend/src/api/podPackApi.ts
+  - backend/src/schemas/podPackSchemas.ts
+  - backend/src/services/auth/authAccessService.ts
+  - backend/src/services/auth/authGuard.ts
+  - backend/src/services/auth/handshakeAuthService.ts
+  - backend/src/services/auth/transportSecurityService.ts
+  - backend/src/services/integration/integrationReplyCapability.ts
+  - backend/src/services/integration/integrationReplyMcpBridge.ts
+  - backend/src/services/mcp/managedMcpSurfaceService.ts
+  - backend/src/services/configStore.ts
+  - backend/src/database/schema.ts
+  - backend/src/database/secretsDatabase.ts
+  - backend/src/services/secretStore.ts
+  - backend/src/services/plugin/pluginCatalogBuilder.ts
+  - backend/src/services/plugin/pluginScanFs.ts
+  - frontend/src/components/settings/GlobalSettingsModal.vue
+  - frontend/src/components/settings/IntegrationsHubModal.vue
+  - frontend/src/components/layout/AppHeader.vue
+  - frontend/src/App.vue
+  - frontend/src/components/security/WorkspaceUnlockView.vue
+  - frontend/src/stores/securityStore.ts
+  - frontend/src/components/run/RunCard.vue
+  - frontend/src/stores/run/runStore.ts
+  - frontend/src/composables/useGlobalSettingsForm.ts
+  - frontend/src/services/websocket/WebSocketClient.ts
+  - backend/tests/business-logic/auth/authGuard.test.ts
+  - backend/tests/business-logic/integrationReplyService.test.ts
+  - backend/tests/business-logic/restRouteManifest.test.ts
+  - backend/tests/database/schema.test.ts
+  - backend/tests/integration/config-ws.test.ts
+  - backend/tests/helpers/apiIntegrationHarness.ts
+  - backend/tests/business-logic/pluginCatalogBuilder.test.ts
+  - backend/tests/business-logic/podPackService.test.ts
+  - backend/tests/business-logic/runExecutionService.test.ts
+  - backend/tests/business-logic/runHandlers.test.ts
+  - frontend/tests/business-logic/composables/useGlobalSettingsForm.test.ts
+  - frontend/tests/business-logic/stores/run/runStore.test.ts
+verify:
+  - bun run test

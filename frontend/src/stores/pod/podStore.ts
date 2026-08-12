@@ -309,6 +309,13 @@ export const usePodStore = defineStore("pod", () => {
     updatePodField(podId, "mcpServerNames", names);
   }
 
+  function updatePodAgentCanvasMcpEnabled(
+    podId: string,
+    enabled: boolean,
+  ): void {
+    updatePodField(podId, "agentCanvasMcpEnabled", enabled);
+  }
+
   /**
    * Backend-sync：呼叫 updatePodMcpServers API 後更新本地狀態。
    * 失敗時 throw McpServerNamesError，由呼叫端決定是否 rollback。
@@ -434,6 +441,7 @@ export const usePodStore = defineStore("pod", () => {
     updatePodGoal,
     updatePodPlugins,
     updatePodMcpServers,
+    updatePodAgentCanvasMcpEnabled,
     setMcpServersWithBackend,
     addPodFromEvent,
     removePod,

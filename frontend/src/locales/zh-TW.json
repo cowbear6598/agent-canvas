@@ -323,6 +323,7 @@
       "pluginsToggleFailed": "變更失敗，已回滾",
       "pluginsCodexHint": "Codex skills 由 codex 全域管理",
       "mcpLabel": "MCPs",
+      "agentCanvasMcpLabel": "Agent Canvas",
       "mcpLoading": "載入中…",
       "mcpEmpty": "尚未安裝 MCP server",
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",
@@ -459,7 +460,55 @@
       "mcp": "MCP 管理",
       "plugin": "Skill 管理",
       "modelSettings": "Model 設定",
+      "agentAccess": "AI 存取",
       "opencode": "OpenCode"
+    }
+  },
+  "agentAccess": {
+    "title": "AI 存取",
+    "description": "管理外部 AI 的 REST API 連線、Token 與可下載 Skill。",
+    "connection": {
+      "title": "連線資訊",
+      "advertisedPlaceholder": "https://canvas.example.com",
+      "downloadSkill": "下載 Agent Canvas Skill"
+    },
+    "create": {
+      "title": "建立 Token",
+      "name": "名稱",
+      "expiration": "有效期限",
+      "scopes": "權限",
+      "canvases": "授權 Canvas",
+      "scopeRequired": "請至少選擇一個權限。",
+      "canvasRequired": "請至少選擇一個 Canvas。",
+      "noCanvases": "目前沒有可授權的 Canvas，請先建立 Canvas。",
+      "locked": "（請先解鎖）",
+      "submit": "建立 Token"
+    },
+    "expirations": {
+      "7d": "7 天",
+      "30d": "30 天",
+      "90d": "90 天（預設）",
+      "never": "永不過期"
+    },
+    "reveal": {
+      "title": "請立即保存 Token",
+      "hint": "完整 Token 只會顯示這一次，關閉後無法再次查看。",
+      "copyConnection": "複製完整連線設定"
+    },
+    "tokens": {
+      "title": "Token 清單",
+      "empty": "尚未建立 Token",
+      "revoke": "撤銷",
+      "revoked": "Token 已撤銷",
+      "confirmTitle": "確認撤銷 Token？",
+      "confirmDescription": "撤銷「{name}」後，使用中的連線會立即失效，且無法復原。"
+    },
+    "errors": {
+      "load": "載入 AI 存取設定失敗",
+      "url": "Advertised URL 儲存失敗，請確認是完整的 HTTP 或 HTTPS URL",
+      "create": "Token 建立失敗",
+      "revoke": "Token 撤銷失敗",
+      "copy": "複製失敗，請確認瀏覽器允許存取剪貼簿"
     }
   },
   "pluginManager": {

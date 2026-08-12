@@ -211,7 +211,11 @@ watch(
 );
 
 // MCP notch 相關狀態
-const podMcpActiveCount = computed(() => props.pod.mcpServerNames?.length ?? 0);
+const podMcpActiveCount = computed(
+  () =>
+    (props.pod.mcpServerNames?.length ?? 0) +
+    (props.pod.agentCanvasMcpEnabled === true ? 1 : 0),
+);
 
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =

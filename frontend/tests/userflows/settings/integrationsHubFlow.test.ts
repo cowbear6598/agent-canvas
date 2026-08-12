@@ -72,6 +72,7 @@ const integrationsHubHarnessStub = defineComponent({
     "select-plugin",
     "select-opencode",
     "select-model-settings",
+    "select-agent-access",
   ],
   template: `
     <div v-if="open" data-testid="integrations-hub-harness">
@@ -81,6 +82,7 @@ const integrationsHubHarnessStub = defineComponent({
       <button data-testid="hub-open-plugin" @click="$emit('select-plugin')">plugin</button>
       <button data-testid="hub-open-model-settings" @click="$emit('select-model-settings')">model</button>
       <button data-testid="hub-open-opencode" @click="$emit('select-opencode')">opencode</button>
+      <button data-testid="hub-open-agent-access" @click="$emit('select-agent-access')">agent access</button>
     </div>
   `,
 });
@@ -104,6 +106,7 @@ function mountHeader() {
         ManagedMcpModal: createModalStub("managed-mcp-modal"),
         ManagedPluginModal: createModalStub("managed-plugin-modal"),
         ModelSettingsModal: createModalStub("model-settings-modal"),
+        AgentAccessModal: createModalStub("agent-access-modal"),
       },
     },
   });
@@ -216,6 +219,16 @@ describe("integrations hub userflow", () => {
         "data-open",
       ),
     ).toBe("true");
+
+    await selectHubCard(wrapper, "hub-open-agent-access");
+    expect(
+      wrapper.get("[data-testid='agent-access-modal']").attributes("data-open"),
+    ).toBe("true");
+    await wrapper.get("[data-testid='agent-access-modal-back']").trigger("click");
+    await flushPromises();
+    expect(wrapper.find("[data-testid='integrations-hub-harness']").exists()).toBe(
+      true,
+    );
   });
 
   it("管理中心顯示新分組且各入口 emit 正確事件", async () => {
@@ -238,6 +251,7 @@ describe("integrations hub userflow", () => {
     expect(wrapper.text()).not.toContain("MCP / Skill / Model 設定");
     expect(wrapper.text()).toContain("外部服務");
     expect(wrapper.text()).toContain("OpenCode");
+    expect(wrapper.text()).toContain("AI 存取");
     expect(wrapper.text()).not.toContain("選擇要管理的整合類別");
 
     await wrapper.get('[data-testid="integrations-hub-card-global-settings"]').trigger("click");
@@ -258,6 +272,10 @@ describe("integrations hub userflow", () => {
     await wrapper.setProps({ open: true });
     await wrapper.get('[data-testid="integrations-hub-card-model-settings"]').trigger("click");
     expect(wrapper.emitted("select-model-settings")).toHaveLength(1);
+
+    await wrapper.setProps({ open: true });
+    await wrapper.get('[data-testid="integrations-hub-card-agent-access"]').trigger("click");
+    expect(wrapper.emitted("select-agent-access")).toHaveLength(1);
 
     await wrapper.setProps({ open: true });
     await wrapper.get('[data-testid="integrations-hub-card-opencode"]').trigger("click");

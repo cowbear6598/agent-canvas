@@ -25,6 +25,7 @@ import {
   replyContextStore,
 } from "../integration/replyContextStore.js";
 import { createIntegrationReplyCapability } from "../integration/integrationReplyCapability.js";
+import { createAgentCanvasCapability } from "../agentAccess/agentCanvasCapability.js";
 import {
   buildPluginSkillCatalog,
   type PluginSkillCatalogEntry,
@@ -117,6 +118,31 @@ function getInternalIntegrationReplyUrl(): string {
   );
 }
 
+function buildAgentCanvasMcpEntry(
+  podId: string,
+  runContext: RunContext,
+): PodMcpEntry {
+  const spawn = buildInternalSelfSpawn("--agent-canvas-mcp-bridge");
+  return {
+    name: "agent_canvas",
+    transport: "stdio",
+    command: spawn.command,
+    args: spawn.args,
+    env: {
+      AGENT_CANVAS_MCP_CAPABILITY: createAgentCanvasCapability({
+        canvasId: runContext.canvasId,
+        podId,
+        runId: runContext.runId,
+      }),
+      AGENT_CANVAS_MCP_ENDPOINT:
+        process.env.AGENT_CANVAS_INTERNAL_MCP_URL ??
+        `http://127.0.0.1:${config.port}/api/internal/agent-canvas`,
+    },
+    cwd: null,
+    proxied: false,
+  };
+}
+
 /**
  * 將單一 registry record 轉成 provider-injectable entry。
  *
@@ -187,6 +213,7 @@ export class ManagedMcpSurfaceService {
       | "mcpServerNames"
       | "pluginIds"
       | "integrationBindings"
+      | "agentCanvasMcpEnabled"
     >,
     runContext: RunContext | null,
   ): Promise<PodMcpEntriesResult> {
@@ -218,6 +245,10 @@ export class ManagedMcpSurfaceService {
     // catalog 則僅在實際有 pluginIds 時才掃描（buildPluginSkillCatalog 內部對空陣列直接回 []）。
     entries.push(buildPluginMcpEntry(pod.id));
     const pluginCatalog = await buildPluginSkillCatalog(pod.pluginIds);
+
+    if (runContext && pod.agentCanvasMcpEnabled) {
+      entries.push(buildAgentCanvasMcpEntry(pod.id, runContext));
+    }
 
     for (const entry of buildIntegrationReplyMcpEntries(pod, runContext)) {
       entries.push(entry);

@@ -79,6 +79,30 @@ describe("mcpApi", () => {
     });
   });
 
+  it("可與使用者 MCP 分開更新內建 Agent Canvas MCP", async () => {
+    const requestPromise = updatePodMcpServers(
+      "canvas-1",
+      "pod-1",
+      ["context7"],
+      true,
+    );
+
+    expect(mockWebSocketClient.emit).toHaveBeenCalledWith(
+      "pod:set-mcp-server-names",
+      expect.objectContaining({
+        mcpServerNames: ["context7"],
+        agentCanvasMcpEnabled: true,
+      }),
+    );
+    simulateEvent("pod:mcp-server-names:updated", {
+      requestId: "req-mcp-update",
+      success: true,
+      agentCanvasMcpEnabled: true,
+    });
+
+    await expect(requestPromise).resolves.toBeUndefined();
+  });
+
   it("parseUpdateError 遇到 i18nError payload 時應保留 reason key", () => {
     expect(
       parseUpdateError({

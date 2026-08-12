@@ -124,6 +124,7 @@ const handlePodMcpServerNamesUpdated = createUnifiedHandler<
     canvasId: string;
     podId?: string;
     mcpServerNames?: string[];
+    agentCanvasMcpEnabled?: boolean;
   }
 >((payload) => {
   if (
@@ -134,6 +135,12 @@ const handlePodMcpServerNamesUpdated = createUnifiedHandler<
     return;
   invalidatePodMcpAvailabilityCache(undefined, payload.podId);
   usePodStore().updatePodMcpServers(payload.podId, payload.mcpServerNames);
+  if (typeof payload.agentCanvasMcpEnabled === "boolean") {
+    usePodStore().updatePodAgentCanvasMcpEnabled(
+      payload.podId,
+      payload.agentCanvasMcpEnabled,
+    );
+  }
 });
 
 export function getPodEventListeners(): Array<{

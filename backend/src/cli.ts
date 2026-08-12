@@ -499,6 +499,17 @@ async function main(): Promise<void> {
     await runIntegrationReplyMcpBridge();
     return;
   }
+  if (flags["agent-canvas-mcp-bridge"]) {
+    if (!process.env.AGENT_CANVAS_MCP_CAPABILITY) {
+      console.error("Agent Canvas MCP bridge 缺少 capability token");
+      process.exit(1);
+    }
+    const { runAgentCanvasMcpBridge } = await import(
+      "./services/mcp/agentCanvasMcpBridge.js"
+    );
+    await runAgentCanvasMcpBridge();
+    return;
+  }
 
   if (flags.daemon) {
     await runDaemon(flags);

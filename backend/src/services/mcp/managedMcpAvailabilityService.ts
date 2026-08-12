@@ -76,6 +76,23 @@ function buildPluginAvailabilityItem(
   };
 }
 
+function buildAgentCanvasAvailabilityItem(
+  pod: Pick<Pod, "agentCanvasMcpEnabled">,
+): PodMcpAvailabilityItem {
+  return {
+    name: "agent_canvas",
+    transport: "stdio",
+    status: "healthy",
+    selected: pod.agentCanvasMcpEnabled,
+    selectable: true,
+    disabledReason: null,
+    lastError: null,
+    system: true,
+    locked: false,
+    description: "只限目前 Canvas 與 Run 的 Workflow 執行工具",
+  };
+}
+
 function resolveDisabledReason(entry: ManagedMcpServerRecord): string | null {
   if (entry.requiresSecretSetup) {
     return "缺少秘密環境變數，請重新設定 MCP 憑證";
@@ -90,7 +107,15 @@ export class ManagedMcpAvailabilityService {
   constructor(private readonly deps: AvailabilityDeps) {}
 
   listForPod(
-    pod: Pick<Pod, "id" | "name" | "goal" | "mcpServerNames" | "pluginIds">,
+    pod: Pick<
+      Pod,
+      | "id"
+      | "name"
+      | "goal"
+      | "mcpServerNames"
+      | "pluginIds"
+      | "agentCanvasMcpEnabled"
+    >,
   ): PodMcpAvailabilityItem[] {
     const selectedNames = new Set(pod.mcpServerNames);
     const registry = this.deps.store.list();
@@ -101,6 +126,7 @@ export class ManagedMcpAvailabilityService {
     const items: PodMcpAvailabilityItem[] = [
       buildGoalAvailabilityItem(pod),
       buildPluginAvailabilityItem(pod),
+      buildAgentCanvasAvailabilityItem(pod),
       ...registry.map((entry) => {
         const runtimeSnapshot = this.deps.runtimeService.getRuntimeSnapshot(
           entry.name,

@@ -15,13 +15,44 @@ describe("REST route manifest", () => {
         scope: route.scope,
         requestSchema: route.requestSchema,
         responseSchema: route.responseSchema,
+        ...(route.requiredAgentScope && {
+          requiredAgentScope: route.requiredAgentScope,
+        }),
       });
       expect(route.handler.name).toBe(route.handlerName);
     }
   });
 
-  it("只保留產品目前需要的 HTTP route", () => {
-    expect(REST_ROUTE_MANIFEST).toEqual([
+  it("保留既有 HTTP route，並新增 AI 存取與版本化 Canvas API", () => {
+    expect(REST_ROUTE_MANIFEST).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        method: "GET",
+        path: "/api/ai-access",
+        handlerName: "handleAgentAccessInfo",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/ai-access/tokens",
+        handlerName: "handleAgentAccessTokenCreate",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/v1/drafts",
+        handlerName: "handleAgentDraftCreate",
+        requiredAgentScope: "canvas:create",
+      }),
+      expect.objectContaining({
+        method: "PATCH",
+        path: "/api/v1/canvases/:id/pods/:podId",
+        handlerName: "handleAgentPodUpdate",
+        requiredAgentScope: "canvas:write",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/v1/canvases/:id/workflows/:podId/runs",
+        handlerName: "handleAgentWorkflowStart",
+        requiredAgentScope: "canvas:execute",
+      }),
       expect.objectContaining({
         method: "POST",
         path: "/api/pod-packs/export",
@@ -62,27 +93,30 @@ describe("REST route manifest", () => {
         path: "/api/internal/integration-reply",
         handlerName: "handleInternalIntegrationReply",
       }),
-    ]);
+    ]));
   });
 
-  it("manifest 不再暴露已移除的 canvas、pod、connection 與 workflow route", () => {
-    const removedPaths = [
-      "/api/canvas/list",
-      "/api/canvas",
-      "/api/canvas/:id/pods",
-      "/api/canvas/:id/pods/:podId",
-      "/api/canvas/:id/connections",
-      "/api/canvas/:id/connections/:connectionId",
-      "/api/canvas/:id/workflows",
-      "/api/canvas/:id/workflows/:podId/chat",
-      "/api/canvas/:id/workflows/:podId/stop",
+  it("不暴露一般破壞性 AI API，只允許停止仍在執行的 Run", () => {
+    const removedRoutes = [
+      ["DELETE", "/api/v1/canvases/:id"],
+      ["DELETE", "/api/v1/canvases/:id/pods/:podId"],
+      ["DELETE", "/api/v1/canvases/:id/connections/:connectionId"],
     ];
 
-    for (const path of removedPaths) {
+    for (const [method, path] of removedRoutes) {
       expect(REST_ROUTE_MANIFEST).not.toEqual(
-        expect.arrayContaining([expect.objectContaining({ path })]),
+        expect.arrayContaining([expect.objectContaining({ method, path })]),
       );
     }
+    expect(REST_ROUTE_MANIFEST).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/api/v1/canvases/:id/runs/:runId",
+          requiredAgentScope: "canvas:execute",
+        }),
+      ]),
+    );
   });
 
   it("manifest 不暴露 runtime handler，並保留 schema 對應欄位", () => {

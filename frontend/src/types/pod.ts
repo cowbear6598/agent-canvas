@@ -115,6 +115,7 @@ export interface Pod {
   hasRepoMemory?: boolean;
   workspacePath?: string;
   mcpServerNames?: string[];
+  agentCanvasMcpEnabled?: boolean;
   pluginIds?: string[];
   repositoryId?: string | null;
   goal?: PodGoal | null;

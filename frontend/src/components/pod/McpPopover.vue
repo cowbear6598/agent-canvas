@@ -32,6 +32,7 @@ const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
 const GOAL_RUNTIME_SERVER_NAME = "agent_canvas_goal";
 const PLUGIN_MCP_SERVER_NAME = "agent_canvas_plugin";
+const AGENT_CANVAS_MCP_SERVER_NAME = "agent_canvas";
 
 /**
  * 取得 pod 目前選定的 MCP server 名稱清單。
@@ -52,7 +53,11 @@ const searchQuery = ref<string>("");
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
 function isSystemLockedServer(server: PodMcpAvailabilityItem): boolean {
-  return Boolean(server.system || server.locked);
+  return server.locked === true;
+}
+
+function isSystemServer(server: PodMcpAvailabilityItem): boolean {
+  return server.system === true;
 }
 
 function isGoalRuntimeServer(server: PodMcpAvailabilityItem): boolean {
@@ -63,9 +68,14 @@ function isPluginMcpServer(server: PodMcpAvailabilityItem): boolean {
   return server.system === true && server.name === PLUGIN_MCP_SERVER_NAME;
 }
 
+function isAgentCanvasMcpServer(server: PodMcpAvailabilityItem): boolean {
+  return server.system === true && server.name === AGENT_CANVAS_MCP_SERVER_NAME;
+}
+
 function resolveServerLabel(server: PodMcpAvailabilityItem): string {
   if (isGoalRuntimeServer(server)) return t("pod.slot.goalMcpLabel");
   if (isPluginMcpServer(server)) return t("pod.slot.pluginMcpLabel");
+  if (isAgentCanvasMcpServer(server)) return t("pod.slot.agentCanvasMcpLabel");
   return server.name;
 }
 
@@ -82,12 +92,12 @@ const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
 
 /** 內建 MCP（系統鎖定，例如 Goal Runtime）：顯示於分隔線下方 */
 const systemMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
-  filteredMcpServers.value.filter((server) => isSystemLockedServer(server)),
+  filteredMcpServers.value.filter((server) => isSystemServer(server)),
 );
 
 /** 使用者建立的 MCP（從 Header 管理面板新增）：顯示於分隔線上方 */
 const userMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
-  filteredMcpServers.value.filter((server) => !isSystemLockedServer(server)),
+  filteredMcpServers.value.filter((server) => !isSystemServer(server)),
 );
 
 /** 兩組皆有資料時才畫 divider，避免單組時出現孤立分隔線 */
@@ -178,6 +188,9 @@ const resolveMcpErrorDescription = (_err: unknown): string =>
   t("pod.slot.mcpToggleFailed");
 
 function isServerChecked(server: PodMcpAvailabilityItem): boolean {
+  if (isAgentCanvasMcpServer(server)) {
+    return podStore.getPodById(props.podId)?.agentCanvasMcpEnabled === true;
+  }
   return (
     isSystemLockedServer(server) || mcpServerNamesSet.value.has(server.name)
   );
@@ -204,6 +217,27 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
   // 取得 canvasId，取不到直接 return（不進入樂觀更新）
   const canvasId = getActiveCanvasIdOrWarn("McpPopover");
   if (!canvasId) return;
+
+  if (isAgentCanvasMcpServer(targetServer)) {
+    const previous =
+      podStore.getPodById(props.podId)?.agentCanvasMcpEnabled === true;
+    podStore.updatePodAgentCanvasMcpEnabled(props.podId, enabled);
+    try {
+      await updatePodMcpServersApi(
+        canvasId,
+        props.podId,
+        podMcpServerNames.value,
+        enabled,
+      );
+    } catch (error) {
+      podStore.updatePodAgentCanvasMcpEnabled(props.podId, previous);
+      logger.warn(
+        "[McpPopover] Agent Canvas MCP update failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    return;
+  }
 
   await runToggle(nextNames, {
     getCurrent: () => [...podMcpServerNames.value],
