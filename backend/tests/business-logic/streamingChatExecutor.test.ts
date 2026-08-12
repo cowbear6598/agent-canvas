@@ -155,6 +155,16 @@ function makeCodexDisconnectedEvent(): NormalizedEvent {
   };
 }
 
+function makeCodexCapacityEvent(): NormalizedEvent {
+  return {
+    type: "error",
+    message: "Codex 選用的模型目前滿載，這次請求未完成。",
+    fatal: true,
+    recovery: "recoverable",
+    code: "MODEL_CAPACITY_EXHAUSTED",
+  };
+}
+
 function readOnlyScopedGoalRuntimeSnapshot(
   runContext: RunContext,
   podId: string,
@@ -1544,6 +1554,178 @@ describe("executeStreamingChat", () => {
         pod.id,
       );
       expect(snapshot?.state.status).toBe("completed");
+    });
+
+    it("Codex 模型滿載時應延遲後沿用既有 session 重試並完成 Goal", async () => {
+      vi.useFakeTimers();
+      try {
+        const goal = {
+          todos: [{ id: "todo-1", text: "容量恢復後完成" }],
+        };
+        const pod = insertCodexPod({ goal });
+        ensureGoalRuntime(pod, defaultRunContext);
+        mockRunSessionPersistence("codex-instance-capacity-retry");
+
+        const chatMock = vi
+          .fn()
+          .mockImplementationOnce(() =>
+            makeEventStream([
+              {
+                type: "session_started",
+                sessionId: "codex-thread-capacity-retry",
+              },
+              makeCodexCapacityEvent(),
+            ]),
+          )
+          .mockImplementationOnce(() =>
+            makeEventStream([
+              {
+                type: "tool_call_result",
+                toolUseId: "goal-tool-capacity-retry",
+                toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+                output: JSON.stringify({
+                  status: "completed",
+                  activeTodoId: null,
+                  activeTodoText: null,
+                  nextTodoId: null,
+                  nextTodoText: null,
+                  completedTodoIds: ["todo-1"],
+                  blockedReason: null,
+                  handoffSummary: "容量恢復後完成",
+                  completedCount: 1,
+                  totalCount: 1,
+                }),
+              },
+              { type: "turn_complete" },
+            ]),
+          );
+        mockCodexProviderChat(chatMock);
+
+        const onComplete = vi.fn();
+        const onError = vi.fn();
+        const execution = executeStreamingChat(
+          {
+            canvasId,
+            podId: pod.id,
+            message,
+            abortable: false,
+            strategy: makeStrategy(),
+          },
+          { onComplete, onError },
+        );
+
+        await vi.advanceTimersByTimeAsync(2000);
+        await execution;
+
+        expect(chatMock).toHaveBeenCalledTimes(2);
+        expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
+          resumeSessionId: "codex-thread-capacity-retry",
+          message: expect.stringContaining("Codex 選用的模型滿載"),
+        });
+        expect(chatMock.mock.calls[1]?.[0]?.message).not.toContain(
+          "Codex 內部連線中斷",
+        );
+        expect(onError).not.toHaveBeenCalled();
+        expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("Codex 模型滿載且尚未取得 session 時應用原始訊息重試", async () => {
+      vi.useFakeTimers();
+      try {
+        const pod = insertCodexPod();
+        const chatMock = vi
+          .fn()
+          .mockImplementationOnce(() =>
+            makeEventStream([makeCodexCapacityEvent()]),
+          )
+          .mockImplementationOnce(() =>
+            makeEventStream([
+              { type: "text", content: "重試成功" },
+              { type: "turn_complete" },
+            ]),
+          );
+        mockCodexProviderChat(chatMock);
+
+        const onComplete = vi.fn();
+        const execution = executeStreamingChat(
+          {
+            canvasId,
+            podId: pod.id,
+            message,
+            abortable: false,
+            strategy: makeStrategy(),
+          },
+          { onComplete },
+        );
+
+        await vi.advanceTimersByTimeAsync(2000);
+        await execution;
+
+        expect(chatMock).toHaveBeenCalledTimes(2);
+        expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
+          resumeSessionId: null,
+          message,
+        });
+        expect(runStore.addRunMessage).not.toHaveBeenCalled();
+        expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("Codex 模型持續滿載超過重試上限時應停止且不觸發完成", async () => {
+      vi.useFakeTimers();
+      try {
+        const pod = insertCodexPod();
+        mockRunSessionPersistence("codex-instance-capacity-exhausted");
+        const chatMock = vi
+          .fn()
+          .mockImplementationOnce(() =>
+            makeEventStream([
+              {
+                type: "session_started",
+                sessionId: "codex-thread-capacity-exhausted",
+              },
+              makeCodexCapacityEvent(),
+            ]),
+          )
+          .mockImplementation(() =>
+            makeEventStream([makeCodexCapacityEvent()]),
+          );
+        mockCodexProviderChat(chatMock);
+
+        const onComplete = vi.fn();
+        const onError = vi.fn();
+        const execution = executeStreamingChat(
+          {
+            canvasId,
+            podId: pod.id,
+            message,
+            abortable: false,
+            strategy: makeStrategy(),
+          },
+          { onComplete, onError },
+        );
+
+        await vi.advanceTimersByTimeAsync(7000);
+        await execution;
+
+        expect(chatMock).toHaveBeenCalledTimes(3);
+        expect(onError).toHaveBeenCalledWith(
+          canvasId,
+          pod.id,
+          expect.objectContaining({
+            message:
+              "Codex 選用的模型目前持續滿載，已停止本次執行，請稍後再試或切換模型",
+          }),
+        );
+        expect(onComplete).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("沒有 Goal 的 Codex Pod transport 中斷時仍應 resume 後才完成", async () => {

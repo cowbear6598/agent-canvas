@@ -313,6 +313,7 @@ async function resolveExecutionDependencies(
  */
 interface ChatTurnOutcome {
   result: StreamingChatExecutorResult;
+  providerErrorCode: string | null;
   finished:
     | "completed"
     | "aborted_or_errored"
@@ -327,14 +328,21 @@ const CODEX_TRANSPORT_RECOVERY_MESSAGE =
   "剛剛 Codex 內部連線中斷。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。";
 const CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE =
   "Codex 連線恢復失敗，已停止本次執行";
+const CODEX_CAPACITY_RECOVERY_MESSAGE =
+  "剛剛 Codex 選用的模型滿載。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。";
+const CODEX_CAPACITY_RECOVERY_FAILED_MESSAGE =
+  "Codex 選用的模型目前持續滿載，已停止本次執行，請稍後再試或切換模型";
+const CODEX_CAPACITY_RETRY_DELAYS_MS = [2000, 5000] as const;
 
-function shouldRetryCodexTransport(
+function hasRecoverableCodexError(
   pod: Pod,
   turnOutcome: ChatTurnOutcome,
+  code: string,
 ): boolean {
   return (
     pod.provider === "codex" &&
-    turnOutcome.finished === "completed_with_recoverable_provider_error"
+    turnOutcome.finished === "completed_with_recoverable_provider_error" &&
+    turnOutcome.providerErrorCode === code
   );
 }
 
@@ -484,7 +492,11 @@ async function executeChatTurn(
 
     if (result.aborted) {
       const abortResult = await handleStreamAbort(lifecycle, callbacks);
-      return { result: abortResult, finished: "aborted_or_errored" };
+      return {
+        result: abortResult,
+        providerErrorCode: null,
+        finished: "aborted_or_errored",
+      };
     }
 
     lifecycle.finalizeAfterStream();
@@ -496,6 +508,7 @@ async function executeChatTurn(
         hasContent: lifecycle.hasAssistantContent(),
         aborted: false,
       },
+      providerErrorCode: lifecycle.lastFatalProviderErrorCode,
       finished:
         lifecycle.lastFatalProviderErrorRecovery === "recoverable"
           ? "completed_with_recoverable_provider_error"
@@ -510,7 +523,11 @@ async function executeChatTurn(
       abortable,
       callbacks,
     );
-    return { result: handled, finished: "aborted_or_errored" };
+    return {
+      result: handled,
+      providerErrorCode: null,
+      finished: "aborted_or_errored",
+    };
   }
 }
 
@@ -519,42 +536,97 @@ interface TurnFlowResult {
   stopped: boolean;
 }
 
-async function recoverCodexTransport(
+function waitForCodexCapacityRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+async function stopAfterCodexRecoveryFailure(
   options: StreamingChatExecutorOptions,
-  pod: Pod,
-  turnOutcome: ChatTurnOutcome,
-  callbacks?: StreamingChatExecutorCallbacks,
+  callbacks: StreamingChatExecutorCallbacks | undefined,
+  outcome: ChatTurnOutcome,
+  message: string,
 ): Promise<TurnFlowResult> {
-  if (!shouldRetryCodexTransport(pod, turnOutcome)) {
-    return { outcome: turnOutcome, stopped: false };
-  }
-
-  await options.strategy.addUserMessage(
-    options.podId,
-    CODEX_TRANSPORT_RECOVERY_MESSAGE,
-  );
-  const recoveryOutcome = await executeChatTurn(
-    options,
-    pod,
-    CODEX_TRANSPORT_RECOVERY_MESSAGE,
-    callbacks,
-  );
-  if (recoveryOutcome.finished === "aborted_or_errored") {
-    return { outcome: recoveryOutcome, stopped: true };
-  }
-
-  if (!shouldRetryCodexTransport(pod, recoveryOutcome)) {
-    return { outcome: recoveryOutcome, stopped: false };
-  }
-
   if (callbacks?.onError) {
     await callbacks.onError(
       options.canvasId,
       options.podId,
-      new Error(CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE),
+      new Error(message),
     );
   }
-  return { outcome: recoveryOutcome, stopped: true };
+  return { outcome, stopped: true };
+}
+
+async function recoverCodexProviderErrors(
+  options: StreamingChatExecutorOptions,
+  pod: Pod,
+  initialOutcome: ChatTurnOutcome,
+  callbacks?: StreamingChatExecutorCallbacks,
+): Promise<TurnFlowResult> {
+  let turnOutcome = initialOutcome;
+  let transportRetryCount = 0;
+  let capacityRetryCount = 0;
+
+  while (true) {
+    let retryMessage: StreamingChatExecutorOptions["message"];
+
+    if (
+      hasRecoverableCodexError(pod, turnOutcome, "STREAM_DISCONNECTED")
+    ) {
+      if (transportRetryCount >= 1) {
+        return stopAfterCodexRecoveryFailure(
+          options,
+          callbacks,
+          turnOutcome,
+          CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE,
+        );
+      }
+
+      await options.strategy.addUserMessage(
+        options.podId,
+        CODEX_TRANSPORT_RECOVERY_MESSAGE,
+      );
+      retryMessage = CODEX_TRANSPORT_RECOVERY_MESSAGE;
+      transportRetryCount++;
+    } else if (
+      hasRecoverableCodexError(
+        pod,
+        turnOutcome,
+        "MODEL_CAPACITY_EXHAUSTED",
+      )
+    ) {
+      const retryDelayMs = CODEX_CAPACITY_RETRY_DELAYS_MS[capacityRetryCount];
+      if (retryDelayMs === undefined) {
+        return stopAfterCodexRecoveryFailure(
+          options,
+          callbacks,
+          turnOutcome,
+          CODEX_CAPACITY_RECOVERY_FAILED_MESSAGE,
+        );
+      }
+
+      await waitForCodexCapacityRetry(retryDelayMs);
+      const hasSession = Boolean(options.strategy.getSessionId(options.podId));
+      retryMessage = hasSession
+        ? CODEX_CAPACITY_RECOVERY_MESSAGE
+        : options.message;
+      if (hasSession) {
+        await options.strategy.addUserMessage(options.podId, retryMessage);
+      }
+      capacityRetryCount++;
+    } else {
+      return { outcome: turnOutcome, stopped: false };
+    }
+
+    turnOutcome = await executeChatTurn(
+      options,
+      pod,
+      retryMessage,
+      callbacks,
+    );
+    if (turnOutcome.finished === "aborted_or_errored") {
+      return { outcome: turnOutcome, stopped: true };
+    }
+  }
 }
 
 async function stopForUnrecoverablePendingGoal(
@@ -644,7 +716,7 @@ async function runGoalCompletionGate(
  *
  * 流程：
  *   1. 第一輪 turn 帶 caller 傳入的 message
- *   2. Codex transport 中斷時，沿用 session 自動恢復一次
+ *   2. Codex transport 中斷或模型滿載時，依錯誤碼執行對應恢復策略
  *   3. 進入 Goal 完成 gate loop：
  *      - proceed → 跳出，呼叫 callbacks.onComplete
  *      - retry   → 透過 strategy.addUserMessage 注入 nudge，再跑一輪
@@ -698,14 +770,14 @@ export async function executeStreamingChat(
       return turnOutcome.result;
     }
 
-    const transportResult = await recoverCodexTransport(
+    const providerRecoveryResult = await recoverCodexProviderErrors(
       effectiveOptions,
       podResult.pod,
       turnOutcome,
       callbacks,
     );
-    turnOutcome = transportResult.outcome;
-    if (transportResult.stopped) return turnOutcome.result;
+    turnOutcome = providerRecoveryResult.outcome;
+    if (providerRecoveryResult.stopped) return turnOutcome.result;
 
     const goalGateResult = await runGoalCompletionGate(
       effectiveOptions,

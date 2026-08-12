@@ -280,6 +280,28 @@ describe("CodexNormalizer - normalize()", () => {
     });
   });
 
+  it("模型暫時滿載應映射為 fatal=true 且 recoverable 的獨立錯誤", () => {
+    const rawMessage =
+      "Selected model is at capacity. Please try a different model.";
+    const line = toLine({ type: "error", message: rawMessage });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e.message).toBe("Codex 選用的模型目前滿載，這次請求未完成。");
+    expect(e.fatal).toBe(true);
+    expect(e.recovery).toBe("recoverable");
+    expect(e.code).toBe("MODEL_CAPACITY_EXHAUSTED");
+    expect(e.systemMessage?.metadata).toMatchObject({
+      provider: "codex",
+      code: "MODEL_CAPACITY_EXHAUSTED",
+      severity: "fatal",
+      rawContent: rawMessage,
+      recovery: "recoverable",
+    });
+  });
+
   it("error envelope 即使含 transport 關鍵字也應維持 unrecoverable", () => {
     const line = toLine({
       type: "error",

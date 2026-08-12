@@ -288,6 +288,7 @@ export class StreamingLifecycleCoordinator {
   private capturedSessionIdValue: string | undefined;
   private lastFatalProviderErrorRecoveryValue: ProviderErrorRecovery | null =
     null;
+  private lastFatalProviderErrorCodeValue: string | null = null;
 
   constructor(options: StreamingLifecycleCoordinatorOptions) {
     const { canvasId, podId, messageId, strategy, throttleMs } = options;
@@ -354,6 +355,10 @@ export class StreamingLifecycleCoordinator {
     return this.lastFatalProviderErrorRecoveryValue;
   }
 
+  get lastFatalProviderErrorCode(): string | null {
+    return this.lastFatalProviderErrorCodeValue;
+  }
+
   get providerName(): ProviderName {
     return this.context.providerName;
   }
@@ -377,6 +382,8 @@ export class StreamingLifecycleCoordinator {
       if (result.aborted) {
         this.lastFatalProviderErrorRecoveryValue =
           resolveProviderErrorRecovery(ev);
+        this.lastFatalProviderErrorCodeValue =
+          ev.code ?? ev.systemMessage?.metadata.code ?? null;
       }
       return result;
     }

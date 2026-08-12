@@ -53,6 +53,8 @@ const CODEX_TRANSPORT_FALLBACK_RE =
   /^Falling back from WebSockets to HTTPS transport\.(?:\s|$)/;
 const CODEX_TERMINAL_TRANSPORT_DISCONNECT_RE =
   /^stream disconnected before completion:\s*websocket closed by server before response\.completed(?:\s|$)/;
+const CODEX_MODEL_CAPACITY_RE =
+  /\b(?:selected|requested) model is at capacity\b/i;
 
 function isCodexReconnectProgressMessage(message: string): boolean {
   return CODEX_RECONNECT_PROGRESS_RE.test(message.trim());
@@ -64,6 +66,10 @@ function isCodexTransportFallbackMessage(message: string): boolean {
 
 function isCodexTerminalTransportDisconnectMessage(message: string): boolean {
   return CODEX_TERMINAL_TRANSPORT_DISCONNECT_RE.test(message.trim());
+}
+
+function isCodexModelCapacityMessage(message: string): boolean {
+  return CODEX_MODEL_CAPACITY_RE.test(message.trim());
 }
 
 interface CodexItemError {
@@ -364,6 +370,16 @@ function normalizeStreamError(event: CodexStreamErrorEvent): NormalizedEvent {
       content: rawContent,
       fatal: true,
       code: "STREAM_DISCONNECTED",
+      rawContent,
+      recovery: "recoverable",
+    });
+  }
+
+  if (isCodexModelCapacityMessage(rawContent)) {
+    return buildCodexSystemError({
+      content: "Codex 選用的模型目前滿載，這次請求未完成。",
+      fatal: true,
+      code: "MODEL_CAPACITY_EXHAUSTED",
       rawContent,
       recovery: "recoverable",
     });
