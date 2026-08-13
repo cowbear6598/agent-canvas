@@ -175,13 +175,15 @@ function readOnlyScopedGoalRuntimeSnapshot(
   const scopedPrefix = `${podId}.`;
   const scopedPaths = fs
     .readdirSync(runDir)
-    .filter((file) => file.startsWith(scopedPrefix) && file.endsWith(".json"))
-    .map((file) => path.join(runDir, file))
-    .sort(
-      (left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs,
-    );
+    .filter(
+      (file) =>
+        file !== path.basename(basePath) &&
+        file.startsWith(scopedPrefix) &&
+        file.endsWith(".json"),
+    )
+    .map((file) => path.join(runDir, file));
 
-  expect(scopedPaths.length).toBeGreaterThan(0);
+  expect(scopedPaths).toHaveLength(1);
   return readGoalRuntimeSnapshot(scopedPaths[0]!);
 }
 
