@@ -423,7 +423,7 @@ const runMessagePayloadSchema = z
     canvasId: z.string().optional(),
     podId: z.string(),
     messageId: z.string(),
-    content: z.string(),
+    content: z.string().optional(),
     delta: z.string().optional(),
     isPartial: z.boolean(),
     role: z.string().optional(),

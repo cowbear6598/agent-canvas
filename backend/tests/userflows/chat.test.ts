@@ -143,7 +143,7 @@ describe("Chat 管理", () => {
             payload.runId === runId &&
             payload.podId === pod.id &&
             payload.role === "assistant" &&
-            payload.content === "Test response" &&
+            payload.delta === "Test response" &&
             payload.isPartial === true,
         },
       );

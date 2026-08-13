@@ -140,6 +140,9 @@ async function startServer(): Promise<void> {
       return new Response("Not Found", { status: 404 });
     },
     websocket: {
+      // 避免慢速 client 讓串流訊息在記憶體中無界累積。
+      backpressureLimit: 1024 * 1024,
+      closeOnBackpressureLimit: true,
       open(webSocket: ServerWebSocket<ConnectionSocketData>) {
         const connectionId = connectionManager.add(webSocket);
         webSocket.data = { ...webSocket.data, connectionId };
@@ -203,6 +206,9 @@ async function startServer(): Promise<void> {
 
         socketService.cleanupSocket(connectionId);
         canvasStore.removeSocket(connectionId);
+      },
+      drain(webSocket: ServerWebSocket<ConnectionSocketData>) {
+        socketService.handleDrain(webSocket.data.connectionId);
       },
     },
   });

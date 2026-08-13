@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const CANVAS_ID = "canvas-run-handlers";
 const CONNECTION_ID = "conn-run-handlers";
@@ -30,7 +30,12 @@ import {
 } from "../../src/handlers/runHandlers.js";
 import { runStore } from "../../src/services/runStore.js";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
+import { podStore } from "../../src/services/podStore.js";
 import { emitSuccess } from "../../src/utils/websocketResponse.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("handleRunLoadPodMessages", () => {
   beforeEach(() => {
@@ -265,6 +270,37 @@ describe("handleRunLoadHistory", () => {
         ],
       }),
     );
+  });
+
+  it("應批次查詢 instances 與 Pod 名稱，不逐筆 hydration Pod", async () => {
+    const firstRun = runStore.createRun(CANVAS_ID, "source-pod-1", "trigger");
+    const secondRun = runStore.createRun(CANVAS_ID, "source-pod-2", "trigger");
+    runStore.createPodInstance(firstRun.id, "pod-1");
+    runStore.createPodInstance(secondRun.id, "pod-2");
+
+    const instancesSpy = vi.spyOn(runStore, "getPodInstancesByCanvasId");
+    const legacyInstancesSpy = vi.spyOn(runStore, "getPodInstancesByRunId");
+    const namesSpy = vi.spyOn(podStore, "getNamesByIds");
+    const podHydrationSpy = vi.spyOn(podStore, "getById");
+
+    await handleRunLoadHistory(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        canvasId: CANVAS_ID,
+      },
+      REQUEST_ID,
+    );
+
+    expect(instancesSpy).toHaveBeenCalledTimes(1);
+    expect(instancesSpy).toHaveBeenCalledWith(CANVAS_ID);
+    expect(namesSpy).toHaveBeenCalledTimes(1);
+    expect(namesSpy).toHaveBeenCalledWith(
+      CANVAS_ID,
+      expect.arrayContaining(["source-pod-1", "source-pod-2", "pod-1", "pod-2"]),
+    );
+    expect(legacyInstancesSpy).not.toHaveBeenCalled();
+    expect(podHydrationSpy).not.toHaveBeenCalled();
   });
 });
 

@@ -61,7 +61,7 @@ export const handleRunMessage = (payload: RunMessagePayload): void => {
     payload.runId,
     payload.podId,
     payload.messageId,
-    payload.content,
+    payload.content ?? "",
     payload.isPartial,
     payload.role ?? 'assistant',
     payload.metadata,

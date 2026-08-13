@@ -92,23 +92,33 @@ export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
     requestId: string,
   ): Promise<void> => {
     const runs = runStore.getRunsByCanvasId(canvasId);
+    const instances = runStore.getPodInstancesByCanvasId(canvasId);
+    const instancesByRunId = new Map<string, typeof instances>();
+
+    for (const instance of instances) {
+      const runInstances = instancesByRunId.get(instance.runId) ?? [];
+      runInstances.push(instance);
+      instancesByRunId.set(instance.runId, runInstances);
+    }
+
+    const podIds = new Set(runs.map((run) => run.sourcePodId));
+    for (const instance of instances) podIds.add(instance.podId);
+    const podNamesById = podStore.getNamesByIds(canvasId, [...podIds]);
 
     const runsWithInstances = runs.map((run) => {
-      const instances = runStore.getPodInstancesByRunId(run.id);
-      const sourcePod = podStore.getById(canvasId, run.sourcePodId);
-      const sourcePodName = sourcePod?.name ?? run.sourcePodId;
+      const runInstances = instancesByRunId.get(run.id) ?? [];
+      const sourcePodName = podNamesById.get(run.sourcePodId) ?? run.sourcePodId;
 
-      const podInstances = instances.map((instance) => {
+      const podInstances = runInstances.map((instance) => {
         const {
           runRepoPath: _runRepoPath,
           workspacePath: _workspacePath,
           sessionId: _sessionId,
           ...instanceData
         } = instance;
-        const pod = podStore.getById(canvasId, instance.podId);
         return {
           ...instanceData,
-          podName: pod?.name ?? instance.podId,
+          podName: podNamesById.get(instance.podId) ?? instance.podId,
         };
       });
 

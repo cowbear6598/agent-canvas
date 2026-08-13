@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useWindowSize } from "@vueuse/core";
 import { useI18n } from "vue-i18n";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useDeleteSelection } from "@/composables/canvas";
@@ -28,7 +29,16 @@ import PodContextMenu from "./PodContextMenu.vue";
 import CanvasContextActionToolbar from "./CanvasContextActionToolbar.vue";
 import PodPackImportDialog from "./PodPackImportDialog.vue";
 import { usePodPack } from "@/composables/canvas/usePodPack";
-import { POD_WIDTH, POD_HEIGHT } from "@/lib/constants";
+import {
+  NOTE_HEIGHT,
+  NOTE_WIDTH,
+  POD_HEIGHT,
+  POD_WIDTH,
+} from "@/lib/constants";
+import {
+  getCanvasViewportBounds,
+  isCanvasRectVisible,
+} from "@/lib/canvasViewport";
 
 const {
   podStore,
@@ -204,31 +214,40 @@ const {
  *   - v-if 真正移除 DOM，可節省記憶體與渲染成本；v-show 僅隱藏，無法達到此效果。
  */
 const VIEWPORT_BUFFER_RATIO = 0.5;
+const { width: screenWidth, height: screenHeight } = useWindowSize();
 
-const visiblePods = computed(() => {
+const viewportBounds = computed(() => {
   const { offset, zoom } = viewportStore;
-
-  const screenW = window.innerWidth;
-  const screenH = window.innerHeight;
-  const bufferX = screenW * VIEWPORT_BUFFER_RATIO;
-  const bufferY = screenH * VIEWPORT_BUFFER_RATIO;
-  const canvasLeft = (-offset.x - bufferX) / zoom;
-  const canvasTop = (-offset.y - bufferY) / zoom;
-  const canvasRight = (-offset.x + screenW + bufferX) / zoom;
-  const canvasBottom = (-offset.y + screenH + bufferY) / zoom;
-
-  return podStore.pods.filter((pod) => {
-    const podRight = pod.x + POD_WIDTH;
-    const podBottom = pod.y + POD_HEIGHT;
-
-    return (
-      podRight >= canvasLeft &&
-      pod.x <= canvasRight &&
-      podBottom >= canvasTop &&
-      pod.y <= canvasBottom
-    );
+  return getCanvasViewportBounds({
+    offset,
+    zoom,
+    screenWidth: screenWidth.value,
+    screenHeight: screenHeight.value,
+    bufferRatio: VIEWPORT_BUFFER_RATIO,
   });
 });
+
+const visiblePods = computed(() =>
+  podStore.pods.filter((pod) =>
+    isCanvasRectVisible(viewportBounds.value, {
+      x: pod.x,
+      y: pod.y,
+      width: POD_WIDTH,
+      height: POD_HEIGHT,
+    }),
+  ),
+);
+
+const visibleRepositoryNotes = computed(() =>
+  repositoryStore.getUnboundNotes.filter((note) =>
+    isCanvasRectVisible(viewportBounds.value, {
+      x: note.x,
+      y: note.y,
+      width: NOTE_WIDTH,
+      height: NOTE_HEIGHT,
+    }),
+  ),
+);
 </script>
 
 <template>
@@ -237,7 +256,10 @@ const visiblePods = computed(() => {
     @contextmenu="handleContextMenu"
     @click="handleCanvasClick"
   >
-    <ConnectionLayer @connection-context-menu="handleConnectionContextMenu" />
+    <ConnectionLayer
+      :viewport-bounds="viewportBounds"
+      @connection-context-menu="handleConnectionContextMenu"
+    />
 
     <SelectionBox />
 
@@ -255,7 +277,7 @@ const visiblePods = computed(() => {
     />
 
     <GenericNote
-      v-for="note in repositoryStore.getUnboundNotes"
+      v-for="note in visibleRepositoryNotes"
       :key="note.id"
       :note="note"
       :branch-name="getRepositoryBranchName(note.repositoryId as string)"

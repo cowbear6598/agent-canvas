@@ -175,6 +175,7 @@ function buildStatements(db: Database): {
   runPodInstance: {
     insert: ReturnType<Database["prepare"]>;
     selectByRunId: ReturnType<Database["prepare"]>;
+    selectByCanvasId: ReturnType<Database["prepare"]>;
     selectByRunIdAndPodId: ReturnType<Database["prepare"]>;
     updateStatus: ReturnType<Database["prepare"]>;
     updateLastResponseSummary: ReturnType<Database["prepare"]>;
@@ -804,6 +805,12 @@ function buildStatements(db: Database): {
       ),
       selectByRunId: db.prepare(
         "SELECT * FROM run_pod_instances WHERE run_id = ?",
+      ),
+      selectByCanvasId: db.prepare(
+        `SELECT run_pod_instances.*
+        FROM run_pod_instances
+        INNER JOIN workflow_runs ON workflow_runs.id = run_pod_instances.run_id
+        WHERE workflow_runs.canvas_id = ?`,
       ),
       selectByRunIdAndPodId: db.prepare(
         "SELECT * FROM run_pod_instances WHERE run_id = $runId AND pod_id = $podId",

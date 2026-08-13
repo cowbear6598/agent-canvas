@@ -376,7 +376,7 @@ describe("executeStreamingChat", () => {
         expect.objectContaining({
           canvasId,
           podId: pod.id,
-          content: "Hello",
+          delta: "Hello",
           isPartial: true,
           role: "assistant",
         }),
@@ -386,7 +386,7 @@ describe("executeStreamingChat", () => {
         canvasId,
         WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
-          content: "Hello World",
+          delta: " World",
           isPartial: true,
         }),
       );
@@ -2565,7 +2565,7 @@ describe("executeStreamingChat", () => {
         canvasId,
         WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
-          content: expect.stringContaining("思考中..."),
+          delta: expect.stringContaining("思考中..."),
         }),
       );
     });
@@ -2803,7 +2803,7 @@ describe("executeStreamingChat", () => {
           runId,
           canvasId,
           podId: pod.id,
-          content: "Run 文字",
+          delta: "Run 文字",
         }),
       );
     });

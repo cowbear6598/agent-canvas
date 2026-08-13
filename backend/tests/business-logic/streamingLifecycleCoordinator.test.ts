@@ -23,8 +23,8 @@ function makeStrategy(
 ): ChatExecutionStrategy {
   return {
     createEmitStrategy: vi.fn(() => ({
-      emitText: ({ content }: { content: string }) => {
-        order.push(`emit:text:${content}`);
+      emitText: ({ delta }: { delta: string }) => {
+        order.push(`emit:text:${delta}`);
       },
       emitToolUse: ({ toolName }: { toolName: string }) => {
         order.push(`emit:tool_use:${toolName}`);

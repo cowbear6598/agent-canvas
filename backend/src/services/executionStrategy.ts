@@ -19,7 +19,6 @@ export interface ChatEmitStrategy {
     canvasId: string;
     podId: string;
     messageId: string;
-    content: string;
     delta: string;
   }): void;
   emitToolUse(params: {

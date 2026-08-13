@@ -65,7 +65,7 @@ export interface RunMessagePayload {
   canvasId: string;
   podId: string;
   messageId: string;
-  content: string;
+  content?: string;
   delta?: string;
   isPartial: boolean;
   role: MessageRole;

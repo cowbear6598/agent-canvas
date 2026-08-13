@@ -19,6 +19,7 @@ class SocketService {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimeouts: Map<string, ReturnType<typeof setTimeout>> =
     new Map();
+  private backpressuredConnectionIds = new Set<string>();
   private initialized = false;
 
   private readonly HEARTBEAT_INTERVAL = 15000;
@@ -44,11 +45,11 @@ class SocketService {
     event: string,
     payload: unknown,
   ): void {
-    const resolvedPayload = this.resolvePayload(event, payload);
+    const serialized = this.serializeEvent(event, payload);
     const connections = connectionManager.getAll();
     for (const connection of connections) {
       if (connection.id === excludeConnectionId) continue;
-      this.emitResolvedPayloadToConnection(connection.id, event, resolvedPayload);
+      this.sendSerializedToConnection(connection.id, serialized);
     }
   }
 
@@ -57,35 +58,42 @@ class SocketService {
     event: string,
     payload: unknown,
   ): void {
-    this.emitResolvedPayloadToConnection(
+    this.sendSerializedToConnection(
       connectionId,
-      event,
-      this.resolvePayload(event, payload),
+      this.serializeEvent(event, payload),
     );
   }
 
-  private emitResolvedPayloadToConnection(
-    connectionId: string,
-    event: string,
-    payload: unknown,
-  ): void {
-    const connection = connectionManager.get(connectionId);
-    if (!connection) {
-      return;
-    }
-
+  private serializeEvent(event: string, payload: unknown): string {
     const response: WebSocketResponse = {
       type: event,
       requestId: "",
       success: true,
-      payload,
+      payload: this.resolvePayload(event, payload),
     };
+    return serialize(response);
+  }
 
-    const serialized = serialize(response);
-    if (connection.webSocket.readyState !== WS_READY_STATE_OPEN) {
+  private sendSerializedToConnection(
+    connectionId: string,
+    serialized: string,
+  ): void {
+    const connection = connectionManager.get(connectionId);
+    if (
+      !connection ||
+      connection.webSocket.readyState !== WS_READY_STATE_OPEN
+    ) {
       return;
     }
-    connection.webSocket.send(serialized);
+    const sendStatus = connection.webSocket.send(serialized);
+    if (sendStatus === -1 && !this.backpressuredConnectionIds.has(connectionId)) {
+      this.backpressuredConnectionIds.add(connectionId);
+      logger.warn(
+        "WebSocket",
+        "Warn",
+        `連線 ${connectionId} 發生傳送壅塞，等待 drain`,
+      );
+    }
   }
 
   emitConnectionReady(
@@ -134,11 +142,11 @@ class SocketService {
   ): void {
     const roomName = `${CANVAS_ROOM_PREFIX}${canvasId}`;
     const members = roomManager.getMembers(roomName);
-    const resolvedPayload = this.resolvePayload(event, payload);
+    const serialized = this.serializeEvent(event, payload);
 
     for (const connectionId of members) {
       if (connectionId === excludeConnectionId) continue;
-      this.emitResolvedPayloadToConnection(connectionId, event, resolvedPayload);
+      this.sendSerializedToConnection(connectionId, serialized);
     }
   }
 
@@ -146,6 +154,11 @@ class SocketService {
     roomManager.leaveAll(connectionId);
     connectionManager.remove(connectionId);
     this.clearHeartbeatTimeout(connectionId);
+    this.backpressuredConnectionIds.delete(connectionId);
+  }
+
+  handleDrain(connectionId: string): void {
+    this.backpressuredConnectionIds.delete(connectionId);
   }
 
   private clearHeartbeatTimeout(connectionId: string): void {

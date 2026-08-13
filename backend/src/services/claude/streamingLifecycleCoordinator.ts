@@ -102,7 +102,6 @@ function handleTextEvent(
     canvasId,
     podId,
     messageId,
-    content: streamState.accumulatedContent,
     delta: event.content,
   });
 

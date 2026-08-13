@@ -591,6 +591,13 @@ class RunStore {
     return rows.map(rowToRunPodInstance);
   }
 
+  getPodInstancesByCanvasId(canvasId: string): RunPodInstance[] {
+    const rows = this.stmts.runPodInstance.selectByCanvasId.all(
+      canvasId,
+    ) as RunPodInstanceRow[];
+    return rows.map(rowToRunPodInstance);
+  }
+
   updatePodInstanceStatus(
     instanceId: string,
     status: RunPodInstanceStatus,

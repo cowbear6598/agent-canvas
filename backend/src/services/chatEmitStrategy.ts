@@ -9,7 +9,7 @@ import type { SystemMessageMetadata } from "../types/message.js";
  */
 export function createChatEmitStrategy(runId: string): ChatEmitStrategy {
   return {
-    emitText({ canvasId, podId, messageId, content, delta }): void {
+    emitText({ canvasId, podId, messageId, delta }): void {
       socketService.emitToCanvas(
         canvasId,
         WebSocketResponseEvents.RUN_MESSAGE,
@@ -18,7 +18,6 @@ export function createChatEmitStrategy(runId: string): ChatEmitStrategy {
           canvasId,
           podId,
           messageId,
-          content,
           delta,
           isPartial: true,
           role: "assistant",

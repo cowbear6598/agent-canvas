@@ -154,6 +154,15 @@ class PodStore {
     return result;
   }
 
+  getNamesByIds(canvasId: string, podIds: string[]): Map<string, string> {
+    const uniquePodIds = [...new Set(podIds)];
+    const rows = podRepository.selectNamesByCanvasIdAndIds(
+      canvasId,
+      uniquePodIds,
+    );
+    return new Map(rows.map((row) => [row.id, row.name]));
+  }
+
   getByIdGlobal(podId: string): { canvasId: string; pod: Pod } | undefined {
     const row = podRepository.selectRowById(podId);
     if (!row) return undefined;

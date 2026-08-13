@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import { connectionManager } from "../../src/services/connectionManager.js";
 import { socketService } from "../../src/services/socketService.js";
+import { logger } from "../../src/utils/logger.js";
 
 const heartbeatPayload = { timestamp: 1 };
 
@@ -31,6 +32,11 @@ function removeAllConnections(): void {
 }
 
 describe("SocketService", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    removeAllConnections();
+  });
+
   describe("emitToAllExcept", () => {
     let wsA: ReturnType<typeof createMockWs>;
     let wsB: ReturnType<typeof createMockWs>;
@@ -137,6 +143,31 @@ describe("SocketService", () => {
       expect(() => socketService.emitToAll("test:event", {})).toThrow(
         "未註冊的 WebSocket server event",
       );
+    });
+
+    it("連線發生背壓時只記錄一次，drain 後可再次記錄", () => {
+      const connectionId = connectionManager.getAll()[0]?.id;
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      (wsA.send as ReturnType<typeof vi.fn>).mockReturnValue(-1);
+
+      socketService.emitToAll(
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
+      socketService.emitToAll(
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      socketService.handleDrain(connectionId!);
+      socketService.emitToAll(
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
+
+      expect(warnSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

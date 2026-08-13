@@ -29,6 +29,11 @@ export interface PodHydrationMaps {
   bindingsMap: Map<string, IntegrationBinding[]>;
 }
 
+interface PodNameRow {
+  id: string;
+  name: string;
+}
+
 export class PodRepository {
   private readonly stmtCache = new Map<
     string,
@@ -265,6 +270,22 @@ export class PodRepository {
     });
 
     return stmt.all(canvasId, ...podIds) as PodRow[];
+  }
+
+  selectNamesByCanvasIdAndIds(
+    canvasId: string,
+    podIds: string[],
+  ): PodNameRow[] {
+    if (podIds.length === 0) return [];
+
+    const stmt = this.getCachedStmt(`podNames:byIds:${podIds.length}`, () => {
+      const placeholders = Array.from({ length: podIds.length }, () => "?").join(
+        ", ",
+      );
+      return `SELECT id, name FROM pods WHERE canvas_id = ? AND id IN (${placeholders})`;
+    });
+
+    return stmt.all(canvasId, ...podIds) as PodNameRow[];
   }
 
   selectRowById(podId: string): PodRow | undefined {

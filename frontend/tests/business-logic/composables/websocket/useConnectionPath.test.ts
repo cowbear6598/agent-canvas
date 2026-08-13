@@ -267,6 +267,21 @@ describe("useConnectionPath", () => {
       expect(longDistance.length).toBeGreaterThan(shortDistance.length);
     });
 
+    it("極長連線最多產生 5 個箭頭", () => {
+      const { calculateMultipleArrowPositions } = useConnectionPath();
+      const arrows = calculateMultipleArrowPositions(
+        {
+          start: { x: -100_000, y: -100_000 },
+          end: { x: 100_000, y: 100_000 },
+          sourceAnchor: "right",
+          targetAnchor: "left",
+        },
+        160,
+      );
+
+      expect(arrows).toHaveLength(5);
+    });
+
     it("箭頭數量計算應為 max(1, floor(estimatedLength / spacing))", () => {
       const { calculateMultipleArrowPositions } = useConnectionPath();
       // 距離 = sqrt((300-100)^2 + (200-100)^2) = sqrt(50000) ≈ 223.6
@@ -291,14 +306,14 @@ describe("useConnectionPath", () => {
 
       const defaultSpacing = calculateMultipleArrowPositions({
         start: { x: 100, y: 100 },
-        end: { x: 500, y: 500 },
+        end: { x: 300, y: 300 },
         sourceAnchor: "right",
         targetAnchor: "left",
       });
       const smallSpacing = calculateMultipleArrowPositions(
         {
           start: { x: 100, y: 100 },
-          end: { x: 500, y: 500 },
+          end: { x: 300, y: 300 },
           sourceAnchor: "right",
           targetAnchor: "left",
         },

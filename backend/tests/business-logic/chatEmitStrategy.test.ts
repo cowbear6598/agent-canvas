@@ -41,7 +41,6 @@ describe("chat message merge business logic", () => {
       canvasId,
       podId,
       messageId,
-      content: "Run 訊息",
       delta: "訊息",
     });
 
@@ -54,7 +53,6 @@ describe("chat message merge business logic", () => {
           canvasId,
           podId,
           messageId,
-          content: "Run 訊息",
           delta: "訊息",
           isPartial: true,
           role: "assistant",
@@ -120,14 +118,12 @@ describe("chat message merge business logic", () => {
       canvasId,
       podId,
       messageId,
-      content: "Run ",
       delta: "Run ",
     });
     strategy.emitText({
       canvasId,
       podId,
       messageId,
-      content: "Run 完整內容",
       delta: "完整內容",
     });
     strategy.emitComplete({

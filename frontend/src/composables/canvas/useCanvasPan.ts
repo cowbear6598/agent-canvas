@@ -24,6 +24,31 @@ export function useCanvasPan(options?: CanvasPanOptions): {
   const { viewportStore } = useCanvasContext();
   const hasPanned = ref(false);
   const isSpacePressed = ref(false);
+  let offsetFrameId: number | null = null;
+  let pendingOffset: { x: number; y: number } | null = null;
+
+  const applyPendingOffset = (): void => {
+    if (!pendingOffset) return;
+    viewportStore.setOffset(pendingOffset.x, pendingOffset.y);
+    pendingOffset = null;
+  };
+
+  const flushPendingOffset = (): void => {
+    if (offsetFrameId !== null) {
+      window.cancelAnimationFrame(offsetFrameId);
+      offsetFrameId = null;
+    }
+    applyPendingOffset();
+  };
+
+  const scheduleOffset = (x: number, y: number): void => {
+    pendingOffset = { x, y };
+    if (offsetFrameId !== null) return;
+    offsetFrameId = window.requestAnimationFrame(() => {
+      offsetFrameId = null;
+      applyPendingOffset();
+    });
+  };
 
   // === 右鍵拖拽狀態 ===
   let startX = 0;
@@ -46,12 +71,13 @@ export function useCanvasPan(options?: CanvasPanOptions): {
         hasPanned.value = true;
       }
 
-      viewportStore.setOffset(
+      scheduleOffset(
         startOffsetX + horizontalDelta,
         startOffsetY + verticalDelta,
       );
     },
     onEnd: (): void => {
+      flushPendingOffset();
       const didPan = hasPanned.value;
       const panEvent = panStartEvent;
 
@@ -99,12 +125,12 @@ export function useCanvasPan(options?: CanvasPanOptions): {
         const horizontalDelta = mouseEvent.clientX - spaceStartX;
         const verticalDelta = mouseEvent.clientY - spaceStartY;
 
-        viewportStore.setOffset(
+        scheduleOffset(
           spaceStartOffsetX + horizontalDelta,
           spaceStartOffsetY + verticalDelta,
         );
       },
-      onEnd: (): void => {},
+      onEnd: flushPendingOffset,
     });
 
   const startSpacePan = (mouseEvent: MouseEvent): void => {
@@ -136,10 +162,8 @@ export function useCanvasPan(options?: CanvasPanOptions): {
     }
 
     // offset 是螢幕空間座標（與右鍵拖拽一致），不需要除以 zoom
-    viewportStore.setOffset(
-      viewportStore.offset.x - deltaX,
-      viewportStore.offset.y - deltaY,
-    );
+    const baseOffset = pendingOffset ?? viewportStore.offset;
+    scheduleOffset(baseOffset.x - deltaX, baseOffset.y - deltaY);
   }
 
   // 判斷事件目標是否為可編輯元素，避免在輸入框中攔截 Space
@@ -171,6 +195,7 @@ export function useCanvasPan(options?: CanvasPanOptions): {
   });
 
   onUnmounted(() => {
+    flushPendingOffset();
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
   });

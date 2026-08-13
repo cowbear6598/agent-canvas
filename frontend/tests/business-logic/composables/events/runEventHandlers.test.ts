@@ -143,6 +143,39 @@ describe("runEventHandlers", () => {
     });
   });
 
+  it("只收到 delta 的串流事件時應在前端累積完整內容", () => {
+    const canvasStore = useCanvasStore();
+    const runStore = useRunStore();
+    canvasStore.activeCanvasId = "canvas-1";
+    runStore.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
+
+    handleRunMessage({
+      canvasId: "canvas-1",
+      runId: "run-1",
+      podId: "pod-1",
+      messageId: "msg-1",
+      delta: "Hel",
+      isPartial: true,
+      role: "assistant",
+    });
+    handleRunMessage({
+      canvasId: "canvas-1",
+      runId: "run-1",
+      podId: "pod-1",
+      messageId: "msg-1",
+      delta: "lo",
+      isPartial: true,
+      role: "assistant",
+    });
+
+    const messages = runStore.runChatMessages
+      .get("run-1")
+      ?.get("pod-1")
+      ?.filter((item): item is Message => !("type" in item));
+    expect(messages).toHaveLength(1);
+    expect(messages?.[0]?.content).toBe("Hello");
+  });
+
   it("Goal round divider event 只應更新目前 runId 與 podId 的 timeline", () => {
     const canvasStore = useCanvasStore();
     const runStore = useRunStore();

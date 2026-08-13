@@ -25,6 +25,7 @@ const TANGENT_STEP = 0.01
 const BEZIER_LENGTH_ESTIMATION_FACTOR = 1.2
 const BEZIER_CONTROL_POINT_RATIO = 0.3
 const BEZIER_MAX_OFFSET_PX = 100
+const MAX_CONNECTION_ARROWS = 5
 
 function applyAnchorOffset(
   baseX: number,
@@ -137,7 +138,10 @@ export function useConnectionPath(): {
     const straightDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
     const estimatedLength = straightDistance * BEZIER_LENGTH_ESTIMATION_FACTOR
 
-    const arrowCount = Math.max(1, Math.floor(estimatedLength / spacing))
+    const arrowCount = Math.min(
+      MAX_CONNECTION_ARROWS,
+      Math.max(1, Math.floor(estimatedLength / spacing))
+    )
 
     const arrows: ArrowPosition[] = []
     for (let i = 1; i <= arrowCount; i++) {

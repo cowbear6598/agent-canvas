@@ -3,11 +3,40 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { isEditingElement } from "@/utils/domHelpers";
 import ConnectionLine from "./ConnectionLine.vue";
+import { POD_HEIGHT, POD_WIDTH } from "@/lib/constants";
+import {
+  isCanvasSegmentBoundsVisible,
+  type CanvasViewportBounds,
+} from "@/lib/canvasViewport";
+
+const props = defineProps<{
+  viewportBounds: CanvasViewportBounds;
+}>();
 
 const { connectionStore, podStore } = useCanvasContext();
 
 const podsById = computed(
   () => new Map(podStore.pods.map((pod) => [pod.id, pod])),
+);
+
+const visibleConnections = computed(() =>
+  connectionStore.connections.filter((connection) => {
+    const sourcePod = podsById.value.get(connection.sourcePodId ?? "");
+    const targetPod = podsById.value.get(connection.targetPodId);
+    if (!sourcePod || !targetPod) return false;
+
+    return isCanvasSegmentBoundsVisible(
+      props.viewportBounds,
+      {
+        x: sourcePod.x + POD_WIDTH / 2,
+        y: sourcePod.y + POD_HEIGHT / 2,
+      },
+      {
+        x: targetPod.x + POD_WIDTH / 2,
+        y: targetPod.y + POD_HEIGHT / 2,
+      },
+    );
+  }),
 );
 
 const draggingPathData = computed(() => {
@@ -65,7 +94,7 @@ onUnmounted(() => {
     @click="handleCanvasClick"
   >
     <ConnectionLine
-      v-for="connection in connectionStore.connections"
+      v-for="connection in visibleConnections"
       :key="connection.id"
       :connection="connection"
       :pods-by-id="podsById"
