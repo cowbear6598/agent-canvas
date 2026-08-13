@@ -24,6 +24,7 @@ import type {
 } from "./managedPluginRegistry.js";
 import { getDb } from "../../database/index.js";
 import { logger } from "../../utils/logger.js";
+import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import {
   isZip64Entry,
   isZip64EndRecord,
@@ -42,6 +43,7 @@ const PLUGIN_MANIFEST_RELATIVE_PATHS = [
   path.join(".codex-plugin", "plugin.json"),
   path.join(".claude-plugin", "plugin.json"),
 ];
+const MARKETPLACE_MANIFEST_RELATIVE_PATH = ".agents/plugins/marketplace.json";
 
 export const MAX_BUNDLE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 const MAX_BUNDLE_TOTAL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
@@ -70,6 +72,11 @@ interface ExtractedBundleMetadata {
   skills: SkillInfo[];
 }
 
+interface OptionalPluginMetadata {
+  displayName: string | null;
+  description: string | null;
+}
+
 function isFileNotFoundError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -83,19 +90,23 @@ function getPluginMetadataFailureReason(errors: unknown[]): string {
     return "JSON 損毀";
   }
 
-  const fileError = errors.find(
-    (error): error is NodeJS.ErrnoException =>
-      error instanceof Error && "code" in error,
-  );
-  if (fileError?.code === "ENOENT") {
-    return "檔案不存在";
-  }
-  if (fileError?.code === "EACCES") {
+  if (
+    errors.some(
+      (error) =>
+        error instanceof Error && "code" in error && error.code === "EACCES",
+    )
+  ) {
     return "權限不足";
   }
 
-  const firstError = errors[0];
-  return firstError instanceof Error ? firstError.message : String(firstError);
+  const actionableError = errors.find((error) => !isFileNotFoundError(error));
+  if (actionableError !== undefined) {
+    return actionableError instanceof Error
+      ? actionableError.message
+      : String(actionableError);
+  }
+
+  return "檔案不存在";
 }
 
 function stripArchiveExtension(filename: string): string {
@@ -477,34 +488,44 @@ async function pathExists(targetPath: string): Promise<boolean> {
 }
 
 function getFallbackSkillName(skills: SkillInfo[]): string | null {
-  const firstNamedSkill = skills.find((skill) => skill.skillName.trim() !== "");
-  if (!firstNamedSkill) {
+  const namedSkills = skills.filter((skill) => skill.skillName.trim() !== "");
+  if (namedSkills.length !== 1) {
     return null;
   }
 
-  const normalized = firstNamedSkill.skillName.replace(/\\/g, "/");
+  const normalized = namedSkills[0]!.skillName.replace(/\\/g, "/");
   const parts = normalized.split("/").filter(Boolean);
   return parts.at(-1) ?? null;
 }
 
-async function extractOptionalPluginMetadata(
-  installPath: string,
-): Promise<{ displayName: string | null; description: string | null }> {
-  const errors: unknown[] = [];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
+async function readPluginMetadataFromDirectory(
+  pluginPath: string,
+  errors: unknown[],
+): Promise<OptionalPluginMetadata | null> {
   for (const relativePath of PLUGIN_MANIFEST_RELATIVE_PATHS) {
     try {
-      const metaPath = path.join(installPath, relativePath);
-      const raw = await fs.promises.readFile(metaPath, "utf-8");
-      const meta = JSON.parse(raw);
+      const raw = await fs.promises.readFile(
+        path.join(pluginPath, relativePath),
+        "utf-8",
+      );
+      const metadata: unknown = JSON.parse(raw);
+      if (!isRecord(metadata)) {
+        return { displayName: null, description: null };
+      }
+
       return {
         displayName:
-          typeof meta?.name === "string" && meta.name.trim().length > 0
-            ? meta.name.trim()
+          typeof metadata.name === "string" && metadata.name.trim().length > 0
+            ? metadata.name.trim()
             : null,
         description:
-          typeof meta?.description === "string" && meta.description.trim()
-            ? meta.description.trim()
+          typeof metadata.description === "string" &&
+          metadata.description.trim()
+            ? metadata.description.trim()
             : null,
       };
     } catch (error) {
@@ -512,7 +533,76 @@ async function extractOptionalPluginMetadata(
     }
   }
 
-  if (errors.length === 0 || errors.every(isFileNotFoundError)) {
+  return null;
+}
+
+function resolveSingleMarketplacePluginPath(
+  installPath: string,
+  marketplace: unknown,
+): string | null {
+  if (
+    !isRecord(marketplace) ||
+    !Array.isArray(marketplace.plugins) ||
+    marketplace.plugins.length !== 1
+  ) {
+    return null;
+  }
+
+  const plugin = marketplace.plugins[0];
+  const source = isRecord(plugin) ? plugin.source : null;
+  if (
+    !isRecord(source) ||
+    source.source !== "local" ||
+    typeof source.path !== "string"
+  ) {
+    return null;
+  }
+
+  const resolvedPath = path.resolve(installPath, source.path);
+  if (!isPathWithinDirectory(resolvedPath, installPath)) {
+    throw new Error("marketplace plugin 路徑超出 bundle 範圍");
+  }
+
+  return resolvedPath;
+}
+
+async function extractOptionalPluginMetadata(
+  installPath: string,
+): Promise<OptionalPluginMetadata> {
+  const errors: unknown[] = [];
+
+  const rootMetadata = await readPluginMetadataFromDirectory(
+    installPath,
+    errors,
+  );
+  if (rootMetadata) {
+    return rootMetadata;
+  }
+
+  try {
+    const marketplacePath = path.join(
+      installPath,
+      MARKETPLACE_MANIFEST_RELATIVE_PATH,
+    );
+    const raw = await fs.promises.readFile(marketplacePath, "utf-8");
+    const pluginPath = resolveSingleMarketplacePluginPath(
+      installPath,
+      JSON.parse(raw),
+    );
+    if (pluginPath) {
+      const nestedMetadata = await readPluginMetadataFromDirectory(
+        pluginPath,
+        errors,
+      );
+      if (nestedMetadata) {
+        return nestedMetadata;
+      }
+    }
+  } catch (error) {
+    errors.push(error);
+  }
+
+  if (errors.every(isFileNotFoundError)) {
     return { displayName: null, description: null };
   }
 

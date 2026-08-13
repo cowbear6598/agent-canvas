@@ -162,6 +162,7 @@ import {
   fsOperation,
 } from "../../src/utils/operationHelpers.js";
 import type { ManagedPluginRecord } from "../../src/services/plugin/managedPluginRegistry.js";
+import { listSkillsForPlugin } from "../../src/services/plugin/pluginScanFs.js";
 
 // ─── 輔助：建立 ManagedPluginRecord ─────────────────────────────────────────
 function makeRecord(
@@ -189,6 +190,28 @@ function mockValidPluginJson(name: string, description?: string): void {
   mockReadFile.mockResolvedValueOnce(
     JSON.stringify({ name, description: description ?? null }),
   );
+}
+
+function mockMarketplacePluginMetadata(
+  name: string,
+  description?: string,
+): void {
+  mockReadFile
+    .mockRejectedValueOnce(makeEnoentError())
+    .mockRejectedValueOnce(makeEnoentError())
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        plugins: [
+          {
+            name,
+            source: { source: "local", path: `./plugins/${name}` },
+          },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(
+      JSON.stringify({ name, description: description ?? null }),
+    );
 }
 
 function createBundleZip(entries: Record<string, string>): Uint8Array {
@@ -256,7 +279,7 @@ describe("installPlugin", () => {
     expect(insertArg.description).toBe("A plugin");
   });
 
-  it("F2：manifest 不存在時靜默 fallback 為第一個 skill 名稱", async () => {
+  it("F2：manifest 不存在且只有一個 skill 時靜默使用 skill 名稱", async () => {
     // readFile 已在 beforeEach 設為 reject
     const result = await installPlugin("owner/repo");
 
@@ -287,6 +310,64 @@ describe("installPlugin", () => {
     const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
     expect(insertArg.displayName).toBe("Legacy Plugin");
     expect(insertArg.description).toBe("legacy");
+  });
+
+  it("F2：單一 plugin marketplace 會讀取其 nested manifest", async () => {
+    mockMarketplacePluginMetadata("soap-toolkit", "Soap Toolkit");
+
+    const result = await installPlugin("owner/repo");
+
+    expect(result.success).toBe(true);
+    expect(mockReadFile).toHaveBeenCalledTimes(4);
+    expect(mockReadFile.mock.calls[2]![0]).toContain(
+      ".agents/plugins/marketplace.json",
+    );
+    expect(mockReadFile.mock.calls[3]![0]).toContain(
+      "plugins/soap-toolkit/.codex-plugin/plugin.json",
+    );
+    const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
+    expect(insertArg.displayName).toBe("soap-toolkit");
+    expect(insertArg.description).toBe("Soap Toolkit");
+  });
+
+  it("F2：多個 skill 且沒有 manifest 時使用 repository 名稱", async () => {
+    vi.mocked(listSkillsForPlugin).mockResolvedValueOnce([
+      { skillName: "skills/threads", description: "Threads" },
+      { skillName: "skills/video-understand", description: "Video" },
+    ]);
+
+    const result = await installPlugin("owner/repo");
+
+    expect(result.success).toBe(true);
+    const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
+    expect(insertArg.displayName).toBe("repo");
+  });
+
+  it("F2：marketplace 的 local path 不可超出 bundle 範圍", async () => {
+    mockReadFile
+      .mockRejectedValueOnce(makeEnoentError())
+      .mockRejectedValueOnce(makeEnoentError())
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          plugins: [
+            {
+              name: "outside",
+              source: { source: "local", path: "../../outside" },
+            },
+          ],
+        }),
+      );
+
+    const result = await installPlugin("owner/repo");
+
+    expect(result.success).toBe(true);
+    expect(mockReadFile).toHaveBeenCalledTimes(3);
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn.mock.calls[0]![2]).toContain(
+      "marketplace plugin 路徑超出 bundle 範圍",
+    );
+    const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
+    expect(insertArg.displayName).toBe("test");
   });
 
   it("F4：已存在相同 repo 時直接回 PLUGIN_ALREADY_INSTALLED，不呼叫 clone", async () => {
@@ -507,6 +588,19 @@ describe("updatePlugin", () => {
       .calls[0]!;
     expect(updateId).toBe("owner/repo");
     expect(updatePartial).toMatchObject({ displayName: "New Plugin Name" });
+  });
+
+  it("F6：update 會用 nested manifest 修正既有 marketplace plugin 名稱", async () => {
+    mockMarketplacePluginMetadata("ai-video-production", "AI Video");
+
+    const result = await updatePlugin("owner/repo");
+
+    expect(result.success).toBe(true);
+    const [, updatePartial] = vi.mocked(managedPluginStore.update).mock.calls[0]!;
+    expect(updatePartial).toMatchObject({
+      displayName: "ai-video-production",
+      description: "AI Video",
+    });
   });
 
   it("F6：update 時 store.update 的 id 與原始 id 一致（保留 id）", async () => {
