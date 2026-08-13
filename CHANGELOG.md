@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.4] - 2026-08-14
+
+### 修正
+- 修正 marketplace repository 的 plugin manifest 位於子目錄時，顯示名稱誤用任一 skill 名稱的問題
+- 更新 marketplace plugin 時會重新讀取 nested manifest，修正既有錯誤名稱
+
 ## [2.3.3] - 2026-08-13
 
 ### 優化
