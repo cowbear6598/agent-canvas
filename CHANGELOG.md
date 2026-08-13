@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.3] - 2026-08-13
+
+### 優化
+- Run History 改為批次載入 Run Pod instances 與 Pod 名稱，移除多層 SQLite N+1 查詢
+- 串流訊息改為只傳送 delta，WebSocket 廣播共用序列化結果並限制背壓緩衝
+- 畫布只渲染視窗附近的 Pod、Note 與 Connection，限制長連線箭頭數量並合併平移更新
+
 ## [2.3.2] - 2026-08-13
 
 ### 新增
