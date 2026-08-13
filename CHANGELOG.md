@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.3.2] - 2026-08-13
+
+### 新增
+- 新增 Agent Canvas AI 存取權限管理、外部 REST API 與內建 MCP 能力，支援為指定 Canvas 核發細分權限 Token
+- Workflow Run 執行時凍結 Pod、Connection 與 Goal 狀態，避免畫布後續編輯影響既有歷程
+
+### 修正
+- Codex 模型暫時滿載時自動重試，避免可恢復錯誤提前中止執行
+- 修正刪除 Canvas 後實體工作目錄仍殘留的問題
+- 改善 Agent Canvas Skill 下載流程
+
 ## [2.3.1] - 2026-08-12
 
 ### 新增
