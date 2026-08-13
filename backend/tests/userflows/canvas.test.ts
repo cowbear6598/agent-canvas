@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -13,15 +14,18 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
   type CanvasCreatePayload,
+  type CanvasDeletePayload,
   type PodCreatePayload,
   type PodMovePayload,
 } from "../../src/schemas";
 import type {
   CanvasCreatedPayload,
+  CanvasDeletedPayload,
   PodCreatedPayload,
   PodMovedPayload,
 } from "../../src/types";
 import { getDb } from "../../src/database/index.js";
+import { switchCanvas } from "../helpers";
 
 describe("Canvas WebSocket user flow", () => {
   let server: TestServerInstance;
@@ -57,6 +61,15 @@ describe("Canvas WebSocket user flow", () => {
     expect(canvasRow).toEqual({
       id: createCanvas.canvas!.id,
       name: "ws-userflow-canvas",
+    });
+
+    const switchToCreatedCanvas = await switchCanvas(
+      client,
+      createCanvas.canvas!.id,
+    );
+    expect(switchToCreatedCanvas).toMatchObject({
+      success: true,
+      canvasId: createCanvas.canvas!.id,
     });
 
     const createPod = await emitAndWaitResponse<
@@ -135,5 +148,33 @@ describe("Canvas WebSocket user flow", () => {
       .prepare("SELECT x, y FROM pods WHERE id = ?")
       .get(createPod.pod!.id) as { x: number; y: number } | undefined;
     expect(movedPodRow).toEqual({ x: -300, y: 450 });
+
+    const canvasDirectory = dirname(createdPodRow!.workspace_path);
+    const switchToDefaultCanvas = await switchCanvas(client, server.canvasId);
+    expect(switchToDefaultCanvas).toMatchObject({
+      success: true,
+      canvasId: server.canvasId,
+    });
+
+    const deleteCanvas = await emitAndWaitResponse<
+      CanvasDeletePayload,
+      CanvasDeletedPayload
+    >(
+      client,
+      WebSocketRequestEvents.CANVAS_DELETE,
+      WebSocketResponseEvents.CANVAS_DELETED,
+      { requestId: uuidv4(), canvasId: createCanvas.canvas!.id },
+    );
+
+    expect(deleteCanvas).toMatchObject({
+      success: true,
+      canvasId: createCanvas.canvas!.id,
+    });
+    expect(
+      getDb()
+        .prepare("SELECT id FROM canvases WHERE id = ?")
+        .get(createCanvas.canvas!.id),
+    ).toBeNull();
+    expect(existsSync(canvasDirectory)).toBe(false);
   });
 });

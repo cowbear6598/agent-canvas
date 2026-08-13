@@ -6,6 +6,7 @@ import { logger } from "../utils/logger.js";
 import { getDb } from "../database/index.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { createI18nError } from "../utils/i18nError.js";
+import { workspaceService } from "./workspace/index.js";
 
 interface CanvasRow {
   id: string;
@@ -172,6 +173,13 @@ class CanvasStore {
     const canvas = this.getById(id);
     if (!canvas) {
       return err(createI18nError("errors.canvasNotFound"));
+    }
+
+    const workspaceDeleteResult = await workspaceService.deleteWorkspace(
+      config.getCanvasPath(canvas.name),
+    );
+    if (!workspaceDeleteResult.success) {
+      return err(workspaceDeleteResult.error);
     }
 
     this.stmts.canvas.deleteById.run(id);

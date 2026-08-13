@@ -4,10 +4,15 @@ import {v4 as uuidv4} from 'uuid';
 import {
     type CanvasCreatePayload,
     type CanvasReorderPayload,
+    type CanvasSwitchPayload,
     WebSocketRequestEvents,
     WebSocketResponseEvents,
 } from '../../src/schemas';
-import {type CanvasCreatedPayload, type CanvasReorderedPayload,} from '../../src/types';
+import {
+  type CanvasCreatedPayload,
+  type CanvasReorderedPayload,
+  type CanvasSwitchedPayload,
+} from '../../src/types';
 
 export async function getCanvasId(client: TestWebSocketClient): Promise<string> {
   if (!client.id) {
@@ -46,6 +51,19 @@ export async function createCanvas(
 
   return response.canvas!;
 }
+
+export async function switchCanvas(
+  client: TestWebSocketClient,
+  canvasId: string,
+): Promise<CanvasSwitchedPayload> {
+  return emitAndWaitResponse<CanvasSwitchPayload, CanvasSwitchedPayload>(
+    client,
+    WebSocketRequestEvents.CANVAS_SWITCH,
+    WebSocketResponseEvents.CANVAS_SWITCHED,
+    { requestId: uuidv4(), canvasId },
+  );
+}
+
 export async function reorderCanvases(
   client: TestWebSocketClient,
   canvasIds: string[]
