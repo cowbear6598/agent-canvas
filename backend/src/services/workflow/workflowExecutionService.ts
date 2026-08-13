@@ -9,18 +9,12 @@ import type {
   SettlementPathway,
 } from "./types.js";
 import type { ProviderName } from "../provider/index.js";
-import { connectionStore } from "../connectionStore.js";
-import { podStore } from "../podStore.js";
 import { runStore } from "../runStore.js";
 import { summaryService } from "../summaryService.js";
 import { logger } from "../../utils/logger.js";
 import { getErrorMessage } from "../../utils/errorHelpers.js";
 import { executeStreamingChat } from "../claude/streamingChatExecutor.js";
-import {
-  buildTransferMessage,
-  forEachMultiInputGroupConnection,
-  isAutoTriggerable,
-} from "./workflowHelpers.js";
+import { buildTransferMessage } from "./workflowHelpers.js";
 import { decideWorkflowSummary } from "./workflowRunDecisions.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import type { RunContext } from "../../types/run.js";
@@ -43,6 +37,7 @@ import {
   UserVisibleError,
 } from "../../utils/userVisibleError.js";
 import { resolveLoopSessionContinuity } from "./workflowLoopPolicy.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -258,8 +253,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   ): Promise<void> {
     if (!isRunActive(runContext)) return;
 
-    const connections = connectionStore.findBySourcePodId(
-      canvasId,
+    const connections = runWorkflowSnapshotStore.findConnectionsBySourcePodId(
+      runContext.runId,
       sourcePodId,
     );
 
@@ -324,7 +319,10 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     if (!isRunActive(runContext)) return;
 
-    const connection = connectionStore.getById(canvasId, connectionId);
+    const connection = runWorkflowSnapshotStore.getConnection(
+      runContext.runId,
+      connectionId,
+    );
     if (!connection) {
       logger.warn(
         "Workflow",
@@ -336,7 +334,10 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     const { sourcePodId, targetPodId } = connection;
 
-    const targetPod = podStore.getById(canvasId, targetPodId);
+    const targetPod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      targetPodId,
+    );
     if (!targetPod) {
       logger.warn(
         "Workflow",
@@ -346,7 +347,10 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       return;
     }
 
-    const sourcePod = podStore.getById(canvasId, sourcePodId);
+    const sourcePod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      sourcePodId,
+    );
     logger.log(
       "Workflow",
       "Create",
@@ -384,28 +388,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       return;
     }
 
-    this.setConnectionsToActive(
-      canvasId,
-      connectionId,
-      targetPodId,
-      triggerMode,
-      resolvedConnectionIds,
-      runContext,
-    );
-
-    strategy.onTrigger({
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      summary,
-      isSummarized,
-      participatingConnectionIds: resolvedConnectionIds,
-      sourcePodIds,
-      sourcePodNames,
-      runContext,
-    });
-
     // 刻意不 await：Claude 查詢是長時間操作，結果透過 WebSocket 事件通知前端。
     // 若改為 await，呼叫方的 Promise.allSettled 會等到查詢完成才繼續，喪失多 connection 並行觸發的能力。
     launchWorkflowChatStage({
@@ -439,61 +421,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
           launchedConnectionId,
         ),
     });
-  }
-
-  private activateConnections(canvasId: string, connectionIds: string[]): void {
-    for (const id of connectionIds) {
-      const stillExists = connectionStore.getById(canvasId, id);
-      if (!stillExists) {
-        logger.warn(
-          "Workflow",
-          "Warn",
-          `Connection ${id} 已不存在，跳過 active 狀態設定`,
-        );
-        continue;
-      }
-      connectionStore.updateConnectionStatus(canvasId, id, "active");
-    }
-  }
-
-  /**
-   * 純函數：依 triggerMode 回傳應設為 active 的 connection id 清單。
-   * 不讀取 runContext，不產生副作用。
-   */
-  private resolveConnectionIdsToActivate(
-    canvasId: string,
-    targetPodId: string,
-    triggerMode: TriggerMode,
-    participatingConnectionIds: string[],
-  ): string[] {
-    if (isAutoTriggerable(triggerMode)) {
-      const multiInputIds: string[] = [];
-      forEachMultiInputGroupConnection(canvasId, targetPodId, (conn) =>
-        multiInputIds.push(conn.id),
-      );
-      return multiInputIds;
-    }
-    return participatingConnectionIds;
-  }
-
-  private setConnectionsToActive(
-    canvasId: string,
-    connectionId: string,
-    targetPodId: string,
-    triggerMode: TriggerMode,
-    participatingConnectionIds: string[],
-    runContext: RunContext,
-  ): void {
-    // run mode 下 connection 是模板，不應改變全域狀態
-    if (runContext) return;
-
-    const ids = this.resolveConnectionIdsToActivate(
-      canvasId,
-      targetPodId,
-      triggerMode,
-      participatingConnectionIds,
-    );
-    this.activateConnections(canvasId, ids);
   }
 
   private async onWorkflowChatComplete(params: WorkflowChatContext): Promise<void> {
@@ -579,7 +506,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     const sourcePodNames =
       params.sourcePodNames ??
       [
-        podStore.getById(canvasId, params.sourcePodId)?.name ??
+        runWorkflowSnapshotStore.getPod(runContext.runId, params.sourcePodId)
+          ?.name ??
           params.sourcePodId,
       ];
 

@@ -10,27 +10,15 @@ export type TriggerMode = ConnectionBaseMode | "direct";
 
 export type WorkflowRole = "head" | "tail" | "middle" | "independent";
 
-export type ConnectionStatus = "idle" | "active" | "queued" | "waiting";
-
-export type DecideStatus =
-  | "none"
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "error";
-
 export interface Connection {
   id: string;
   sourcePodId?: string;
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
-  status?: ConnectionStatus;
-  decideStatus: DecideStatus;
   triggerMode: ConnectionBaseMode;
   /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
   direct: boolean;
-  decideReason?: string;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
   /**

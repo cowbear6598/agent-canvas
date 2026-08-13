@@ -27,7 +27,6 @@ import type {
   PodSetPluginsPayload,
 } from "../schemas";
 import { podStore } from "../services/podStore.js";
-import { runStore } from "../services/runStore.js";
 import {
   createPodWithWorkspace,
   deletePodWithCleanup,
@@ -535,22 +534,6 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       requestId,
     );
     if (!existingPod) {
-      return;
-    }
-
-    if (runStore.hasActiveRunForPod(podId)) {
-      const busyResponse: PodPluginsSetPayload = {
-        requestId,
-        canvasId,
-        podId,
-        success: false,
-        reason: "pod-busy",
-      };
-      socketService.emitToConnection(
-        connectionId,
-        WebSocketResponseEvents.POD_PLUGINS_SET,
-        busyResponse,
-      );
       return;
     }
 

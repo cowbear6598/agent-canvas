@@ -3,7 +3,6 @@ import { ref, computed } from "vue";
 import type {
   AnchorPosition,
   Connection,
-  ConnectionStatus,
   DraggingConnection,
   WorkflowRole,
 } from "@/types/connection";
@@ -19,7 +18,6 @@ import {
   createWebSocketRequest,
   WebSocketRequestEvents,
   WebSocketResponseEvents,
-  websocketClient,
 } from "@/services/websocket";
 import { useToast } from "@/composables/useToast";
 import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
@@ -28,7 +26,6 @@ import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
-import { createWorkflowEventHandlers } from "./workflowEventHandlers";
 import { normalizePodProvider } from "@/lib/providerOptions";
 import { logger } from "@/utils/logger";
 import type {
@@ -50,12 +47,7 @@ import {
   type BranchSettingsPayload,
 } from "@/stores/connection/connectionBranchRules";
 
-import { shouldUpdateConnection } from "./connectionStoreHelpers";
-import {
-  getPodWorkflowRoleFromConnections,
-  isDownstreamWorkflowRunning,
-  isPodPartOfRunningWorkflow,
-} from "./connectionGraphHelpers";
+import { getPodWorkflowRoleFromConnections } from "./connectionGraphHelpers";
 import {
   normalizeConnection,
   normalizeConnectionListPayload,
@@ -67,8 +59,6 @@ import {
   syncConnectionUpdateResponse as syncConnectionUpdateResponseReducer,
   updateConnectionEvent,
 } from "@/stores/connection/connectionEventReducers";
-
-type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
 
 interface NewConnectionSummaryDefaults {
   sourcePod: Pod | undefined;
@@ -164,118 +154,10 @@ export const useConnectionStore = defineStore("connection", () => {
     return getPodWorkflowRoleFromConnections(connections.value, podId);
   });
 
-  /**
-   * 雙向 BFS 遍歷整條 Workflow 鏈（上游 + 下游），
-   * 讓 head、tail 或任何連線中的 Pod 都能感知整條鏈的執行狀態，
-   * 用於在 Workflow 執行中時封鎖對應 Pod 的輸入。
-   * 每次呼叫預先建立鄰接表（O(n)），BFS 查詢降為 O(degree)。
-   */
-  const isPartOfRunningWorkflow = computed(() => (podId: string): boolean => {
-    return isPodPartOfRunningWorkflow(connections.value, podId);
-  });
-
-  /**
-   * 單向下游 BFS，從指定 Pod 出發往下游遍歷，
-   * 用於判斷從某個 head Pod 觸發的 Workflow 是否仍在執行中，
-   * 以決定是否允許再次觸發。
-   * 每次呼叫預先建立鄰接表（O(n)），BFS 查詢降為 O(degree)。
-   */
-  const isWorkflowRunning = computed(() => (sourcePodId: string): boolean => {
-    return isDownstreamWorkflowRunning(connections.value, sourcePodId);
-  });
-
   function findConnectionById(connectionId: string): Connection | undefined {
     return connections.value.find(
       (connection) => connection.id === connectionId,
     );
-  }
-
-  function updateAutoGroupStatus(
-    targetPodId: string,
-    status: ConnectionStatus,
-  ): void {
-    connections.value.forEach((connection) => {
-      if (shouldUpdateConnection(connection, targetPodId, status)) {
-        connection.status = status;
-      }
-    });
-  }
-
-  function setConnectionStatus(
-    connectionId: string,
-    status: ConnectionStatus,
-  ): void {
-    const connection = findConnectionById(connectionId);
-    if (connection) {
-      connection.status = status;
-    }
-  }
-
-  const workflowHandlers: WorkflowHandlers = createWorkflowEventHandlers({
-    connections: connections.value,
-    updateAutoGroupStatus,
-    setConnectionStatus,
-  });
-  const workflowListenerEntries = [
-    {
-      event: WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
-      handler: workflowHandlers.handleWorkflowAutoTriggered as (
-        payload: unknown,
-      ) => void,
-    },
-    {
-      event: WebSocketResponseEvents.WORKFLOW_COMPLETE,
-      handler: workflowHandlers.handleWorkflowComplete as (
-        payload: unknown,
-      ) => void,
-    },
-    {
-      event: WebSocketResponseEvents.WORKFLOW_BRANCH_TRIGGERED,
-      handler: workflowHandlers.handleWorkflowBranchTriggered as (
-        payload: unknown,
-      ) => void,
-    },
-    {
-      event: WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED,
-      handler: workflowHandlers.handleWorkflowDirectTriggered as (
-        payload: unknown,
-      ) => void,
-    },
-    {
-      event: WebSocketResponseEvents.WORKFLOW_QUEUED,
-      handler: workflowHandlers.handleWorkflowQueued as (
-        payload: unknown,
-      ) => void,
-    },
-    {
-      event: WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED,
-      handler: workflowHandlers.handleWorkflowQueueProcessed as (
-        payload: unknown,
-      ) => void,
-    },
-  ] as const;
-  let workflowListenersRegistered = false;
-
-  function getWorkflowHandlers(): WorkflowHandlers {
-    return workflowHandlers;
-  }
-
-  function setupWorkflowListeners(): void {
-    if (workflowListenersRegistered) return;
-
-    for (const { event, handler } of workflowListenerEntries) {
-      websocketClient.on(event, handler);
-    }
-    workflowListenersRegistered = true;
-  }
-
-  function cleanupWorkflowListeners(): void {
-    if (!workflowListenersRegistered) return;
-
-    for (const { event, handler } of workflowListenerEntries) {
-      websocketClient.off(event, handler);
-    }
-    workflowListenersRegistered = false;
   }
 
   async function loadConnectionsFromBackend(): Promise<void> {
@@ -900,11 +782,7 @@ export const useConnectionStore = defineStore("connection", () => {
     hasUpstreamConnections,
     getBranchConnectionsBySourcePodId,
     getPodWorkflowRole,
-    isPartOfRunningWorkflow,
-    isWorkflowRunning,
     findConnectionById,
-    setupWorkflowListeners,
-    cleanupWorkflowListeners,
     loadConnectionsFromBackend,
     validateNewConnection,
     createConnection,
@@ -914,8 +792,6 @@ export const useConnectionStore = defineStore("connection", () => {
     startDragging,
     updateDraggingPosition,
     endDragging,
-    updateAutoGroupStatus,
-    setConnectionStatus,
     updateConnectionTriggerMode,
     updateConnectionDirect,
     updateConnectionSummaryModel,
@@ -926,7 +802,6 @@ export const useConnectionStore = defineStore("connection", () => {
     updateConnectionBranchLabel,
     updateConnectionBranchDescription,
     updateConnectionBranchSettings,
-    getWorkflowHandlers,
     addConnectionFromEvent,
     updateConnectionFromEvent,
     removeConnectionFromEvent,

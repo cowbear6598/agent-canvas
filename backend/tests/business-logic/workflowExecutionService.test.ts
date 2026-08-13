@@ -4,7 +4,6 @@ import { connectionStore } from "../../src/services/connectionStore.js";
 import { podStore } from "../../src/services/podStore.js";
 import { runStore } from "../../src/services/runStore.js";
 import { summaryService } from "../../src/services/summaryService.js";
-import { workflowEventEmitter } from "../../src/services/workflow";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { logger } from "../../src/utils/logger.js";
 import * as streamingChatExecutor from "../../src/services/claude/streamingChatExecutor.js";
@@ -14,6 +13,7 @@ import type { RunContext } from "../../src/types/run.js";
 import path from "path";
 import { config } from "../../src/config/index.js";
 import * as runChatHelpers from "../../src/utils/runChatHelpers.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
 
 // ─── 常數 ────────────────────────────────────────────────────────────────────
 
@@ -31,9 +31,6 @@ function makeConnection(overrides?: Partial<Connection>): Connection {
     targetPodId: TARGET_POD_ID,
     targetAnchor: "left",
     triggerMode: "auto",
-    decideStatus: "none",
-    decideReason: null,
-    connectionStatus: "idle",
     summaryModel: "sonnet",
     label: "Checklist",
     description: undefined,
@@ -68,11 +65,6 @@ function makeStrategy(
   const base: Partial<TriggerStrategy> = {
     mode,
     decide: vi.fn().mockResolvedValue([]),
-    onTrigger: vi.fn(),
-    onComplete: vi.fn(),
-    onError: vi.fn(),
-    onQueued: vi.fn(),
-    onQueueProcessed: vi.fn(),
     ...overrides,
   };
   if (mode === "direct" && !overrides?.collectSources) {
@@ -122,23 +114,16 @@ function setupBasicSpies() {
   vi.spyOn(connectionStore, "findBySourcePodId").mockReturnValue([]);
   vi.spyOn(connectionStore, "getById").mockReturnValue(undefined);
   vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([]);
-  vi.spyOn(connectionStore, "updateConnectionStatus").mockReturnValue(
-    undefined,
+  vi.spyOn(runWorkflowSnapshotStore, "getConnection").mockImplementation(
+    (_runId, connectionId) => connectionStore.getById(CANVAS_ID, connectionId),
   );
-  vi.spyOn(connectionStore, "updateDecideStatus").mockReturnValue(undefined);
-  vi.spyOn(workflowEventEmitter, "emitWorkflowQueued").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitWorkflowComplete").mockImplementation(
-    () => {},
+  vi.spyOn(runWorkflowSnapshotStore, "getPod").mockImplementation(
+    (_runId, podId) => podStore.getById(CANVAS_ID, podId),
   );
   vi.spyOn(
-    workflowEventEmitter,
-    "emitWorkflowAutoTriggered",
-  ).mockImplementation(() => {});
-  vi.spyOn(workflowEventEmitter, "emitBranchTriggered").mockImplementation(
-    () => {},
-  );
+    runWorkflowSnapshotStore,
+    "findConnectionsBySourcePodId",
+  ).mockReturnValue([]);
 }
 
 // ─── 測試 ─────────────────────────────────────────────────────────────────────
@@ -156,13 +141,21 @@ describe("WorkflowExecutionService", () => {
   // triggerWorkflowWithSummary - run mode business rules
   // ============================================================
   describe("triggerWorkflowWithSummary - run mode business rules", () => {
-    it("run mode uses connection templates without mutating global active state", async () => {
+    it("run mode 使用 snapshot connection 啟動，不修改全域 Connection runtime 狀態", async () => {
       const runContext = makeRunContext();
       const autoConn = makeConnection({
         id: "conn-auto-1",
         triggerMode: "auto",
       });
       const mockStrategy = makeStrategy("auto");
+      const executeStreamingChatSpy = vi
+        .spyOn(streamingChatExecutor, "executeStreamingChat")
+        .mockResolvedValue({
+          messageId: "message-1",
+          content: "完成",
+          hasContent: true,
+          aborted: false,
+        });
 
       vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
       vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
@@ -180,12 +173,7 @@ describe("WorkflowExecutionService", () => {
         skipBusyCheck: true,
       });
 
-      // run mode：connection 是模板，不應設為 active
-      const activeCalls = (
-        connectionStore.updateConnectionStatus as any
-      ).mock.calls.filter((call: any[]) => call[2] === "active");
-      expect(activeCalls).toHaveLength(0);
-      expect(mockStrategy.onTrigger).toHaveBeenCalled();
+      await vi.waitFor(() => expect(executeStreamingChatSpy).toHaveBeenCalled());
     });
 
     it("run mode 啟動查詢時只標記 pod 執行中，active stream 由 streaming strategy 管理", async () => {
@@ -301,7 +289,6 @@ describe("WorkflowExecutionService", () => {
       });
 
       expect(delegate.startPodExecution).not.toHaveBeenCalled();
-      expect(mockStrategy.onTrigger).not.toHaveBeenCalled();
       expect(executeStreamingChatSpy).not.toHaveBeenCalled();
     });
 
@@ -591,6 +578,10 @@ describe("WorkflowExecutionService", () => {
     it("missing connection is ignored so deleted workflow edges do not start chats", async () => {
       const mockStrategy = makeStrategy("auto");
       vi.spyOn(connectionStore, "getById").mockReturnValue(undefined);
+      const executeStreamingChatSpy = vi.spyOn(
+        streamingChatExecutor,
+        "executeStreamingChat",
+      );
 
       await workflowExecutionService.triggerWorkflowWithSummary({
         canvasId: CANVAS_ID,
@@ -602,7 +593,7 @@ describe("WorkflowExecutionService", () => {
         runContext: makeRunContext(),
       });
 
-      expect(mockStrategy.onTrigger).not.toHaveBeenCalled();
+      expect(executeStreamingChatSpy).not.toHaveBeenCalled();
     });
   });
 });

@@ -2,8 +2,6 @@ import type {
   AnchorPosition,
   Connection,
   ConnectionBaseTriggerMode,
-  ConnectionStatus,
-  DecideStatus,
   Pod,
 } from "../../types/index.js";
 import type { ProviderName } from "../provider/index.js";
@@ -16,9 +14,6 @@ export interface ConnectionRow {
   target_pod_id: string;
   target_anchor: string;
   trigger_mode: string;
-  decide_status: string;
-  decide_reason: string | null;
-  connection_status: string;
   summary_model: string;
   summary_provider: string | null;
   summary_thinking_level: string | null;
@@ -58,9 +53,6 @@ export function rowToConnection(
     targetAnchor: row.target_anchor as AnchorPosition,
     triggerMode: normalizeTriggerMode(row),
     direct: row.direct_enabled === 1 || row.trigger_mode === "direct",
-    decideStatus: row.decide_status as DecideStatus,
-    decideReason: row.decide_reason,
-    connectionStatus: row.connection_status as ConnectionStatus,
     summaryModel: row.summary_model,
     summaryProvider: row.summary_provider as ProviderName | null,
     summaryThinkingLevel: row.summary_thinking_level,

@@ -170,9 +170,6 @@ export interface ConnectionPayloadItem {
   triggerMode?: TriggerMode;
   /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
   direct?: boolean;
-  decideStatus?: "none" | "pending" | "approved" | "rejected" | "error";
-  connectionStatus?: "idle" | "active" | "queued" | "waiting";
-  decideReason?: string | null;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
   /**
@@ -200,20 +197,6 @@ export interface ConnectionListResultPayload extends ResultPayload {
 
 export interface ConnectionDeletedPayload extends ResultPayload {
   connectionId?: string;
-}
-
-export interface WorkflowAutoTriggeredPayload {
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  transferredContent: string;
-  isSummarized: boolean;
-}
-
-export interface WorkflowCompletePayload extends ResultPayload {
-  connectionId: string;
-  targetPodId: string;
-  triggerMode?: "auto" | "branch" | "direct";
 }
 
 export interface PasteError {
@@ -318,68 +301,6 @@ export interface RepositoryMemoryClearedPayload extends ResultPayload {
   repositoryId?: string;
   repository?: Repository;
   pods?: Pod[];
-}
-
-export interface WorkflowBranchPendingPayload {
-  canvasId: string;
-  connectionIds: string[];
-  sourcePodId: string;
-}
-
-export interface WorkflowBranchResultPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  selectedLabel: string | null;
-}
-
-export interface WorkflowBranchErrorPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  error: string;
-}
-
-export interface WorkflowBranchClearPayload {
-  canvasId: string;
-  connectionIds: string[];
-}
-
-export interface WorkflowBranchTriggeredPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-}
-
-export interface WorkflowDirectTriggeredPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  transferredContent: string;
-  isSummarized: boolean;
-}
-
-export interface WorkflowQueuedPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  position: number;
-  queueSize: number;
-  triggerMode: "auto" | "branch" | "direct";
-}
-
-export interface WorkflowQueueProcessedPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  remainingQueueSize: number;
-  triggerMode: "auto" | "branch" | "direct";
 }
 
 export interface CursorMovedPayload {
@@ -525,24 +446,14 @@ export interface AuthCanvasAccessResetPayload {
   reason: string;
 }
 
-/** Pod plugin 設定結果（discriminated union，以 success 欄位區分兩條路徑） */
-export type PodPluginsSetPayload =
-  | {
-      requestId?: string;
-      canvasId: string;
-      success: true;
-      pod?: Pod;
-      /** self-healing 過濾掉的 plugin ID 清單（未安裝的 plugin） */
-      ignoredIds?: string[];
-    }
-  | {
-      requestId?: string;
-      canvasId: string;
-      podId?: string;
-      success: false;
-      /** pod-busy：Pod 正忙碌，無法修改 plugin 設定 */
-      reason: "pod-busy";
-    };
+export interface PodPluginsSetPayload {
+  requestId?: string;
+  canvasId: string;
+  success: true;
+  pod?: Pod;
+  /** self-healing 過濾掉的 plugin ID 清單（未安裝的 plugin） */
+  ignoredIds?: string[];
+}
 
 export interface PluginListResultPayload extends ResultPayload {
   plugins?: InstalledPlugin[];

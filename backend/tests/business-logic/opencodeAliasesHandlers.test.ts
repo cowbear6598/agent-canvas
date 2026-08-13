@@ -296,12 +296,12 @@ function insertConnection(params: {
     .prepare(
       `INSERT INTO connections (
         id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
-        trigger_mode, decide_status, decide_reason, connection_status,
+        trigger_mode,
         summary_model, summary_provider, summary_thinking_level,
         label, description
       ) VALUES (
         $id, $canvasId, $sourcePodId, 'right', $targetPodId, 'left',
-        $triggerMode, 'none', NULL, 'idle',
+        $triggerMode,
         $summaryModel, $summaryProvider, NULL,
         $label, NULL
       )`,

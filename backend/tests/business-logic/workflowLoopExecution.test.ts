@@ -18,11 +18,6 @@ function makeStrategy(): TriggerStrategy {
   return {
     mode: "auto",
     decide: vi.fn().mockResolvedValue([]),
-    onTrigger: vi.fn(),
-    onComplete: vi.fn(),
-    onError: vi.fn(),
-    onQueued: vi.fn(),
-    onQueueProcessed: vi.fn(),
   };
 }
 
@@ -88,10 +83,6 @@ describe("Workflow loop execution", () => {
       checkAndTriggerWorkflows,
     });
 
-    expect(strategy.onComplete).toHaveBeenCalledWith(
-      expect.objectContaining({ triggerMode: "direct" }),
-      true,
-    );
     expect(delegate.onChatComplete).toHaveBeenCalledWith(
       "canvas-1",
       "pod-target",

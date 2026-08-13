@@ -6,6 +6,7 @@ import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import { removeGoalRuntimeRun } from "../goalRuntime.js";
 import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
 import { runStore } from "../runStore.js";
+import { deferredPodWorkspaceCleanupService } from "../runtime/deferredPodWorkspaceCleanupService.js";
 
 export class RunResourceLifecycleService {
   private async removeRunDirectory(
@@ -45,8 +46,6 @@ export class RunResourceLifecycleService {
     removeGoalRuntimeRun(runId);
 
     const entries = runStore.getExecutionPathsByRunId(runId);
-    if (entries.length === 0) return;
-
     const uniqueRunRepos = new Set<string>();
     for (const entry of entries) {
       if (entry.runRepoPath) {
@@ -54,12 +53,15 @@ export class RunResourceLifecycleService {
       }
     }
 
-    await Promise.all(
-      [...uniqueRunRepos].map((runRepoPath) =>
-        this.removeRunRepoDirectory(runRepoPath),
-      ),
-    );
-
-    runStore.clearExecutionPathsByRunId(runId);
+    try {
+      await Promise.all(
+        [...uniqueRunRepos].map((runRepoPath) =>
+          this.removeRunRepoDirectory(runRepoPath),
+        ),
+      );
+      runStore.clearExecutionPathsByRunId(runId);
+    } finally {
+      await deferredPodWorkspaceCleanupService.releaseRun(runId);
+    }
   }
 }

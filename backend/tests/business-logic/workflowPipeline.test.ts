@@ -19,6 +19,7 @@ import type { RunPodInstance } from "../../src/services/runStore.js";
 import type { Pod } from "../../src/types/index.js";
 import path from "path";
 import { config } from "../../src/config/index.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
 
 // ─── 常數（取代 TEST_IDS 工廠引用）─────────────────────────────────────────
 
@@ -56,9 +57,6 @@ function makeConnection(overrides?: Partial<Connection>): Connection {
     targetPodId: TARGET_POD_ID,
     targetAnchor: "left",
     triggerMode: "auto",
-    decideStatus: "none",
-    decideReason: null,
-    connectionStatus: "idle",
     summaryModel: "sonnet",
     aiDecideModel: "sonnet",
     ...overrides,
@@ -134,6 +132,20 @@ describe("WorkflowPipeline", () => {
     status: "idle" as const,
   });
 
+  function mockSnapshotConnectionLineConfig(
+    connectionLineConfig: ReturnType<
+      typeof configStore.getConnectionLineModelConfig
+    >,
+  ): void {
+    vi.mocked(runWorkflowSnapshotStore.getRequired).mockReturnValue({
+      canvasId: CANVAS_ID,
+      sourcePodId: SOURCE_POD_ID,
+      connectionLineConfig,
+      pods: new Map(),
+      connections: new Map([[mockConnection.id, mockConnection]]),
+    });
+  }
+
   beforeEach(() => {
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -150,6 +162,29 @@ describe("WorkflowPipeline", () => {
       connectionLineThinkingLevel: null,
     });
     vi.spyOn(socketService, "emitToCanvas").mockImplementation(() => {});
+    vi.spyOn(runWorkflowSnapshotStore, "getPod").mockImplementation(
+      (_runId, podId) =>
+        podId === TARGET_POD_ID
+          ? mockTargetPod
+          : makePod({ id: podId, name: "Source Pod" }),
+    );
+    vi.spyOn(runWorkflowSnapshotStore, "getRequired").mockReturnValue({
+      canvasId: CANVAS_ID,
+      sourcePodId: SOURCE_POD_ID,
+      connectionLineConfig: {
+        connectionLineProvider: "claude",
+        connectionLineModel: "sonnet",
+        connectionLineThinkingLevel: null,
+      },
+      pods: new Map(),
+      connections: new Map([[mockConnection.id, mockConnection]]),
+    });
+    vi.spyOn(
+      runWorkflowSnapshotStore,
+      "findConnectionsByTargetPodId",
+    ).mockImplementation((_runId, targetPodId) =>
+      connectionStore.findByTargetPodId(CANVAS_ID, targetPodId),
+    );
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
     vi.spyOn(runStore, "getRun").mockReturnValue({
       id: baseRunContext.runId,
@@ -524,7 +559,7 @@ describe("WorkflowPipeline", () => {
     it("workflow does not start when the target pod no longer exists", async () => {
       const mockStrategy = makeStrategy("auto");
 
-      vi.spyOn(podStore, "getById").mockReturnValue(null as any);
+      vi.mocked(runWorkflowSnapshotStore.getPod).mockReturnValueOnce(undefined);
 
       await workflowPipeline.execute(baseContext, mockStrategy);
 
@@ -864,7 +899,7 @@ describe("WorkflowPipeline", () => {
 
     it("codex source still uses the unified Connection Line model config", async () => {
       const mockStrategy = makeStrategy("auto");
-      vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+      mockSnapshotConnectionLineConfig({
         connectionLineProvider: "codex",
         connectionLineModel: "gpt-5.5",
         connectionLineThinkingLevel: "medium",
@@ -966,7 +1001,7 @@ describe("WorkflowPipeline", () => {
   describe("summary provider selection rules", () => {
     it("summary execution ignores connection summary fields and uses unified Connection Line config", async () => {
       const mockStrategy = makeStrategy("auto");
-      vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+      mockSnapshotConnectionLineConfig({
         connectionLineProvider: "claude",
         connectionLineModel: "sonnet",
         connectionLineThinkingLevel: "low",
@@ -1008,7 +1043,7 @@ describe("WorkflowPipeline", () => {
 
       await workflowPipeline.execute(context, mockStrategy);
 
-      expect(configStore.getConnectionLineModelConfig).toHaveBeenCalled();
+      expect(configStore.getConnectionLineModelConfig).not.toHaveBeenCalled();
       expect(
         mockExecutionService.generateSummaryWithFallback,
       ).toHaveBeenCalledWith(
@@ -1026,7 +1061,7 @@ describe("WorkflowPipeline", () => {
 
     it("unified Connection Line provider overrides source pod and connection summary provider", async () => {
       const mockStrategy = makeStrategy("auto");
-      vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+      mockSnapshotConnectionLineConfig({
         connectionLineProvider: "codex",
         connectionLineModel: "gpt-5.5",
         connectionLineThinkingLevel: "medium",

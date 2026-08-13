@@ -3,8 +3,6 @@ import type { Pod, Schedule, ModelType, FrequencyType } from "@/types/pod";
 import type {
   Connection,
   TriggerMode,
-  ConnectionStatus,
-  DecideStatus,
   AnchorPosition,
 } from "@/types/connection";
 import type {
@@ -23,14 +21,6 @@ import type {
   IntegrationProviderConfig,
   IntegrationResource,
 } from "@/types/integration";
-import {
-  WebSocketResponseEvents,
-  type WebSocketMessage,
-  type WorkflowAutoTriggeredPayload,
-  type WorkflowBranchPendingPayload,
-  type WorkflowDirectTriggeredPayload,
-  type WorkflowQueuedPayload,
-} from "@/types/websocket";
 import { defineComponent, h } from "vue";
 
 // 計數器
@@ -44,7 +34,6 @@ let repositoryCounter = 0;
 let groupCounter = 0;
 let runCounter = 0;
 let runPodInstanceCounter = 0;
-let workflowEventCounter = 0;
 let integrationProviderCounter = 0;
 let integrationAppCounter = 0;
 let integrationResourceCounter = 0;
@@ -65,7 +54,6 @@ export function resetFactoryCounters(): void {
   groupCounter = 0;
   runCounter = 0;
   runPodInstanceCounter = 0;
-  workflowEventCounter = 0;
   integrationProviderCounter = 0;
   integrationAppCounter = 0;
   integrationResourceCounter = 0;
@@ -162,8 +150,6 @@ export function createMockConnection(
     sourceAnchor: "bottom" as AnchorPosition,
     targetPodId: `pod-${connectionCounter + 1}`,
     targetAnchor: "top" as AnchorPosition,
-    status: "idle" as ConnectionStatus,
-    decideStatus: "none" as DecideStatus,
     summaryModel: "sonnet" as ModelType,
     ...overrides,
     triggerMode,
@@ -315,78 +301,6 @@ export function createMockRunPodInstance(
     status: "pending",
     autoPathwaySettled: "not-applicable",
     directPathwaySettled: "not-applicable",
-    ...overrides,
-  };
-}
-
-export type MockWorkflowEventPayload =
-  | WorkflowAutoTriggeredPayload
-  | WorkflowBranchPendingPayload
-  | WorkflowDirectTriggeredPayload
-  | WorkflowQueuedPayload;
-
-/**
- * 建立 Mock workflow WebSocket event。
- */
-export function createMockWorkflowEvent<
-  TPayload extends MockWorkflowEventPayload = WorkflowAutoTriggeredPayload,
->(options?: {
-  type?: WebSocketResponseEvents;
-  payload?: Partial<TPayload>;
-  requestId?: string;
-}): WebSocketMessage<TPayload> {
-  const id = ++workflowEventCounter;
-  const defaultPayload: WorkflowAutoTriggeredPayload = {
-    connectionId: `connection-${id}`,
-    sourcePodId: `pod-${id}`,
-    targetPodId: `pod-${id + 1}`,
-    transferredContent: `Workflow content ${id}`,
-    isSummarized: false,
-  };
-
-  return {
-    type: options?.type ?? WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
-    payload: {
-      ...defaultPayload,
-      ...(options?.payload ?? {}),
-    } as TPayload,
-    requestId: options?.requestId ?? `request-${id}`,
-  };
-}
-
-/**
- * 建立 Mock workflow direct triggered payload。
- */
-export function createMockWorkflowDirectTriggeredPayload(
-  overrides?: Partial<WorkflowDirectTriggeredPayload>,
-): WorkflowDirectTriggeredPayload {
-  const id = ++workflowEventCounter;
-  return {
-    canvasId: `canvas-1`,
-    connectionId: `connection-${id}`,
-    sourcePodId: `pod-${id}`,
-    targetPodId: `pod-${id + 1}`,
-    transferredContent: `Direct workflow content ${id}`,
-    isSummarized: false,
-    ...overrides,
-  };
-}
-
-/**
- * 建立 Mock workflow queued payload。
- */
-export function createMockWorkflowQueuedPayload(
-  overrides?: Partial<WorkflowQueuedPayload>,
-): WorkflowQueuedPayload {
-  const id = ++workflowEventCounter;
-  return {
-    canvasId: `canvas-1`,
-    connectionId: `connection-${id}`,
-    sourcePodId: `pod-${id}`,
-    targetPodId: `pod-${id + 1}`,
-    position: 1,
-    queueSize: 1,
-    triggerMode: "auto",
     ...overrides,
   };
 }

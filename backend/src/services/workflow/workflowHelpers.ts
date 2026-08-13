@@ -1,28 +1,16 @@
 import type { Pod, Connection, TriggerMode } from "../../types/index.js";
-import type {
-  WorkflowQueuedPayload,
-  WorkflowQueueProcessedPayload,
-} from "../../types/responses/workflow.js";
 import type { RunContext } from "../../types/run.js";
-import { connectionStore } from "../connectionStore.js";
-import { workflowEventEmitter } from "./workflowEventEmitter.js";
-import { logger } from "../../utils/logger.js";
-import { createClientSafeWorkflowError } from "./workflowClientError.js";
-import type {
-  CompletionContext,
-  QueuedContext,
-  QueueProcessedContext,
-  SettlementPathway,
-} from "./types.js";
+import type { SettlementPathway } from "./types.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 const WORKFLOW_SOURCE_HEADING = "## Source:";
 const WORKFLOW_SECTION_SEPARATOR = "---";
 
 export function resolvePendingKey(
   targetPodId: string,
-  runContext?: RunContext,
+  runContext: RunContext,
 ): string {
-  return runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
+  return `${runContext.runId}:${targetPodId}`;
 }
 
 export function buildRunQueueKey(runId: string, podId: string): string {
@@ -40,35 +28,17 @@ export function resolveSettlementPathway(
 }
 
 export function getMultiInputGroupConnections(
-  canvasId: string,
+  runContext: RunContext,
   targetPodId: string,
 ): Connection[] {
-  const allIncomingConnections = connectionStore.findByTargetPodId(
-    canvasId,
+  const allIncomingConnections =
+    runWorkflowSnapshotStore.findConnectionsByTargetPodId(
+    runContext.runId,
     targetPodId,
   );
   return allIncomingConnections.filter(
     (conn) => isAutoTriggerable(conn.triggerMode) && !conn.direct,
   );
-}
-
-export function forEachMultiInputGroupConnection(
-  canvasId: string,
-  targetPodId: string,
-  callback: (conn: Connection) => void,
-): void {
-  const connections = getMultiInputGroupConnections(canvasId, targetPodId);
-  if (connections.length === 0) {
-    logger.warn(
-      "Workflow",
-      "Warn",
-      `[forEachMultiInputGroupConnection] 未找到 targetPod ${targetPodId} 的 auto/branch 連線`,
-    );
-    return;
-  }
-  for (const conn of connections) {
-    callback(conn);
-  }
 }
 
 export function formatMergedSummaries(
@@ -95,92 +65,4 @@ function escapeXmlTags(content: string): string {
 
 export function buildTransferMessage(content: string): string {
   return `<source-summary>\n${escapeXmlTags(content)}\n</source-summary>`;
-}
-
-export function completeMultiInputConnections(
-  context: CompletionContext,
-  success: boolean,
-  error?: string,
-): void {
-  forEachMultiInputGroupConnection(
-    context.canvasId,
-    context.targetPodId,
-    (conn) => {
-      if (!context.runContext) {
-        workflowEventEmitter.emitWorkflowComplete({
-          canvasId: context.canvasId,
-          connectionId: conn.id,
-          sourcePodId: conn.sourcePodId,
-          targetPodId: context.targetPodId,
-          success,
-          error: error ? createClientSafeWorkflowError() : undefined,
-          triggerMode: context.triggerMode,
-        });
-        connectionStore.updateConnectionStatus(
-          context.canvasId,
-          conn.id,
-          "idle",
-        );
-      }
-    },
-  );
-}
-
-export function buildQueuedPayload(
-  context: QueuedContext,
-  connectionId: string,
-  sourcePodId: string,
-): WorkflowQueuedPayload {
-  return {
-    canvasId: context.canvasId,
-    targetPodId: context.targetPodId,
-    connectionId,
-    sourcePodId,
-    position: context.position,
-    queueSize: context.queueSize,
-    triggerMode: context.triggerMode,
-  };
-}
-
-export function createMultiInputCompletionHandlers(): {
-  onComplete(
-    context: CompletionContext,
-    success: boolean,
-    error?: string,
-  ): void;
-  onError(context: CompletionContext, errorMessage: string): void;
-} {
-  return {
-    onComplete(
-      context: CompletionContext,
-      success: boolean,
-      error?: string,
-    ): void {
-      completeMultiInputConnections(context, success, error);
-    },
-    onError(context: CompletionContext, errorMessage: string): void {
-      completeMultiInputConnections(context, false, errorMessage);
-    },
-  };
-}
-
-export function buildQueueProcessedPayload(
-  context: QueueProcessedContext,
-): WorkflowQueueProcessedPayload {
-  return {
-    canvasId: context.canvasId,
-    targetPodId: context.targetPodId,
-    connectionId: context.connectionId,
-    sourcePodId: context.sourcePodId,
-    remainingQueueSize: context.remainingQueueSize,
-    triggerMode: context.triggerMode,
-  };
-}
-
-export function emitQueueProcessed(context: QueueProcessedContext): void {
-  if (context.runContext) return;
-  workflowEventEmitter.emitWorkflowQueueProcessed(
-    context.canvasId,
-    buildQueueProcessedPayload(context),
-  );
 }

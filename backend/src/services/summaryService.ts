@@ -1,6 +1,6 @@
 import { executeDisposableChat } from "./disposableChatService.js";
 import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
-import { podStore } from "./podStore.js";
+import { runWorkflowSnapshotStore } from "./workflow/runWorkflowSnapshotStore.js";
 import {
   formatGoalTodos,
   getGoalRuntimeStatePath,
@@ -64,7 +64,10 @@ class SummaryService {
     summaryThinkingLevel: string | null,
     runContext: RunContext,
   ): Promise<TargetSummaryResult> {
-    const sourcePod = podStore.getById(canvasId, sourcePodId);
+    const sourcePod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      sourcePodId,
+    );
     if (!sourcePod) {
       logger.error(
         "Workflow",
@@ -79,7 +82,10 @@ class SummaryService {
       };
     }
 
-    const targetPod = podStore.getById(canvasId, targetPodId);
+    const targetPod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      targetPodId,
+    );
     if (!targetPod) {
       logger.error(
         "Workflow",

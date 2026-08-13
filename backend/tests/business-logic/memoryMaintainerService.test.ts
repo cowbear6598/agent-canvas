@@ -25,6 +25,7 @@ import { memoryStateService } from "../../src/services/memoryStateService.js";
 import { memoryMaintainerService } from "../../src/services/memoryMaintainerService.js";
 import { runRepoActivitySnapshotService } from "../../src/services/runRepoActivitySnapshotService.js";
 import type { RunContext } from "../../src/types/run.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
 
 const CANVAS_ID = "memory-canvas";
 
@@ -107,6 +108,9 @@ describe("memoryMaintainerService", () => {
     insertCanvas();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.spyOn(runWorkflowSnapshotStore, "getPod").mockImplementation(
+      (_runId, podId) => podStore.getById(CANVAS_ID, podId),
+    );
   });
 
   it("有 repo 檔案讀寫證據時，應建立 pod 與 repo memory job 並寫入正式 summary", async () => {

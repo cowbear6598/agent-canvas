@@ -74,10 +74,7 @@ export function enqueueWorkflowTriggerStage(
   delegate: WorkflowStatusDelegate,
   item: EnqueueItem,
 ): boolean {
-  if (
-    !delegate.shouldEnqueue() ||
-    !delegate.isBusy(item.canvasId, item.targetPodId)
-  ) {
+  if (!delegate.isBusy(item.canvasId, item.targetPodId)) {
     return false;
   }
 
@@ -119,20 +116,6 @@ export async function completeWorkflowChatStage(params: {
   delegate: WorkflowStatusDelegate;
   checkAndTriggerWorkflows: () => Promise<void>;
 }): Promise<void> {
-  params.strategy.onComplete(
-    {
-      canvasId: params.canvasId,
-      connectionId: params.connectionId,
-      sourcePodId: params.sourcePodId,
-      targetPodId: params.targetPodId,
-      triggerMode: params.triggerMode,
-      participatingConnectionIds: params.participatingConnectionIds,
-      sourcePodIds: params.sourcePodIds,
-      sourcePodNames: params.sourcePodNames,
-      runContext: params.runContext,
-    },
-    true,
-  );
   params.delegate.onChatComplete(
     params.canvasId,
     params.targetPodId,
@@ -158,20 +141,6 @@ export function failWorkflowChatStage(params: {
   error: Error;
   clientErrorMessage: string;
 }): void {
-  params.strategy.onError(
-    {
-      canvasId: params.canvasId,
-      connectionId: params.connectionId,
-      sourcePodId: params.sourcePodId,
-      targetPodId: params.targetPodId,
-      triggerMode: params.triggerMode,
-      participatingConnectionIds: params.participatingConnectionIds,
-      sourcePodIds: params.sourcePodIds,
-      sourcePodNames: params.sourcePodNames,
-      runContext: params.runContext,
-    },
-    params.clientErrorMessage,
-  );
   logger.error("Workflow", "Error", "Workflow 執行失敗", params.error);
   params.delegate.onChatError(
     params.canvasId,

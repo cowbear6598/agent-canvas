@@ -11,6 +11,7 @@ import {
 import { config } from "../../src/config/index.js";
 import type { RunContext } from "../../src/types/run.js";
 import path from "path";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
 
 const executeDisposableChatMock = vi.hoisted(() => vi.fn());
 
@@ -60,6 +61,9 @@ describe("SummaryService", () => {
       multiInstance: false,
       skillIds: [],
     })) as typeof podStore.getById);
+    vi.spyOn(runWorkflowSnapshotStore, "getPod").mockImplementation(
+      (_runId, podId) => podStore.getById(CANVAS_ID, podId),
+    );
   });
 
   it("應優先使用 persisted summary 與 recent transcript window 建構摘要 prompt", async () => {

@@ -15,6 +15,8 @@ import type {
 } from "../../src/services/workflow/types.js";
 import type { RunContext } from "../../src/types/run.js";
 import type { RunPodInstance } from "../../src/services/runStore.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
+import { installRunWorkflowSnapshot } from "../helpers/workflowSnapshotHelper.js";
 
 const CANVAS_ID = "canvas-multi-input";
 const TARGET_POD_ID = "target-pod";
@@ -28,9 +30,6 @@ function makeConnection(overrides: Partial<Connection>): Connection {
     targetPodId: TARGET_POD_ID,
     targetAnchor: "left",
     triggerMode: "auto",
-    decideStatus: "none",
-    decideReason: null,
-    connectionStatus: "idle",
     summaryModel: "sonnet",
     summaryProvider: null,
     ...overrides,
@@ -113,6 +112,7 @@ describe("WorkflowMultiInputService", () => {
   };
 
   beforeEach(() => {
+    runWorkflowSnapshotStore.clear();
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
     vi.spyOn(logger, "error").mockImplementation(() => {});
@@ -144,6 +144,14 @@ describe("WorkflowMultiInputService", () => {
     vi.spyOn(runQueueService, "enqueue").mockImplementation(() => {});
     vi.spyOn(runQueueService, "processNext").mockResolvedValue(undefined);
     vi.spyOn(socketService, "emitToCanvas").mockImplementation(() => {});
+    installRunWorkflowSnapshot(runContext, {
+      pods: [
+        makePod("source-a", "來源 Pod A"),
+        makePod("source-b", "來源 Pod B"),
+        makePod(TARGET_POD_ID, "目標 Pod"),
+      ],
+      connections: groupConnections,
+    });
 
     workflowMultiInputService.init({
       executionService,

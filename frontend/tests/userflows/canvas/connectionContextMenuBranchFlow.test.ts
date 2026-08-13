@@ -59,7 +59,6 @@ describe("connection context menu branch userflow", () => {
       sourceAnchor: "right",
       targetPodId: "target-pod",
       targetAnchor: "left",
-      decideStatus: "none",
       triggerMode: "auto",
       direct: true,
     };

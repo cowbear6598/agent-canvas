@@ -3,8 +3,6 @@ import type {
   Connection,
   AnchorPosition,
   TriggerMode,
-  DecideStatus,
-  ConnectionStatus,
   Pod,
 } from "../types";
 import { getDb } from "../database/index.js";
@@ -27,7 +25,6 @@ import {
   resolveBranchThinkingModel,
   resolveConnectionThinkingLevel,
   resolveProviderDefaultModel,
-  shouldResetDecideState,
   validateBranchLabel,
   validateConnectionThinkingLevel,
   validateProviderModel,
@@ -54,8 +51,6 @@ interface CreateConnectionData {
 
 type ConnectionUpdateData = Partial<{
   triggerMode: TriggerMode;
-  decideStatus: DecideStatus;
-  decideReason: string | null;
   /** summaryModel 接受任意非空模型名稱 */
   summaryModel: string;
   /** null 代表清除指定 provider；undefined 代表本次不修改 */
@@ -76,9 +71,6 @@ interface ConnectionUpdateOptions {
 type ConnectionUpdateState = Pick<
   UpdateConnectionRowInput,
   | "triggerMode"
-  | "decideStatus"
-  | "decideReason"
-  | "connectionStatus"
   | "summaryModel"
   | "summaryProvider"
   | "summaryThinkingLevel"
@@ -115,9 +107,6 @@ function createConnectionUpdateState(
 ): ConnectionUpdateState {
   return {
     triggerMode: existing.triggerMode,
-    decideStatus: existing.decideStatus,
-    decideReason: existing.decideReason,
-    connectionStatus: existing.connectionStatus,
     summaryModel: existing.summaryModel,
     summaryProvider: existing.summaryProvider,
     summaryThinkingLevel: existing.summaryThinkingLevel,
@@ -130,19 +119,13 @@ function createConnectionUpdateState(
   };
 }
 
-function applyModeAndDecisionUpdates(
+function applyModeUpdates(
   state: ConnectionUpdateState,
   existing: Connection,
   updates: ConnectionUpdateData,
 ): void {
   if (updates.triggerMode !== undefined) {
     const triggerMode = normalizeTriggerMode(updates.triggerMode);
-    if (shouldResetDecideState(existing.triggerMode, triggerMode)) {
-      state.decideStatus = "none";
-      state.decideReason = null;
-      state.connectionStatus = "idle";
-    }
-
     if (existing.triggerMode === "branch" && triggerMode !== "branch") {
       state.label = "";
       state.description = null;
@@ -157,12 +140,6 @@ function applyModeAndDecisionUpdates(
   }
 
   if (updates.direct !== undefined) state.direct = updates.direct;
-  if (updates.decideStatus !== undefined) {
-    state.decideStatus = updates.decideStatus;
-  }
-  if (updates.decideReason !== undefined) {
-    state.decideReason = updates.decideReason;
-  }
 }
 
 function resolveTargetSummaryProvider(
@@ -418,9 +395,6 @@ class ConnectionStore {
       targetAnchor: data.targetAnchor,
       triggerMode: normalizedMode.triggerMode,
       direct: normalizedMode.direct,
-      decideStatus: "none",
-      decideReason: null,
-      connectionStatus: "idle",
       summaryModel: resolvedSummaryModel,
       summaryProvider: data.summaryProvider ?? null,
       summaryThinkingLevel: resolvedSummaryThinkingLevel,
@@ -480,7 +454,7 @@ class ConnectionStore {
     if (!existing) return undefined;
 
     const state = createConnectionUpdateState(existing);
-    applyModeAndDecisionUpdates(state, existing, updates);
+    applyModeUpdates(state, existing, updates);
 
     const sourcePod = podStore.getById(canvasId, existing.sourcePodId);
     applySummaryUpdates(state, existing, sourcePod, updates);
@@ -591,39 +565,8 @@ class ConnectionStore {
     return syncBranchSiblings();
   }
 
-  updateConnectionStatus(
-    canvasId: string,
-    connectionId: string,
-    status: ConnectionStatus,
-  ): Connection | undefined {
-    const updatedRow = this.repository.updateConnectionStatusReturning(
-      canvasId,
-      connectionId,
-      status,
-    );
-
-    if (!updatedRow) return undefined;
-    return this.mapRow(canvasId, updatedRow);
-  }
-
-  updateDecideStatus(
-    canvasId: string,
-    connectionId: string,
-    status: DecideStatus,
-    reason: string | null,
-  ): Connection | undefined {
-    return this.update(canvasId, connectionId, {
-      decideStatus: status,
-      decideReason: reason,
-    });
-  }
-
   deleteByPodId(canvasId: string, podId: string): number {
     return this.repository.deleteByPodId(canvasId, podId);
-  }
-
-  clearDecideStatusByPodId(canvasId: string, podId: string): void {
-    this.repository.clearDecideStatusByPodId(canvasId, podId);
   }
 
   findByTriggerMode(

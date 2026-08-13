@@ -2,8 +2,6 @@ import type {
   AnchorPosition,
   Connection,
   ConnectionBaseMode,
-  ConnectionStatus,
-  DecideStatus,
 } from "@/types/connection";
 import type { PodProvider } from "@/types/pod";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
@@ -26,9 +24,6 @@ export interface RawConnection {
   summaryThinkingLevel?: string | null;
   label?: string;
   description?: string;
-  connectionStatus?: string;
-  decideReason?: string | null;
-  decideStatus?: string;
 }
 
 function normalizeOptionalLabel(label?: string): string | undefined {
@@ -96,9 +91,6 @@ export function normalizeConnection(
     summaryThinkingLevel: raw.summaryThinkingLevel ?? null,
     label: normalizeOptionalLabel(raw.label),
     description: raw.description,
-    status: (raw.connectionStatus ?? "idle") as ConnectionStatus,
-    decideReason: raw.decideReason ?? undefined,
-    decideStatus: (raw.decideStatus as DecideStatus) ?? "none",
   };
 }
 
@@ -142,7 +134,7 @@ export function normalizeConnectionUpdateResponsePayload(
 }
 
 export function normalizeCreatedConnectionEvent(
-  connection: Omit<Connection, "status">,
+  connection: Connection,
   sourceProvider?: PodProvider,
 ): Connection {
   const normalizedConnection = normalizeConnection(
@@ -150,11 +142,7 @@ export function normalizeCreatedConnectionEvent(
     sourceProvider,
   );
 
-  return {
-    ...normalizedConnection,
-    status: "idle",
-    decideStatus: "none",
-  };
+  return normalizedConnection;
 }
 
 function resolveSummaryProviderFromUpdatePayload(
@@ -218,15 +206,5 @@ export function mapConnectionUpdatedEventPayload(
         : existingConnection.summaryThinkingLevel,
     label: normalizeOptionalLabel(connection.label),
     description: connection.description,
-    // connectionStatus 有帶值則覆寫；未帶則保留既有 status（避免 multi-input rejected 後 status 卡住）
-    status: connection.connectionStatus
-      ? (connection.connectionStatus as ConnectionStatus)
-      : existingConnection.status,
-    // decideStatus：incoming 有值則覆寫，undefined 則保留既有值
-    decideStatus:
-      connection.decideStatus !== undefined
-        ? (connection.decideStatus as DecideStatus)
-        : existingConnection.decideStatus,
-    decideReason: connection.decideReason ?? existingConnection.decideReason,
   };
 }

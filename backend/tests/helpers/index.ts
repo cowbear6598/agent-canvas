@@ -17,3 +17,4 @@ export * from "./eventCollector.js";
 export * from "./providerFakeHarness.js";
 export * from "./integrationProviderFakeHarness.js";
 export * from "./gitFakeHarness.js";
+export * from "./workflowSnapshotHelper.js";

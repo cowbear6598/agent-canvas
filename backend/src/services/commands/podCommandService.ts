@@ -30,8 +30,6 @@ import { logger } from "../../utils/logger.js";
 import { WebSocketError } from "../../middleware/wsErrorHandler.js";
 import type { ApplicationCommandResult } from "./applicationCommand.js";
 import { isFastModeSupported } from "../provider/capabilities.js";
-import { abortRegistry } from "../provider/abortRegistry.js";
-import { runStore } from "../runStore.js";
 
 function getFastModeCompatibilityUpdate(
   provider: string,
@@ -382,18 +380,6 @@ class PodCommandService {
     existingPod: Pod;
     enabled: PodSetFastModePayload["enabled"];
   }): ApplicationCommandResult<PodFastModeSetPayload> {
-    if (
-      abortRegistry.hasActiveForPod(params.podId) ||
-      runStore.hasActiveRunForPod(params.podId)
-    ) {
-      throw new WebSocketError(
-        "POD_BUSY",
-        "Pod 正在執行任務，無法切換 Fast mode",
-        undefined,
-        params.podId,
-      );
-    }
-
     if (
       params.enabled &&
       !isFastModeSupported(

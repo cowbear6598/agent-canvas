@@ -10,8 +10,6 @@
  * 改由 branchDecider（內部使用 executeDisposableChat）處理模型呼叫。
  */
 
-import { podStore } from "../podStore.js";
-import { configStore } from "../configStore.js";
 import { branchDecider } from "../branch/index.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
 import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
@@ -20,6 +18,7 @@ import { getErrorMessage, isAbortError } from "../../utils/errorHelpers.js";
 import type { Connection } from "../../types/index.js";
 import type { RunContext } from "../../types/run.js";
 import type { BranchDecisionFailure } from "../branch/branchDecider.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 // 每次決策讀取的最近訊息段數
 const RECENT_MESSAGES_COUNT = 4;
@@ -70,7 +69,10 @@ class BranchDecisionService {
       };
     }
 
-    const sourcePod = podStore.getById(canvasId, sourcePodId);
+    const sourcePod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      sourcePodId,
+    );
     if (!sourcePod) {
       throw new Error(
         `[BranchDecisionService] 找不到來源 Pod（podId=${sourcePodId}）`,
@@ -85,15 +87,16 @@ class BranchDecisionService {
 
     const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
-    const {
-      connectionLineProvider: provider,
-      connectionLineModel: model,
-      connectionLineThinkingLevel: thinkingLevel,
-    } = configStore.getConnectionLineModelConfig();
+    const connectionLineConfig = runWorkflowSnapshotStore.getRequired(
+      runContext.runId,
+    ).connectionLineConfig;
 
     // targetPodName：從 podStore 查詢，若查不到則 fallback 為 targetPodId
     const branches = branchConnections.map((conn) => {
-      const targetPod = podStore.getById(canvasId, conn.targetPodId);
+      const targetPod = runWorkflowSnapshotStore.getPod(
+        runContext.runId,
+        conn.targetPodId,
+      );
       return {
         label: conn.label,
         description: conn.description,
@@ -112,9 +115,9 @@ class BranchDecisionService {
         branches,
         persistedSummary: transcriptWindow.persistedSummary,
         recentMessages: transcriptWindow.recentMessages,
-        provider,
-        model,
-        thinkingLevel,
+        provider: connectionLineConfig.connectionLineProvider,
+        model: connectionLineConfig.connectionLineModel,
+        thinkingLevel: connectionLineConfig.connectionLineThinkingLevel,
         workspacePath: executionPaths.workspacePath,
         runContext,
         abortSignal,

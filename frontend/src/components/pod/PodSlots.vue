@@ -21,7 +21,6 @@ const props = defineProps<{
   currentModel: string;
   currentThinkingLevel: string | undefined;
   fastModeEnabled: boolean;
-  fastModeBusy: boolean;
   boundRepositoryNote: RepositoryNote | undefined;
   goalTodoCount: number;
 }>();
@@ -60,9 +59,7 @@ const fastUnsupported = computed(
 );
 
 const fastDisabledTooltip = computed(() =>
-  props.fastModeBusy
-    ? t("pod.slot.fastBusyTooltip")
-    : t("pod.slot.fastUnsupportedTooltip"),
+  t("pod.slot.fastUnsupportedTooltip"),
 );
 </script>
 
@@ -70,7 +67,7 @@ const fastDisabledTooltip = computed(() =>
   <PodFastSlot
     :pod-rotation="props.podRotation"
     :enabled="props.fastModeEnabled"
-    :disabled="fastUnsupported || props.fastModeBusy"
+    :disabled="fastUnsupported"
     :disabled-tooltip="fastDisabledTooltip"
     @click="(ev) => emit('fast-clicked', ev)"
   />

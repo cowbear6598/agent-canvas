@@ -25,6 +25,9 @@ import {
 } from "../../src/services/goalRuntime.js";
 import { memoryMaintainerService } from "../../src/services/memoryMaintainerService.js";
 import { runQueueService } from "../../src/services/workflow/runQueueService.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
+import { connectionStore } from "../../src/services/connectionStore.js";
+import { installRunWorkflowSnapshot } from "../helpers/workflowSnapshotHelper.js";
 
 // --- 測試常數 ---
 const CANVAS_ID = "canvas-exec-1";
@@ -49,6 +52,16 @@ function insertCanvas(id: string = CANVAS_ID): void {
     .run(id, `canvas-${id}`, 0);
 }
 
+function insertPod(canvasId: string, podId: string): void {
+  getDb()
+    .prepare(
+      `INSERT OR IGNORE INTO pods
+       (id, canvas_id, name, workspace_path)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(podId, canvasId, podId, `/tmp/${podId}`);
+}
+
 /**
  * 直接透過 SQL 插入 connection，繞過 connectionStore.create 的 pod 查找。
  */
@@ -59,25 +72,34 @@ function insertConnection(
   triggerMode: "auto" | "direct" | "branch" | "ai-decide" = "auto",
   id?: string,
 ): string {
+  insertPod(canvasId, sourcePodId);
+  insertPod(canvasId, targetPodId);
   const connId = id ?? uuidv4();
   getDb()
     .prepare(
       `INSERT INTO connections
        (id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
-        trigger_mode, decide_status, decide_reason, connection_status)
-       VALUES (?, ?, ?, 'right', ?, 'left', ?, 'none', NULL, 'idle')`,
+        trigger_mode)
+       VALUES (?, ?, ?, 'right', ?, 'left', ?)`,
     )
     .run(connId, canvasId, sourcePodId, targetPodId, triggerMode);
   return connId;
 }
 
 function makeRunContext(overrides?: Partial<RunContext>): RunContext {
-  return {
+  const runContext = {
     runId: "run-1",
     canvasId: CANVAS_ID,
     sourcePodId: SOURCE_POD_ID,
     ...overrides,
   };
+  if (!runWorkflowSnapshotStore.has(runContext.runId)) {
+    installRunWorkflowSnapshot(runContext, {
+      pods: podStore.list(runContext.canvasId),
+      connections: connectionStore.list(runContext.canvasId),
+    });
+  }
+  return runContext;
 }
 
 describe("RunExecutionService", () => {
@@ -86,7 +108,10 @@ describe("RunExecutionService", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
+    insertPod(CANVAS_ID, SOURCE_POD_ID);
     capturedCanvasEvents.length = 0;
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -221,24 +246,19 @@ describe("RunExecutionService", () => {
       expect(tgtResult?.podName).toBe("Target Pod");
     });
 
-    it("pod 找不到時 RUN_CREATED payload 的 podName fallback 為 podId", async () => {
-      // 不建立真實 pod，podId 直接作為名稱 fallback
-      const ctx = await runExecutionService.createRun(
-        CANVAS_ID,
-        "pod-unknown",
-        "測試",
+    it("Pod 缺漏時原子拒絕建立 Run", async () => {
+      const runCount = runStore.countRunsByCanvasId(CANVAS_ID);
+
+      await expect(
+        runExecutionService.createRun(CANVAS_ID, "pod-unknown", "測試"),
+      ).rejects.toThrow(
+        "無法建立 Workflow snapshot：找不到 Pod pod-unknown",
       );
 
-      const createdEvent = capturedCanvasEvents.find(
-        (event) =>
-          event.eventName === WebSocketResponseEvents.RUN_CREATED &&
-          event.payload.run?.id === ctx.runId,
+      expect(runStore.countRunsByCanvasId(CANVAS_ID)).toBe(runCount);
+      expect(capturedCanvasEvents).not.toContainEqual(
+        expect.objectContaining({ eventName: WebSocketResponseEvents.RUN_CREATED }),
       );
-      const instances = createdEvent?.payload.run?.podInstances as Array<{
-        podId: string;
-        podName: string;
-      }>;
-      expect(instances?.[0]?.podName).toBe("pod-unknown");
     });
 
     it("source pod 找不到時 RUN_CREATED payload 的 sourcePodName fallback 為 podId", async () => {
@@ -311,7 +331,7 @@ describe("RunExecutionService", () => {
         expect(runStore.getRunsByCanvasId(CANVAS_ID)).toHaveLength(
           RUN_HISTORY_RETENTION_COUNT + 1,
         );
-      });
+      }, { timeout: 3000 });
       expect(runStore.getRun(longRunning.id)?.status).toBe("running");
     });
 

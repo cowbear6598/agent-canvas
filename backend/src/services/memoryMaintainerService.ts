@@ -7,6 +7,7 @@ import {
 import { configStore } from "./configStore.js";
 import { memoryStateService, type MemoryScopeType } from "./memoryStateService.js";
 import { podStore } from "./podStore.js";
+import { runWorkflowSnapshotStore } from "./workflow/runWorkflowSnapshotStore.js";
 import { repositoryService } from "./repositoryService.js";
 import {
   runRepoActivitySnapshotService,
@@ -396,8 +397,7 @@ class MemoryMaintainerService {
 
   private createPodMemoryTasks(input: RunScopeInput): MemoryScopeTask[] {
     const tasks: MemoryScopeTask[] = [];
-    const podState = memoryStateService.getPodState(input.pod.id);
-    if (podState?.memoryEnabled) {
+    if (input.pod.memoryEnabled === true) {
       tasks.push({
         scopeType: "pod",
         scopeId: input.pod.id,
@@ -834,19 +834,24 @@ class MemoryMaintainerService {
     });
   }
 
-  async scheduleForCompletedPod(runContext: RunContext, podId: string): Promise<void> {
-    const podResult = podStore.getByIdGlobal(podId);
-    if (!podResult) {
+  async scheduleForCompletedPod(
+    runContext: RunContext,
+    podId: string,
+    snapshotPod?: Pod,
+  ): Promise<void> {
+    const pod =
+      snapshotPod ?? runWorkflowSnapshotStore.getPod(runContext.runId, podId);
+    if (!pod) {
       return;
     }
 
     const tasks = this.createPodMemoryTasks({
       runContext,
-      pod: podResult.pod,
+      pod,
     });
 
     if (tasks.length === 0) {
-      logger.log("Memory", "Update", `略過 Pod「${podResult.pod.name}」記憶維護：memory 未啟用`);
+      logger.log("Memory", "Update", `略過 Pod「${pod.name}」記憶維護：memory 未啟用`);
       return;
     }
 
@@ -855,6 +860,7 @@ class MemoryMaintainerService {
 
   async scheduleRepositoriesForCompletedRun(
     runContext: RunContext,
+    snapshotPods?: readonly Pod[],
   ): Promise<void> {
     try {
       const repoGroups = new Map<
@@ -862,16 +868,18 @@ class MemoryMaintainerService {
         { representativePod: Pod; scopePods: Pod[]; workspacePath: string | null }
       >();
 
+      const podsById = new Map(
+        (snapshotPods ?? []).map((pod) => [pod.id, pod]),
+      );
       for (const instance of runStore.getPodInstancesByRunId(runContext.runId)) {
-        const podResult = podStore.getByIdGlobal(instance.podId);
-        const pod = podResult?.pod;
+        const pod =
+          podsById.get(instance.podId) ?? podStore.getByIdGlobal(instance.podId)?.pod;
         const repositoryId = pod?.repositoryId ?? null;
         if (!pod || !repositoryId) {
           continue;
         }
 
-        const repoState = memoryStateService.getRepoState(repositoryId);
-        if (!repoState?.memoryEnabled) {
+        if (pod.repoMemoryEnabled !== true) {
           continue;
         }
 

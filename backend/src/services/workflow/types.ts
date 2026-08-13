@@ -41,58 +41,6 @@ export interface CollectSourcesResult {
   sourcePodNames?: string[];
 }
 
-export interface TriggerLifecycleContext {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  summary: string;
-  isSummarized: boolean;
-  participatingConnectionIds: string[];
-  sourcePodIds?: string[];
-  sourcePodNames?: string[];
-  runContext: RunContext;
-}
-
-export interface QueuedContext {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  position: number;
-  queueSize: number;
-  triggerMode: TriggerMode;
-  participatingConnectionIds: string[];
-  sourcePodIds?: string[];
-  sourcePodNames?: string[];
-  runContext: RunContext;
-}
-
-export interface QueueProcessedContext {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  remainingQueueSize: number;
-  triggerMode: TriggerMode;
-  participatingConnectionIds: string[];
-  sourcePodIds?: string[];
-  sourcePodNames?: string[];
-  runContext: RunContext;
-}
-
-export interface CompletionContext {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  triggerMode: TriggerMode;
-  participatingConnectionIds: string[];
-  sourcePodIds?: string[];
-  sourcePodNames?: string[];
-  runContext: RunContext;
-}
-
 export interface TriggerStrategy {
   mode: TriggerMode;
 
@@ -102,16 +50,6 @@ export interface TriggerStrategy {
     context: CollectSourcesContext,
   ): Promise<CollectSourcesResult>;
 
-  onTrigger(context: TriggerLifecycleContext): void;
-  onComplete(
-    context: CompletionContext,
-    success: boolean,
-    error?: string,
-  ): void;
-  onError(context: CompletionContext, errorMessage: string): void;
-
-  onQueued(context: QueuedContext): void;
-  onQueueProcessed(context: QueueProcessedContext): void;
 }
 
 export interface PipelineContext {
@@ -162,16 +100,6 @@ export interface ExecutionServiceMethods {
   triggerWorkflowWithSummary(
     params: TriggerWorkflowWithSummaryParams,
   ): Promise<void>;
-}
-
-export interface StateServiceMethods {
-  checkMultiInputScenario(
-    canvasId: string,
-    targetPodId: string,
-  ): {
-    isMultiInput: boolean;
-    requiredSourcePodIds: string[];
-  };
 }
 
 export interface HandleMultiInputForConnectionParams {

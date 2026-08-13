@@ -65,15 +65,6 @@ const canvasRequestSuccessPayloadSchema = requestSuccessPayloadSchema
 
 const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
 const connectionBaseTriggerModeSchema = z.enum(["auto", "branch"]);
-const triggerModeSchema = z.enum(["auto", "branch", "direct"]);
-const decideStatusSchema = z.enum([
-  "none",
-  "pending",
-  "approved",
-  "rejected",
-  "error",
-]);
-const connectionStatusSchema = z.enum(["idle", "active", "queued", "waiting"]);
 const pathwayStateSchema = z.enum([
   "not-applicable",
   "pending",
@@ -147,9 +138,6 @@ const connectionPayloadSchema = z
     targetAnchor: anchorPositionSchema,
     triggerMode: connectionBaseTriggerModeSchema.optional(),
     direct: z.boolean().optional(),
-    decideStatus: decideStatusSchema.optional(),
-    connectionStatus: connectionStatusSchema.optional(),
-    decideReason: z.string().nullable().optional(),
     summaryModel: z.string().optional(),
     summaryProvider: z.string().nullable().optional(),
     summaryThinkingLevel: z.string().nullable().optional(),
@@ -267,62 +255,6 @@ const connectionUpdatedPayloadSchema = canvasRequestSuccessPayloadSchema
 const connectionDeletedPayloadSchema = canvasRequestSuccessPayloadSchema
   .extend({
     connectionId: z.string(),
-  })
-  .passthrough();
-
-const workflowTriggeredPayloadSchema = z
-  .object({
-    canvasId: z.string(),
-    connectionId: z.string(),
-    sourcePodId: z.string(),
-    targetPodId: z.string(),
-    transferredContent: z.string().optional(),
-    isSummarized: z.boolean().optional(),
-  })
-  .passthrough();
-
-const workflowCompletePayloadSchema = z
-  .object({
-    canvasId: z.string(),
-    requestId: z.string(),
-    connectionId: z.string(),
-    targetPodId: z.string(),
-    success: z.boolean(),
-    error: z.string().optional(),
-    errorCode: z.string().optional(),
-    triggerMode: z.string().optional(),
-  })
-  .passthrough();
-
-const workflowPendingPayloadSchema = z
-  .object({
-    canvasId: z.string(),
-    targetPodId: z.string(),
-    completedSourcePodIds: z.array(z.string()),
-    pendingSourcePodIds: z.array(z.string()),
-    totalSources: z.number(),
-    completedCount: z.number(),
-    rejectedSourcePodIds: z.array(z.string()).optional(),
-    hasRejectedSources: z.boolean().optional(),
-  })
-  .passthrough();
-
-const workflowSourcesMergedPayloadSchema = z
-  .object({
-    canvasId: z.string(),
-    targetPodId: z.string(),
-    sourcePodIds: z.array(z.string()),
-    mergedContentPreview: z.string(),
-  })
-  .passthrough();
-
-const workflowQueuePayloadSchema = z
-  .object({
-    canvasId: z.string(),
-    targetPodId: z.string(),
-    connectionId: z.string(),
-    sourcePodId: z.string(),
-    triggerMode: triggerModeSchema,
   })
   .passthrough();
 
@@ -566,15 +498,6 @@ const pluginListPayloadSchema = requestSuccessPayloadSchema
 
 const pluginMutationPayloadSchema = requestSuccessPayloadSchema.passthrough();
 
-const podPluginsBusyPayloadSchema = z
-  .object({
-    requestId: z.string(),
-    canvasId: z.string(),
-    podId: z.string(),
-    success: z.literal(false),
-    reason: z.literal("pod-busy"),
-  })
-  .passthrough();
 
 const backupEventPayloadSchema = z.object({}).passthrough();
 const providerListPayloadSchema = requestSuccessPayloadSchema
@@ -716,51 +639,6 @@ const serverEventContracts = {
     "connectionUpdatedPayloadSchema",
     connectionUpdatedPayloadSchema,
   ),
-  [WebSocketResponseEvents.WORKFLOW_TRIGGERED]: {
-    schemaName: "workflowTriggeredPayloadSchema",
-    schema: workflowTriggeredPayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED]: {
-    schemaName: "workflowAutoTriggeredPayloadSchema",
-    schema: workflowTriggeredPayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_COMPLETE]: {
-    schemaName: "workflowCompletePayloadSchema",
-    schema: workflowCompletePayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_PENDING]: {
-    schemaName: "workflowPendingPayloadSchema",
-    schema: workflowPendingPayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_SOURCES_MERGED]: {
-    schemaName: "workflowSourcesMergedPayloadSchema",
-    schema: workflowSourcesMergedPayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_BRANCH_TRIGGERED]: {
-    schemaName: "workflowBranchTriggeredPayloadSchema",
-    schema: workflowTriggeredPayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED]: {
-    schemaName: "workflowDirectTriggeredPayloadSchema",
-    schema: workflowTriggeredPayloadSchema,
-  },
-  [WebSocketResponseEvents.WORKFLOW_QUEUED]: {
-    schemaName: "workflowQueuedPayloadSchema",
-    schema: workflowQueuePayloadSchema
-      .extend({
-        position: z.number(),
-        queueSize: z.number(),
-      })
-      .passthrough(),
-  },
-  [WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED]: {
-    schemaName: "workflowQueueProcessedPayloadSchema",
-    schema: workflowQueuePayloadSchema
-      .extend({
-        remainingQueueSize: z.number(),
-      })
-      .passthrough(),
-  },
   [WebSocketResponseEvents.CANVAS_PASTE_RESULT]: withRequestError(
     "canvasPasteResultPayloadSchema",
     canvasPasteResultPayloadSchema,
@@ -1098,14 +976,10 @@ const serverEventContracts = {
     "pluginReorderedPayloadSchema",
     pluginMutationPayloadSchema,
   ),
-  [WebSocketResponseEvents.POD_PLUGINS_SET]: {
-    schemaName: "podPluginsSetPayloadSchema",
-    schema: z.union([
-      podMutationSuccessPayloadSchema,
-      podPluginsBusyPayloadSchema,
-      requestErrorPayloadSchema,
-    ]),
-  },
+  [WebSocketResponseEvents.POD_PLUGINS_SET]: withRequestError(
+    "podPluginsSetPayloadSchema",
+    podMutationSuccessPayloadSchema,
+  ),
   [WebSocketResponseEvents.BACKUP_TRIGGER_RESULT]: withRequestError(
     "backupTriggerResultPayloadSchema",
     requestSuccessPayloadSchema.passthrough(),

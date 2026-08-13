@@ -16,6 +16,9 @@ import {
   deletePodWithCleanup,
 } from "../../src/services/podService.js";
 import { podStore } from "../../src/services/podStore.js";
+import { runStore } from "../../src/services/runStore.js";
+import { deferredPodWorkspaceCleanupService } from "../../src/services/runtime/deferredPodWorkspaceCleanupService.js";
+import { RunResourceLifecycleService } from "../../src/services/workflow/runResourceLifecycleService.js";
 
 type MutableConfig = typeof config;
 
@@ -76,6 +79,7 @@ describe("PodStore integration with database and temp filesystem", () => {
     installWorkspaceConfig(workspace.rootDir);
     database = await createTestDatabaseHarness(workspace.rootDir);
     podStore.__clearCacheForTesting();
+    deferredPodWorkspaceCleanupService.clear();
 
     const canvas = await canvasStore.create("pod-store-canvas");
     if (!canvas.success) {
@@ -91,6 +95,7 @@ describe("PodStore integration with database and temp filesystem", () => {
     await workspace.cleanup();
     restoreConfig();
     podStore.__clearCacheForTesting();
+    deferredPodWorkspaceCleanupService.clear();
   });
 
   it("createPodWithWorkspace 寫入真 DB 並在 tmp/AgentCanvas 建立 workspace", async () => {
@@ -289,5 +294,55 @@ describe("PodStore integration with database and temp filesystem", () => {
       .prepare("SELECT id FROM integration_bindings WHERE pod_id = ?")
       .get(pod.id);
     expect(bindingRow).toBeFalsy();
+  });
+
+  it("刪除 Pod 後保留 active Run 與工作目錄，直到最後一個 Run 釋放", async () => {
+    const result = await createPodWithWorkspace(
+      canvasId,
+      {
+        name: "deferred-workspace-pod",
+        x: 0,
+        y: 0,
+        rotation: 0,
+      },
+      "test-request",
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error("建立測試 Pod 工作目錄失敗");
+    }
+    const pod = result.data.pod;
+    await writeFile(join(pod.workspacePath, "run-artifact.txt"), "仍在使用");
+
+    const firstRun = runStore.createRun(canvasId, pod.id, "first");
+    const secondRun = runStore.createRun(canvasId, pod.id, "second");
+    for (const run of [firstRun, secondRun]) {
+      runStore.createPodInstance(
+        run.id,
+        pod.id,
+        "pending",
+        "not-applicable",
+        { workspacePath: pod.workspacePath, runRepoPath: null },
+      );
+    }
+
+    const deleteResult = await deletePodWithCleanup(
+      canvasId,
+      pod.id,
+      "test-request",
+    );
+
+    expect(deleteResult.success).toBe(true);
+    expect(podStore.getById(canvasId, pod.id)).toBeUndefined();
+    expect(runStore.getRun(firstRun.id)?.status).toBe("running");
+    expect(runStore.getRun(secondRun.id)?.status).toBe("running");
+    expect(existsSync(pod.workspacePath)).toBe(true);
+
+    const lifecycle = new RunResourceLifecycleService();
+    await lifecycle.cleanupRunResources(firstRun.id);
+    expect(existsSync(pod.workspacePath)).toBe(true);
+
+    await lifecycle.cleanupRunResources(secondRun.id);
+    expect(existsSync(pod.workspacePath)).toBe(false);
   });
 });

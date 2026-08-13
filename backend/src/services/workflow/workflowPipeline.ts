@@ -4,8 +4,6 @@ import type {
   ExecutionServiceMethods,
   MultiInputServiceMethods,
 } from "./types.js";
-import { podStore } from "../podStore.js";
-import { configStore } from "../configStore.js";
 import { runStore, TRIGGERABLE_STATUSES } from "../runStore.js";
 import { logger } from "../../utils/logger.js";
 import { LazyInitializable } from "./lazyInitializable.js";
@@ -17,6 +15,7 @@ import {
   enqueueWorkflowTriggerStage,
   runWorkflowSummaryStage,
 } from "./workflowTriggerStages.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 interface PipelineDeps {
   executionService: ExecutionServiceMethods;
@@ -89,7 +88,10 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     if (!this.isRunActive(runContext)) return;
 
-    const targetPod = podStore.getById(canvasId, targetPodId);
+    const targetPod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      targetPodId,
+    );
     if (!targetPod) {
       logger.error(
         "Workflow",
@@ -112,13 +114,14 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       return;
     }
 
-    const sourcePod = podStore.getById(canvasId, sourcePodId);
+    const sourcePod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      sourcePodId,
+    );
     const sourcePodName = sourcePod?.name ?? sourcePodId;
-    const {
-      connectionLineProvider,
-      connectionLineModel,
-      connectionLineThinkingLevel,
-    } = configStore.getConnectionLineModelConfig();
+    const connectionLineConfig = runWorkflowSnapshotStore.getRequired(
+      runContext.runId,
+    ).connectionLineConfig;
 
     logger.log(
       "Workflow",
@@ -132,9 +135,9 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       canvasId,
       sourcePodId,
       targetPodId,
-      provider: connectionLineProvider,
-      summaryModel: connectionLineModel,
-      summaryThinkingLevel: connectionLineThinkingLevel,
+      provider: connectionLineConfig.connectionLineProvider,
+      summaryModel: connectionLineConfig.connectionLineModel,
+      summaryThinkingLevel: connectionLineConfig.connectionLineThinkingLevel,
       runContext,
       pathway,
       delegate,
@@ -307,7 +310,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     sourcePodIds?: string[];
     sourcePodNames?: string[];
   } | null> {
-    const { canvasId, connection } = context;
+    const { connection } = context;
     const { targetPodId } = connection;
 
     if (strategy.collectSources) {
@@ -324,7 +327,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     }
 
     const isMultiInput =
-      getMultiInputGroupConnections(canvasId, targetPodId).length > 1;
+      getMultiInputGroupConnections(context.runContext, targetPodId).length > 1;
 
     if (isMultiInput) {
       return this.runMultiInputCollectStage(context, summaryContent);

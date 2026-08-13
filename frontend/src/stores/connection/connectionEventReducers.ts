@@ -53,7 +53,7 @@ export function syncConnectionUpdateResponse(
 
 export function addConnectionEvent(
   currentConnections: Connection[],
-  connection: Omit<Connection, "status">,
+  connection: Connection,
   resolveSourceProvider: SourceProviderResolver,
 ): Connection[] {
   const enrichedConnection = normalizeCreatedConnectionEvent(

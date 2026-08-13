@@ -28,7 +28,6 @@ import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useRunStore } from "@/stores/run/runStore";
-import { useChatStore } from "@/stores/chat/chatStore";
 import { useUploadStore } from "@/stores/upload/uploadStore";
 import PodHeader from "@/components/pod/PodHeader.vue";
 import PodUploadOverlay from "@/components/pod/PodUploadOverlay.vue";
@@ -56,7 +55,6 @@ const {
   canvasStore,
 } = useCanvasContext();
 const runStore = useRunStore();
-const chatStore = useChatStore();
 const uploadStore = useUploadStore();
 const { startBatchDrag, isElementSelected, isBatchDragging } = useBatchDrag();
 const { toast } = useToast();
@@ -71,10 +69,6 @@ const boundRepositoryNote = computed(
 );
 const currentModel = computed(() => props.pod.providerConfig.model);
 const goalTodoCount = computed(() => props.pod.goal?.todos.length ?? 0);
-const isFastModeBusy = computed(
-  () =>
-    chatStore.isTyping(props.pod.id) || runStore.isPodRunning(props.pod.id),
-);
 
 const dividerPath = computed(() => createPodDividerPath(props.pod.id));
 
@@ -336,8 +330,6 @@ const handleModelChange = async (model: string): Promise<void> => {
 };
 
 const handleFastModeToggle = async (): Promise<void> => {
-  if (isFastModeBusy.value) return;
-
   const result = await sendCanvasAction<
     PodSetFastModePayload,
     PodFastModeSetPayload
@@ -434,7 +426,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         :current-model="currentModel"
         :current-thinking-level="pod.providerConfig.thinkingLevel"
         :fast-mode-enabled="pod.fastModeEnabled === true"
-        :fast-mode-busy="isFastModeBusy"
         :bound-repository-note="boundRepositoryNote"
         :goal-todo-count="goalTodoCount"
         @plugin-clicked="handlePluginClick"

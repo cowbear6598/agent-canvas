@@ -2,12 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── 模組 mock（本地定義，不依賴工廠檔）─────────────────────────────────────
 
-vi.mock("../../src/services/workflow/workflowEventEmitter.js", () => ({
-  workflowEventEmitter: {
-    emitWorkflowQueueProcessed: vi.fn(),
-  },
-}));
-
 vi.mock("../../src/services/connectionStore.js", () => ({
   connectionStore: {
     findBySourcePodId: vi.fn(),
@@ -30,11 +24,9 @@ vi.mock("../../src/utils/logger.js", () => ({
 import {
   buildTransferMessage,
   isAutoTriggerable,
-  buildQueueProcessedPayload,
   formatMergedSummaries,
   resolvePendingKey,
 } from "../../src/services/workflow/workflowHelpers.js";
-import type { QueueProcessedContext } from "../../src/services/workflow/types.js";
 import type { RunContext } from "../../src/types/run.js";
 import type { Pod } from "../../src/types/pod.js";
 
@@ -58,39 +50,9 @@ const makePod = (overrides?: Partial<Pod>): Pod => ({
   ...overrides,
 });
 
-const makeQueueProcessedContext = (
-  overrides?: Partial<QueueProcessedContext>,
-): QueueProcessedContext => ({
-  canvasId: "canvas-1",
-  targetPodId: "target-pod",
-  connectionId: "conn-1",
-  sourcePodId: "source-pod",
-  remainingQueueSize: 2,
-  triggerMode: "auto",
-  participatingConnectionIds: ["conn-1"],
-  ...overrides,
-});
-
 describe("workflowHelpers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe("buildQueueProcessedPayload", () => {
-    it("從 QueueProcessedContext 正確建立 payload", () => {
-      const context = makeQueueProcessedContext();
-
-      const payload = buildQueueProcessedPayload(context);
-
-      expect(payload).toEqual({
-        canvasId: "canvas-1",
-        targetPodId: "target-pod",
-        connectionId: "conn-1",
-        sourcePodId: "source-pod",
-        remainingQueueSize: 2,
-        triggerMode: "auto",
-      });
-    });
   });
 
   describe("buildTransferMessage", () => {
@@ -194,11 +156,6 @@ describe("workflowHelpers", () => {
       expect(result).toBe("run-1:target-pod");
     });
 
-    it("無 runContext（undefined）時直接回傳 targetPodId", () => {
-      const result = resolvePendingKey("target-pod", undefined);
-
-      expect(result).toBe("target-pod");
-    });
   });
 
   describe("isAutoTriggerable", () => {

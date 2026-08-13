@@ -1,0 +1,101 @@
+description: >
+  Workflow runs currently persist their status, messages, pod-instance state,
+  and isolated execution paths, but the runtime still reads Pod definitions,
+  connections, and connection-line settings from the editable canvas stores.
+  Later edits or deletion can therefore change or interrupt an active run. Each
+  run needs an immutable workflow-definition snapshot so users can keep refining
+  the canvas without changing the behavior of work that has already started.
+  Pod definition deletion is isolated by the snapshot. When an active Run still
+  uses a deleted Pod's local working directory, physical directory cleanup is
+  deferred until the last referencing Run releases it. The
+  definition snapshot must exist only as an execution resource while its Run is
+  active and be removed when the Run reaches any terminal state or is deleted.
+  Completed Run history keeps its existing results and messages without retaining
+  the workflow definition. Plugin and MCP selections are captured by
+  reference only, and Pod or Repository Memory content remains live while only
+  its enablement settings are captured. Changes to those external resources may
+  therefore still affect an active run. Active runs may continue to follow the
+  existing shutdown policy.
+goal:
+  - Execute every run from the workflow definition and execution settings captured when that run starts.
+  - Limit each snapshot to the source Pod and the downstream Pods and Connections reachable when the run starts, excluding unrelated canvas content and later graph additions.
+  - Hold the immutable snapshot in a backend in-memory run-scoped store only while its owning Run is active, and remove it on completion, error, cancellation, manual deletion, or failed Run creation.
+  - Reject Run creation atomically without leaving history or starting execution when a complete snapshot cannot be created.
+  - Keep an active run stable when Pod settings or workflow connections change after launch.
+  - Allow FastMode and plugin assignments to be changed while any existing run is active, with changes applying only to subsequently created runs.
+  - Snapshot Plugin and MCP selections by identifier without duplicating their global definitions, files, or secrets.
+  - Snapshot Pod and Repository Memory enablement settings without copying their live memory content.
+  - Keep live Pod and Connection definition deletion isolated from an active run's execution graph, and defer deletion of a removed Pod's local working directory until every referencing Run releases it.
+  - Completely remove the obsolete normal-mode workflow path, including its backend branches and emitters, shared WebSocket contracts, frontend event handlers, and Connection runtime animation state, leaving run-scoped execution as the single supported model.
+  - Keep the workflow snapshot backend-only and exclude it from completed Run history and frontend contracts.
+related:
+  - backend/src/database/schema.ts
+  - backend/src/database/statements.ts
+  - backend/src/services/runStore.ts
+  - backend/src/services/connection/connectionRepository.ts
+  - backend/src/services/connection/connectionRowMapper.ts
+  - backend/src/services/connectionStore.ts
+  - backend/src/services/runtime/runExecutionResources.ts
+  - backend/src/services/runtime/executionPaths.ts
+  - backend/src/services/goalRuntime.ts
+  - backend/src/services/mcp/managedMcpSurfaceService.ts
+  - backend/src/services/provider/claude/buildClaudeOptions.ts
+  - backend/src/services/provider/codexProvider.ts
+  - backend/src/services/provider/opencodeOptionsBuilder.ts
+  - backend/src/services/workflow/runExecutionService.ts
+  - backend/src/services/workflow/runWorkflowSnapshotStore.ts
+  - backend/src/services/workflow/runResourceLifecycleService.ts
+  - backend/src/services/workflow/workflowExecutionService.ts
+  - backend/src/services/workflow/workflowPipeline.ts
+  - backend/src/services/workflow/workflowStatusDelegate.ts
+  - backend/src/services/workflow/workflowAutoTriggerService.ts
+  - backend/src/services/workflow/workflowBranchTriggerService.ts
+  - backend/src/services/workflow/workflowDirectTriggerService.ts
+  - backend/src/services/workflow/workflowMultiInputService.ts
+  - backend/src/services/workflow/workflowStateService.ts
+  - backend/src/services/workflow/workflowHelpers.ts
+  - backend/src/services/workflow/workflowEventEmitter.ts
+  - backend/src/services/workflow/types.ts
+  - backend/src/services/workflow/branchDecisionService.ts
+  - backend/src/services/summaryService.ts
+  - backend/src/services/disposableChatService.ts
+  - backend/src/services/branch/branchDecider.ts
+  - backend/src/services/claude/streamingChatExecutor.ts
+  - backend/src/services/commands/podCommandService.ts
+  - backend/src/handlers/podHandlers.ts
+  - backend/src/services/podService.ts
+  - backend/src/types/run.ts
+  - backend/src/types/connection.ts
+  - backend/src/types/responses/workflow.ts
+  - backend/src/schemas/serverEventManifest.ts
+  - shared/websocket/events.ts
+  - backend/tests/business-logic/runExecutionService.test.ts
+  - backend/tests/business-logic/workflowExecutionService.test.ts
+  - backend/tests/business-logic/workflowPipeline.test.ts
+  - backend/tests/business-logic/streamingChatExecutor.test.ts
+  - backend/tests/business-logic/podFastMode.test.ts
+  - backend/tests/business-logic/pluginHandlers.test.ts
+  - backend/tests/business-logic/runWorkflowSnapshotStore.test.ts
+  - backend/tests/business-logic/connectionStatusPersistence.test.ts
+  - backend/tests/database/schema.test.ts
+  - frontend/src/components/pod/CanvasPod.vue
+  - frontend/src/components/pod/PodSlots.vue
+  - frontend/src/components/canvas/ConnectionLayer.vue
+  - frontend/src/components/canvas/ConnectionLine.vue
+  - frontend/src/composables/eventHandlers/workflowEventHandlers.ts
+  - frontend/src/stores/connectionStore.ts
+  - frontend/src/stores/workflowEventHandlers.ts
+  - frontend/src/stores/connectionGraphHelpers.ts
+  - frontend/src/stores/connectionPayloadMappers.ts
+  - frontend/src/stores/connectionStoreHelpers.ts
+  - frontend/src/types/connection.ts
+  - frontend/src/types/websocket/responses.ts
+  - frontend/src/locales/en.json
+  - frontend/src/locales/ja.json
+  - frontend/src/locales/zh-TW.json
+  - frontend/tests/userflows/canvas/podFastModeFlow.test.ts
+  - frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts
+  - frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts
+  - frontend/tests/business-logic/stores/connectionStore.test.ts
+verify:
+  - bun run test

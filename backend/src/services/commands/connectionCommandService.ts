@@ -16,7 +16,6 @@ import { toConnectionPublic, toPodPublicView } from "../../types/index.js";
 import { WebSocketError } from "../../middleware/wsErrorHandler.js";
 import { connectionStore } from "../connectionStore.js";
 import { podStore } from "../podStore.js";
-import { workflowStateService } from "../workflow/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { getPodDisplayName } from "../../utils/handlerHelpers.js";
 import { logger } from "../../utils/logger.js";
@@ -146,11 +145,6 @@ class ConnectionCommandService {
     connectionId: string;
     connection: Connection;
   }): ApplicationCommandResult<ConnectionDeletedPayload> {
-    workflowStateService.handleConnectionDeletion(
-      params.canvasId,
-      params.connectionId,
-    );
-
     const deleted = connectionStore.delete(params.canvasId, params.connectionId);
     if (!deleted) {
       throw new WebSocketError(

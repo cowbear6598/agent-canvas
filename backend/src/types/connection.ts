@@ -7,15 +7,6 @@ export type TriggerMode = "auto" | "branch" | "direct";
 
 export type AutoTriggerMode = ConnectionBaseTriggerMode;
 
-export type DecideStatus =
-  | "none"
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "error";
-
-export type ConnectionStatus = "idle" | "active" | "queued" | "waiting";
-
 export interface Connection {
   id: string;
   sourcePodId: string;
@@ -29,9 +20,6 @@ export interface Connection {
   triggerMode: ConnectionBaseTriggerMode;
   /** direct 代表 no-wait pathway toggle，非第三種 connection 類別 */
   direct: boolean;
-  decideStatus: DecideStatus;
-  decideReason: string | null;
-  connectionStatus: ConnectionStatus;
   /** summaryModel 接受任意模型名稱（如 "sonnet"、"gpt-5.6-luna"），由 service 層驗證 capability */
   summaryModel: string;
   /**

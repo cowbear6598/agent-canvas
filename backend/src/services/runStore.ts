@@ -556,6 +556,13 @@ class RunStore {
     }));
   }
 
+  getRunIdsByWorkspacePath(workspacePath: string): string[] {
+    const rows = this.stmts.runPodInstance.selectRunIdsByWorkspacePath.all(
+      workspacePath,
+    ) as Array<{ run_id: string }>;
+    return rows.map((row) => row.run_id);
+  }
+
   /**
    * 清除指定 Run 所有 pod instance 的 run_repo_path。
    * 在 run repo 實際刪除成功後呼叫，防止二次清理。

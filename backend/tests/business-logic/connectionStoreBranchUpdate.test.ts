@@ -3,7 +3,7 @@
  *
  * 涵蓋：
  * - create：triggerMode=branch 時 label 必填、不可為 "None"（大小寫不敏感）、同 source 唯一
- * - update：branch → auto/direct 時 reset decideStatus；
+ * - update：branch → auto/direct 時清除 branch 欄位；
  *           branch → branch 時 label 唯一性（排除自己）；label="None" throw；
  *           修改 description 與統一 line model settings 不動 label 也合法
  * - findBranchGroup：只列出同 source 且 triggerMode=branch 的連線
@@ -186,14 +186,11 @@ describe("connectionStore — branch 驗證邏輯", () => {
   // update 路徑
   // ----------------------------------------------------------------
   describe("update — branch → 其他模式清空欄位", () => {
-    it("6. update branch → auto → 清空 label/description/branchProvider/branchModel + decideStatus='none'", () => {
+    it("6. update branch → auto → 清空 label/description/branchProvider/branchModel", () => {
       insertPod("src-6");
       insertPod("dst-6");
 
       const conn = createBranchConnection("src-6", "dst-6", "MyLabel");
-      // 先手動設 decideStatus 為 pending
-      connectionStore.update(CANVAS_ID, conn.id, { decideStatus: "pending" });
-
       const updated = connectionStore.update(CANVAS_ID, conn.id, {
         triggerMode: "auto",
       });
@@ -201,19 +198,13 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.triggerMode).toBe("auto");
       expect(updated?.label).toBe("");
       expect(updated?.description).toBeUndefined();
-      // branchProvider/branchModel 在 rowToConnection 中 NULL 會 fallback
-      // 切換後 DB 應為 NULL；rowToConnection fallback 為 "claude"/"sonnet"
-      // 主要驗證 decideStatus 被 reset
-      expect(updated?.decideStatus).toBe("none");
     });
 
-    it("7. update branch → direct toggle → reset decideStatus='none'", () => {
+    it("7. update branch → direct toggle → 清除 branch 欄位", () => {
       insertPod("src-7");
       insertPod("dst-7");
 
       const conn = createBranchConnection("src-7", "dst-7", "DirectLabel");
-      connectionStore.update(CANVAS_ID, conn.id, { decideStatus: "decided" });
-
       const updated = connectionStore.update(CANVAS_ID, conn.id, {
         triggerMode: "direct",
       });
@@ -221,7 +212,6 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.triggerMode).toBe("auto");
       expect(updated?.direct).toBe(true);
       expect(updated?.label).toBe("");
-      expect(updated?.decideStatus).toBe("none");
     });
 
     it("triggerMode=direct 同時明確指定 direct=false 時，以明確值為準", () => {
@@ -242,23 +232,6 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.direct).toBe(false);
     });
 
-    it("離開 branch 同時明確指定 decideStatus 時，以明確值覆寫 reset", () => {
-      insertPod("src-decide-override");
-      insertPod("dst-decide-override");
-
-      const conn = createBranchConnection(
-        "src-decide-override",
-        "dst-decide-override",
-        "DecideOverride",
-      );
-      const updated = connectionStore.update(CANVAS_ID, conn.id, {
-        triggerMode: "auto",
-        decideStatus: "pending",
-      });
-
-      expect(updated?.triggerMode).toBe("auto");
-      expect(updated?.decideStatus).toBe("pending");
-    });
   });
 
   describe("update — branch → branch label 變更", () => {

@@ -52,6 +52,7 @@ import { resetStatements } from "../../src/database/statements.js";
 import { executeStreamingChat } from "../../src/services/claude/streamingChatExecutor.js";
 import { socketService } from "../../src/services/socketService.js";
 import { podStore } from "../../src/services/podStore.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
 import { runStore } from "../../src/services/runStore.js";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { workflowExecutionService } from "../../src/services/workflow/index.js";
@@ -316,6 +317,9 @@ describe("executeStreamingChat", () => {
         content,
         timestamp: new Date().toISOString(),
       }),
+    );
+    vi.spyOn(runWorkflowSnapshotStore, "getPod").mockImplementation(
+      (_runId, podId) => podStore.getById(canvasId, podId),
     );
 
     asMock(getProvider).mockClear();

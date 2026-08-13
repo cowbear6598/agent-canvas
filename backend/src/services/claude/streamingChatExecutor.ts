@@ -12,6 +12,7 @@ import {
   type StreamingLifecycleCoordinator,
 } from "./streamingLifecycleCoordinator.js";
 import { podStore } from "../podStore.js";
+import { runWorkflowSnapshotStore } from "../workflow/runWorkflowSnapshotStore.js";
 import { logger } from "../../utils/logger.js";
 import type { ChatExecutionStrategy } from "../executionStrategy.js";
 import { getProvider } from "../provider/index.js";
@@ -731,16 +732,17 @@ export async function executeStreamingChat(
   callbacks?: StreamingChatExecutorCallbacks,
 ): Promise<StreamingChatExecutorResult> {
   const { canvasId, podId, strategy } = options;
-
-  const podResult = podStore.getByIdGlobal(podId);
-  if (!podResult) {
+  const baseRunContext = strategy.getRunContext();
+  const pod = baseRunContext
+    ? runWorkflowSnapshotStore.getPod(baseRunContext.runId, podId)
+    : podStore.getByIdGlobal(podId)?.pod;
+  if (!pod) {
     emitPodNotFoundError(canvasId, podId);
     return { messageId: "", content: "", hasContent: false, aborted: false };
   }
 
-  const baseRunContext = strategy.getRunContext();
   const effectiveOptions =
-    shouldCreateGoalRuntimeScope(baseRunContext, podResult.pod)
+    shouldCreateGoalRuntimeScope(baseRunContext, pod)
       ? {
           ...options,
           strategy: strategy.withGoalRuntimeScope(uuidv4()),
@@ -748,7 +750,7 @@ export async function executeStreamingChat(
       : options;
   const scopedRunContext = effectiveOptions.strategy.getRunContext();
   if (scopedRunContext?.goalRuntimeScopeId) {
-    ensureGoalRuntime(podResult.pod, scopedRunContext);
+    ensureGoalRuntime(pod, scopedRunContext);
   }
 
   const runContext = effectiveOptions.strategy.getRunContext();
@@ -762,7 +764,7 @@ export async function executeStreamingChat(
     // 第一輪 turn：使用 caller 傳入的 message
     let turnOutcome = await executeChatTurn(
       effectiveOptions,
-      podResult.pod,
+      pod,
       effectiveOptions.message,
       callbacks,
     );
@@ -772,7 +774,7 @@ export async function executeStreamingChat(
 
     const providerRecoveryResult = await recoverCodexProviderErrors(
       effectiveOptions,
-      podResult.pod,
+      pod,
       turnOutcome,
       callbacks,
     );
@@ -781,7 +783,7 @@ export async function executeStreamingChat(
 
     const goalGateResult = await runGoalCompletionGate(
       effectiveOptions,
-      podResult.pod,
+      pod,
       runContext,
       turnOutcome,
       callbacks,

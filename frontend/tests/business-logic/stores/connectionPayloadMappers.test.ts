@@ -12,20 +12,6 @@ import {
 
 describe("connectionPayloadMappers", () => {
   describe("payload normalize 規則", () => {
-    it("缺少 triggerMode、status、decideStatus 時補預設值", () => {
-      const connection = normalizeConnection({
-        id: "conn-1",
-        sourcePodId: "pod-a",
-        sourceAnchor: "bottom",
-        targetPodId: "pod-b",
-        targetAnchor: "top",
-      });
-
-      expect(connection.triggerMode).toBe("auto");
-      expect(connection.status).toBe("idle");
-      expect(connection.decideStatus).toBe("none");
-    });
-
     it("gemini summaryModel 會收斂成預設 summary model 與 claude provider", () => {
       const connection = normalizeConnection({
         id: "conn-1",
@@ -85,22 +71,6 @@ describe("connectionPayloadMappers", () => {
   });
 
   describe("response event payload mapping 規則", () => {
-    it("created event 補齊前端事件需要的 idle 狀態", () => {
-      const connection = normalizeCreatedConnectionEvent({
-        id: "conn-1",
-        sourcePodId: "pod-a",
-        sourceAnchor: "bottom",
-        targetPodId: "pod-b",
-        targetAnchor: "top",
-        triggerMode: "auto",
-        direct: false,
-        decideStatus: "pending",
-      });
-
-      expect(connection.status).toBe("idle");
-      expect(connection.decideStatus).toBe("none");
-    });
-
     it("created event 也會套用 legacy gemini summary normalize", () => {
       const connection = normalizeCreatedConnectionEvent({
         id: "conn-1",
@@ -112,7 +82,6 @@ describe("connectionPayloadMappers", () => {
         summaryProvider: "opencode",
         triggerMode: "auto",
         direct: false,
-        decideStatus: "none",
       });
 
       expect(connection.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
@@ -130,7 +99,6 @@ describe("connectionPayloadMappers", () => {
           summaryProvider: null,
           triggerMode: "auto",
           direct: false,
-          decideStatus: "none",
         },
         "opencode",
       );
@@ -147,35 +115,10 @@ describe("connectionPayloadMappers", () => {
         targetAnchor: "top",
         triggerMode: "auto",
         direct: false,
-        decideStatus: "none",
         label: "",
       });
 
       expect(connection.label).toBeUndefined();
-    });
-
-    it("updated event 未帶 connectionStatus 時保留既有 status", () => {
-      const existingConnection = createMockConnection({
-        id: "conn-1",
-        sourcePodId: "pod-a",
-        targetPodId: "pod-b",
-        status: "waiting",
-      });
-      const payload: ConnectionPayloadItem = {
-        id: "conn-1",
-        sourcePodId: "pod-a",
-        sourceAnchor: "bottom",
-        targetPodId: "pod-b",
-        targetAnchor: "top",
-      };
-
-      const mapped = mapConnectionUpdatedEventPayload(
-        payload,
-        existingConnection,
-        () => "claude",
-      );
-
-      expect(mapped.status).toBe("waiting");
     });
 
     it("updated event 會保留既有 direct 並更新 summaryThinkingLevel", () => {

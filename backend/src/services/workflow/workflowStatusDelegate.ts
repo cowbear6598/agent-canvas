@@ -20,7 +20,6 @@ export interface EnqueueItem {
 }
 
 export interface WorkflowStatusDelegate {
-  isRunMode(): boolean;
   startPodExecution(
     canvasId: string,
     podId: string,
@@ -42,7 +41,6 @@ export interface WorkflowStatusDelegate {
   ): void;
   onChatError(canvasId: string, podId: string, errorMessage: string): void;
   evaluateRun(): void;
-  shouldEnqueue(): boolean;
   isBusy(canvasId: string, targetPodId: string): boolean;
   enqueue(item: EnqueueItem): void;
   scheduleNextInQueue(canvasId: string, targetPodId: string): void;
@@ -55,10 +53,6 @@ export interface WorkflowStatusDelegate {
 
 class RunDelegate implements WorkflowStatusDelegate {
   constructor(private readonly runContext: RunContext) {}
-
-  isRunMode(): boolean {
-    return true;
-  }
 
   startPodExecution(
     _canvasId: string,
@@ -125,10 +119,6 @@ class RunDelegate implements WorkflowStatusDelegate {
 
   evaluateRun(): void {
     runExecutionService.evaluateRun(this.runContext);
-  }
-
-  shouldEnqueue(): boolean {
-    return true;
   }
 
   isBusy(_canvasId: string, targetPodId: string): boolean {

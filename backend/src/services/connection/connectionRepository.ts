@@ -2,8 +2,6 @@ import { getDb } from "../../database/index.js";
 import { getStatements } from "../../database/statements.js";
 import type {
   AnchorPosition,
-  ConnectionStatus,
-  DecideStatus,
   TriggerMode,
 } from "../../types/index.js";
 import type { ProviderName } from "../provider/index.js";
@@ -19,9 +17,6 @@ export interface InsertConnectionRowInput {
   targetPodId: string;
   targetAnchor: AnchorPosition;
   triggerMode: TriggerMode;
-  decideStatus: DecideStatus;
-  decideReason: string | null;
-  connectionStatus: ConnectionStatus;
   summaryModel: string;
   summaryProvider: ProviderName | null;
   summaryThinkingLevel: string | null;
@@ -70,9 +65,6 @@ export class ConnectionRepository {
       $targetPodId: input.targetPodId,
       $targetAnchor: input.targetAnchor,
       $triggerMode: persistedTriggerMode,
-      $decideStatus: input.decideStatus,
-      $decideReason: input.decideReason,
-      $connectionStatus: input.connectionStatus,
       $summaryModel: input.summaryModel,
       $summaryProvider: input.summaryProvider,
       $summaryThinkingLevel: input.summaryThinkingLevel,
@@ -127,9 +119,6 @@ export class ConnectionRepository {
       $targetPodId: input.targetPodId,
       $targetAnchor: input.targetAnchor,
       $triggerMode: persistedTriggerMode,
-      $decideStatus: input.decideStatus,
-      $decideReason: input.decideReason,
-      $connectionStatus: input.connectionStatus,
       $summaryModel: input.summaryModel,
       $summaryProvider: input.summaryProvider,
       $summaryThinkingLevel: input.summaryThinkingLevel,
@@ -139,31 +128,12 @@ export class ConnectionRepository {
     }) as ConnectionRow | undefined;
   }
 
-  updateConnectionStatusReturning(
-    canvasId: string,
-    id: string,
-    connectionStatus: ConnectionStatus,
-  ): ConnectionRow | undefined {
-    return this.stmts.updateConnectionStatusReturning.get({
-      $canvasId: canvasId,
-      $id: id,
-      $connectionStatus: connectionStatus,
-    }) as ConnectionRow | undefined;
-  }
-
   deleteByPodId(canvasId: string, podId: string): number {
     const result = this.stmts.deleteByPodId.run({
       $canvasId: canvasId,
       $podId: podId,
     });
     return result.changes;
-  }
-
-  clearDecideStatusByPodId(canvasId: string, podId: string): void {
-    this.stmts.clearDecideStatusByPodId.run({
-      $canvasId: canvasId,
-      $podId: podId,
-    });
   }
 
   findByTriggerMode(

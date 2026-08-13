@@ -8,6 +8,11 @@ import { logger } from "../../src/utils/logger.js";
 import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import { getDb } from "../../src/database/index.js";
 import { v4 as uuidv4 } from "uuid";
+import { podStore } from "../../src/services/podStore.js";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
+import { connectionStore } from "../../src/services/connectionStore.js";
+import type { RunContext } from "../../src/types/run.js";
+import { installRunWorkflowSnapshot } from "../helpers/workflowSnapshotHelper.js";
 
 // --- 測試常數 ---
 const CANVAS_ID = "canvas-settle-1";
@@ -22,6 +27,31 @@ function insertCanvas(id: string = CANVAS_ID): void {
     .run(id, `canvas-${id}`, 0);
 }
 
+function insertPod(canvasId: string, podId: string): void {
+  getDb()
+    .prepare(
+      `INSERT OR IGNORE INTO pods
+       (id, canvas_id, name, workspace_path)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(podId, canvasId, podId, `/tmp/${podId}`);
+}
+
+function makeRunContext(runId: string): RunContext {
+  const runContext = {
+    runId,
+    canvasId: CANVAS_ID,
+    sourcePodId: SOURCE_POD_ID,
+  };
+  if (!runWorkflowSnapshotStore.has(runId)) {
+    installRunWorkflowSnapshot(runContext, {
+      pods: podStore.list(CANVAS_ID),
+      connections: connectionStore.list(CANVAS_ID),
+    });
+  }
+  return runContext;
+}
+
 /**
  * 直接透過 SQL 插入 connection，繞過 connectionStore.create 的 pod 查找與 model 解析，
  * 確保測試資料建立不依賴 podStore。
@@ -33,13 +63,15 @@ function insertConnection(
   triggerMode: "auto" | "direct" | "branch" = "auto",
   id?: string,
 ): string {
+  insertPod(canvasId, sourcePodId);
+  insertPod(canvasId, targetPodId);
   const connId = id ?? uuidv4();
   getDb()
     .prepare(
       `INSERT INTO connections
        (id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
-        trigger_mode, decide_status, decide_reason, connection_status)
-       VALUES (?, ?, ?, 'right', ?, 'left', ?, 'none', NULL, 'idle')`,
+        trigger_mode)
+       VALUES (?, ?, ?, 'right', ?, 'left', ?)`,
     )
     .run(connId, canvasId, sourcePodId, targetPodId, triggerMode);
   return connId;
@@ -49,7 +81,10 @@ describe("calculatePathways（透過 createRun 測試）", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
+    insertPod(CANVAS_ID, SOURCE_POD_ID);
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
     vi.spyOn(logger, "error").mockImplementation(() => {});
@@ -167,6 +202,8 @@ describe("settlePodTrigger", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -188,7 +225,7 @@ describe("settlePodTrigger", () => {
     runStore.updatePodInstanceStatus(inst.id, "running");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -210,7 +247,7 @@ describe("settlePodTrigger", () => {
     runStore.updatePodInstanceStatus(inst.id, "running");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "direct",
     );
@@ -229,7 +266,7 @@ describe("settlePodTrigger", () => {
     runStore.updatePodInstanceStatus(inst.id, "running");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -252,7 +289,7 @@ describe("settlePodTrigger", () => {
     runStore.settleAutoPathway(inst.id);
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "direct",
     );
@@ -266,7 +303,7 @@ describe("settlePodTrigger", () => {
     runStore.createPodInstance(runId, "pod-a", "pending");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -279,7 +316,7 @@ describe("settlePodTrigger", () => {
   it("找不到 instance 時 log warning 不拋錯", () => {
     expect(() =>
       runExecutionService.settlePodTrigger(
-        { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+        makeRunContext(runId),
         "pod-nonexistent",
         "auto",
       ),
@@ -292,7 +329,7 @@ describe("settlePodTrigger", () => {
     runStore.updatePodInstanceStatus(inst.id, "running");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -320,7 +357,7 @@ describe("settlePodTrigger", () => {
     runStore.updatePodInstanceStatus(inst.id, "running");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "direct",
     );
@@ -342,7 +379,7 @@ describe("settlePodTrigger", () => {
     runStore.settleAutoPathway(inst.id);
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "direct",
     );
@@ -361,7 +398,7 @@ describe("settlePodTrigger", () => {
     runStore.updatePodInstanceStatus(inst.id, "error");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "direct",
     );
@@ -377,6 +414,8 @@ describe("settleAndSkipPath", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -400,7 +439,7 @@ describe("settleAndSkipPath", () => {
     );
 
     runExecutionService.settleAndSkipPath(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -421,7 +460,7 @@ describe("settleAndSkipPath", () => {
     // status=pending 屬於 NEVER_TRIGGERED_STATUSES → skipped
 
     runExecutionService.settleAndSkipPath(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -440,7 +479,7 @@ describe("settleAndSkipPath", () => {
     runStore.updatePodInstanceStatus(inst.id, "queued");
 
     runExecutionService.settleAndSkipPath(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -459,7 +498,7 @@ describe("settleAndSkipPath", () => {
     runStore.updatePodInstanceStatus(inst.id, "waiting");
 
     runExecutionService.settleAndSkipPath(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -478,7 +517,7 @@ describe("settleAndSkipPath", () => {
     runStore.updatePodInstanceStatus(inst.id, "deciding");
 
     runExecutionService.settleAndSkipPath(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -497,7 +536,7 @@ describe("settleAndSkipPath", () => {
     runStore.updatePodInstanceStatus(inst.id, "running");
 
     runExecutionService.settleAndSkipPath(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -511,12 +550,12 @@ describe("settleAndSkipPath", () => {
 
     expect(() => {
       runExecutionService.settleAndSkipPath(
-        { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+        makeRunContext(runId),
         "pod-a",
         "auto",
       );
       runExecutionService.settleAndSkipPath(
-        { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+        makeRunContext(runId),
         "pod-a",
         "auto",
       );
@@ -526,7 +565,7 @@ describe("settleAndSkipPath", () => {
   it("找不到 instance 時 log warning 不拋錯", () => {
     expect(() =>
       runExecutionService.settleAndSkipPath(
-        { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+        makeRunContext(runId),
         "pod-nonexistent",
         "auto",
       ),
@@ -541,6 +580,8 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -564,7 +605,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
 
     // 透過 errorPodInstance 觸發 evaluateRunStatus（errorPodInstance 亦呼叫 evaluateRunStatus）
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -586,7 +627,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-c", "pod-d", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-b",
       "test error",
     );
@@ -620,7 +661,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-c", "pod-d", "direct");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-b",
       "test error",
     );
@@ -652,7 +693,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-c", "pod-d", "direct");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-b",
       "test error",
     );
@@ -674,7 +715,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-c", "pod-d", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -694,7 +735,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-a", "pod-b", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -714,7 +755,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-a", "pod-b", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -732,7 +773,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-a", "pod-b", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -762,7 +803,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-c", "pod-d", "direct");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-b",
       "test error",
     );
@@ -780,7 +821,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-a", "pod-b", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -798,7 +839,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-a", "pod-b", "auto");
 
     runExecutionService.errorPodInstance(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "test error",
     );
@@ -815,7 +856,7 @@ describe("settleUnreachablePaths（透過 evaluateRunStatus 觸發）", () => {
     insertConnection(CANVAS_ID, "pod-a", "pod-b", "auto");
 
     runExecutionService.settlePodTrigger(
-      { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID },
+      makeRunContext(runId),
       "pod-a",
       "auto",
     );
@@ -831,6 +872,8 @@ describe("雙 pathway pod 端到端", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -846,7 +889,7 @@ describe("雙 pathway pod 端到端", () => {
   });
 
   it("auto pathway settled 後 direct 未 settled → 不 completed；兩者都 settled → completed", () => {
-    const runCtx = { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID };
+    const runCtx = makeRunContext(runId);
     const inst = runStore.createPodInstance(
       runId,
       "pod-d",
@@ -873,7 +916,7 @@ describe("雙 pathway pod 端到端", () => {
   });
 
   it("pending pod：auto settled 後 direct 未 settled → 不 skip；兩者都 settled → skipped", () => {
-    const runCtx = { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID };
+    const runCtx = makeRunContext(runId);
     runStore.createPodInstance(runId, "pod-d", "pending", "pending");
 
     // Step 1: settle auto → direct 未 settled，不 skip
@@ -897,6 +940,8 @@ describe("端到端：AI-decide reject → settleAndSkipPath → evaluateRunStat
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    podStore.__clearCacheForTesting();
+    runWorkflowSnapshotStore.clear();
     insertCanvas();
     vi.spyOn(logger, "log").mockImplementation(() => {});
     vi.spyOn(logger, "warn").mockImplementation(() => {});
@@ -914,7 +959,7 @@ describe("端到端：AI-decide reject → settleAndSkipPath → evaluateRunStat
   });
 
   it("source pod 完成後 target pod 被 reject → run 完成", () => {
-    const runCtx = { runId, canvasId: CANVAS_ID, sourcePodId: SOURCE_POD_ID };
+    const runCtx = makeRunContext(runId);
 
     // source 已完成
     const srcInst = runStore.createPodInstance(runId, SOURCE_POD_ID, "settled");

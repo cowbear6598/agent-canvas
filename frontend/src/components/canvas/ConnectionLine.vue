@@ -1,34 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, nextTick, watch } from "vue";
-import type {
-  Connection,
-  ConnectionStatus,
-  DecideStatus,
-  TriggerMode,
-} from "@/types/connection";
+import { computed } from "vue";
+import type { Connection, TriggerMode } from "@/types/connection";
 import type { Pod } from "@/types/pod";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useConnectionPath } from "@/composables/useConnectionPath";
 import { useAnchorDetection } from "@/composables/useAnchorDetection";
-import { Loader2 } from "lucide-vue-next";
-import { useI18n } from "vue-i18n";
 
 const props = withDefaults(
   defineProps<{
     connection: Connection;
     podsById: Map<string, Pod>;
     isSelected: boolean;
-    status?: ConnectionStatus;
     triggerMode?: TriggerMode;
-    decideStatus?: DecideStatus;
-    decideReason?: string;
     label?: string;
   }>(),
   {
-    status: "idle",
     triggerMode: "auto",
-    decideStatus: "none",
-    decideReason: undefined,
     label: undefined,
   },
 );
@@ -42,7 +29,6 @@ const connectionStore = useConnectionStore();
 const { calculatePathData, calculateMultipleArrowPositions } =
   useConnectionPath();
 const { getAnchorPositions } = useAnchorDetection();
-const { t } = useI18n();
 
 const emptyPathData = { path: "", midPoint: { x: 0, y: 0 }, angle: 0 };
 
@@ -88,52 +74,16 @@ const pathData = computed(() => {
   return calculatePathData(connectionPathInput.value);
 });
 
-const BRANCH_STATUS_COLOR_DEFAULT = "oklch(0.65 0.12 300 / 0.7)";
-
-const BRANCH_STATUS_COLOR_MAP: Record<string, string> = {
-  pending: "oklch(0.65 0.14 300 / 0.8)",
-  rejected: "oklch(0.65 0.15 20)",
-  error: "oklch(0.7 0.15 60 / 0.8)",
-  approved: BRANCH_STATUS_COLOR_DEFAULT,
-  active: "oklch(0.7 0.15 50)",
-  queued: "oklch(0.7 0.12 230 / 0.8)",
-};
-
-function getBranchStatusColor(decideStatus: string): string {
-  return BRANCH_STATUS_COLOR_MAP[decideStatus] ?? BRANCH_STATUS_COLOR_DEFAULT;
-}
-
-function getStatusColor(status: string): string {
-  if (status === "idle") return "oklch(0.6 0.02 50 / 0.5)";
-  return "oklch(0.7 0.15 50)";
-}
-
-const lineColor = computed(() => {
-  if (props.triggerMode === "branch")
-    return getBranchStatusColor(props.decideStatus ?? "none");
-  if (props.status === "queued") return "oklch(0.7 0.12 230 / 0.8)";
-  if (props.status === "waiting") return "oklch(0.7 0.15 155 / 0.8)";
-  return getStatusColor(props.status);
-});
+const lineColor = computed(() =>
+  props.triggerMode === "branch"
+    ? "oklch(0.65 0.12 300 / 0.7)"
+    : "oklch(0.6 0.02 50 / 0.5)",
+);
 
 const isDirect = computed(() => props.connection.direct);
 
 type MidLabelEntryValue = { type: string; text: string; class: string };
 type MidLabelEntry = MidLabelEntryValue | null;
-
-const UNDECIDED_BRANCH_DECIDE_STATUS = "none" satisfies DecideStatus;
-type DecidedBranchStatus = Exclude<
-  DecideStatus,
-  typeof UNDECIDED_BRANCH_DECIDE_STATUS
->;
-
-// branch 模式下特殊狀態 label 覆寫表（rejected / none 不覆寫，保留使用者命名的 label）
-const BRANCH_STATUS_LABEL_MAP: Partial<
-  Record<DecidedBranchStatus, MidLabelEntry>
-> = {
-  pending: { type: "deciding", text: "", class: "deciding-label" },
-  error: { type: "error", text: "!", class: "error-label" },
-};
 
 function createBranchMidLabel(label?: string): MidLabelEntryValue {
   return {
@@ -143,51 +93,16 @@ function createBranchMidLabel(label?: string): MidLabelEntryValue {
   };
 }
 
-function getBranchMidLabel(
-  decideStatus: DecideStatus | undefined,
-  label: string | undefined,
-): MidLabelEntry {
-  const branchDecisionStatus = decideStatus ?? UNDECIDED_BRANCH_DECIDE_STATUS;
-
-  if (branchDecisionStatus === UNDECIDED_BRANCH_DECIDE_STATUS) {
-    return createBranchMidLabel(label);
-  }
-
-  return (
-    BRANCH_STATUS_LABEL_MAP[branchDecisionStatus] ?? createBranchMidLabel(label)
-  );
-}
-
 function getMidLabel(
   triggerMode: TriggerMode,
-  decideStatus: DecideStatus | undefined,
   label: string | undefined,
 ): MidLabelEntry {
   if (triggerMode === "auto") return null;
-
-  return getBranchMidLabel(decideStatus, label);
+  return createBranchMidLabel(label);
 }
 
 const midLabel = computed((): MidLabelEntry => {
-  return getMidLabel(props.triggerMode, props.decideStatus, props.label);
-});
-
-const tooltipText = computed(() => {
-  if (!props.decideReason) return undefined;
-
-  if (props.decideStatus === "rejected") {
-    return t("canvas.connectionLine.aiRejectedReason", {
-      reason: props.decideReason,
-    });
-  }
-
-  if (props.decideStatus === "error") {
-    return t("canvas.connectionLine.aiErrorReason", {
-      reason: props.decideReason,
-    });
-  }
-
-  return undefined;
+  return getMidLabel(props.triggerMode, props.label);
 });
 
 const arrowPositions = computed(() => {
@@ -201,59 +116,6 @@ const arrowPositions = computed(() => {
   );
 });
 
-const useXMarker = computed(() => {
-  return props.triggerMode === "branch" && props.decideStatus === "rejected";
-});
-
-const pathRef = ref<SVGPathElement | null>(null);
-
-const xMarkerPositions = ref<Array<{ x: number; y: number; angle: number }>>(
-  [],
-);
-
-const MARKER_SPACING_PX = 50;
-const MIN_MARKERS = 2;
-const MAX_MARKERS = 8;
-
-const calculateXMarkerPositions = (): void => {
-  if (!pathRef.value || !useXMarker.value) {
-    xMarkerPositions.value = [];
-    return;
-  }
-
-  const path = pathRef.value;
-  const totalLength = path.getTotalLength();
-
-  const count = Math.max(
-    MIN_MARKERS,
-    Math.min(MAX_MARKERS, Math.floor(totalLength / MARKER_SPACING_PX)),
-  );
-
-  const positions: Array<{ x: number; y: number; angle: number }> = [];
-
-  for (let i = 0; i < count; i++) {
-    const distance = (totalLength / (count + 1)) * (i + 1);
-    const point = path.getPointAtLength(distance);
-
-    const delta = 2;
-    const point1 = path.getPointAtLength(Math.max(0, distance - delta));
-    const point2 = path.getPointAtLength(
-      Math.min(totalLength, distance + delta),
-    );
-    const angle =
-      Math.atan2(point2.y - point1.y, point2.x - point1.x) * (180 / Math.PI);
-
-    positions.push({ x: point.x, y: point.y, angle });
-  }
-
-  xMarkerPositions.value = positions;
-};
-
-watch([pathData, useXMarker], () => nextTick(calculateXMarkerPositions));
-
-onMounted(() => {
-  calculateXMarkerPositions();
-});
 
 const handleClick = (e: MouseEvent): void => {
   e.stopPropagation();
@@ -278,15 +140,7 @@ const handleContextMenu = (e: MouseEvent): void => {
       'connection-line',
       {
         selected: isSelected,
-        active: status === 'active',
-        idle: status === 'idle',
-        queued: status === 'queued',
-        waiting: status === 'waiting',
         branch: triggerMode === 'branch',
-        deciding: decideStatus === 'pending',
-        approved: decideStatus === 'approved',
-        rejected: decideStatus === 'rejected',
-        error: decideStatus === 'error',
         direct: isDirect,
       },
     ]"
@@ -303,14 +157,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     />
 
     <path
-      ref="pathRef"
-      :class="[
-        'line',
-        {
-          'queued-pulse': status === 'queued',
-          'waiting-pulse': status === 'waiting',
-        },
-      ]"
+      class="line"
       :d="pathData.path"
       :stroke="lineColor"
       :style="{ color: lineColor }"
@@ -319,13 +166,6 @@ const handleContextMenu = (e: MouseEvent): void => {
 
     <polygon
       v-for="(arrow, index) in arrowPositions"
-      v-show="
-        (status === 'idle' ||
-          status === 'queued' ||
-          status === 'waiting' ||
-          decideStatus === 'approved') &&
-          !useXMarker
-      "
       :key="`static-${index}`"
       class="arrow"
       :points="`0,-5 10,0 0,5`"
@@ -333,67 +173,12 @@ const handleContextMenu = (e: MouseEvent): void => {
       :transform="`translate(${arrow.x}, ${arrow.y}) rotate(${arrow.angle})`"
     />
 
-    <template
-      v-if="(status === 'active' || decideStatus === 'pending') && !useXMarker"
-    >
-      <polygon
-        v-for="i in 3"
-        :key="`animated-${i}`"
-        class="arrow arrow-animated"
-        :points="`0,-5 10,0 0,5`"
-        :fill="lineColor"
-      >
-        <animateMotion
-          dur="4s"
-          :begin="`${(i - 1) * 1.33}s`"
-          repeatCount="indefinite"
-          :path="pathData.path"
-          rotate="auto"
-        />
-        <animate
-          attributeName="opacity"
-          dur="4s"
-          :begin="`${(i - 1) * 1.33}s`"
-          values="0;1;1;0"
-          keyTimes="0;0.1;0.9;1"
-          repeatCount="indefinite"
-        />
-      </polygon>
-    </template>
-
-    <g
-      v-for="(marker, index) in xMarkerPositions"
-      v-show="useXMarker"
-      :key="`x-marker-${index}`"
-      :transform="`translate(${marker.x}, ${marker.y}) rotate(${marker.angle})`"
-    >
-      <line
-        x1="-4"
-        y1="-4"
-        x2="4"
-        y2="4"
-        :stroke="lineColor"
-        stroke-width="2"
-        stroke-linecap="round"
-      />
-      <line
-        x1="4"
-        y1="-4"
-        x2="-4"
-        y2="4"
-        :stroke="lineColor"
-        stroke-width="2"
-        stroke-linecap="round"
-      />
-    </g>
-
     <foreignObject
       v-if="midLabel || isDirect"
       :x="pathData.midPoint.x - 100"
       :y="pathData.midPoint.y - 10"
       width="200"
       height="20"
-      :title="tooltipText"
     >
       <div class="connection-mid-label-wrapper">
         <div class="connection-mid-label-stack">
@@ -401,11 +186,7 @@ const handleContextMenu = (e: MouseEvent): void => {
             v-if="midLabel"
             :class="['connection-mid-label', midLabel.class]"
           >
-            <Loader2
-              v-if="midLabel.type === 'deciding'"
-              :size="12"
-            />
-            <span v-else>{{ midLabel.text }}</span>
+            <span>{{ midLabel.text }}</span>
           </div>
           <div
             v-if="isDirect"

@@ -1,30 +1,15 @@
-import type {
-  Connection,
-  WorkflowAutoTriggeredPayload,
-} from "../../types/index.js";
+import type { Connection } from "../../types/index.js";
 import type {
   TriggerStrategy,
   TriggerDecideContext,
   TriggerDecideResult,
   PipelineContext,
-  TriggerLifecycleContext,
-  CompletionContext,
-  QueuedContext,
-  QueueProcessedContext,
 } from "./types.js";
-import { podStore } from "../podStore.js";
 import { runStore } from "../runStore.js";
-import { connectionStore } from "../connectionStore.js";
-import { workflowEventEmitter } from "./workflowEventEmitter.js";
-import {
-  forEachMultiInputGroupConnection,
-  buildQueuedPayload,
-  createMultiInputCompletionHandlers,
-  emitQueueProcessed,
-} from "./workflowHelpers.js";
 import { createStatusDelegate } from "./workflowStatusDelegate.js";
 import { logger } from "../../utils/logger.js";
 import type { RunContext } from "../../types/run.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 interface Pipeline {
   execute(context: PipelineContext, strategy: TriggerStrategy): Promise<void>;
@@ -78,7 +63,10 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
       throw new Error("AutoTriggerService 尚未初始化，請先呼叫 init()");
     }
 
-    const targetPod = podStore.getById(canvasId, connection.targetPodId);
+    const targetPod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      connection.targetPodId,
+    );
     if (!targetPod) {
       logger.log(
         "Workflow",
@@ -105,57 +93,6 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
     };
 
     await this.pipeline.execute(pipelineContext, this);
-  }
-
-  onTrigger(context: TriggerLifecycleContext): void {
-    if (context.runContext) return;
-    const payload: WorkflowAutoTriggeredPayload = {
-      connectionId: context.connectionId,
-      sourcePodId: context.sourcePodId,
-      targetPodId: context.targetPodId,
-      transferredContent: context.summary,
-      isSummarized: context.isSummarized,
-    };
-    workflowEventEmitter.emitWorkflowAutoTriggered(context.canvasId, payload);
-  }
-
-  private readonly completionHandlers = createMultiInputCompletionHandlers();
-
-  onComplete(
-    context: CompletionContext,
-    success: boolean,
-    error?: string,
-  ): void {
-    if (context.runContext) return;
-    this.completionHandlers.onComplete(context, success, error);
-  }
-
-  onError(context: CompletionContext, errorMessage: string): void {
-    if (context.runContext) return;
-    this.completionHandlers.onError(context, errorMessage);
-  }
-
-  onQueued(context: QueuedContext): void {
-    if (context.runContext) return;
-    forEachMultiInputGroupConnection(
-      context.canvasId,
-      context.targetPodId,
-      (conn) => {
-        connectionStore.updateConnectionStatus(
-          context.canvasId,
-          conn.id,
-          "queued",
-        );
-      },
-    );
-    workflowEventEmitter.emitWorkflowQueued(
-      context.canvasId,
-      buildQueuedPayload(context, context.connectionId, context.sourcePodId),
-    );
-  }
-
-  onQueueProcessed(context: QueueProcessedContext): void {
-    emitQueueProcessed(context);
   }
 }
 

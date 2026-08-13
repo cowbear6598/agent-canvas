@@ -313,8 +313,6 @@ describe("copyPasteFlow", () => {
           id: "conn-new",
           sourcePodId: "pod-new-source",
           targetPodId: "pod-new-target",
-          status: "idle",
-          decideStatus: "none",
         }),
       ]),
     );

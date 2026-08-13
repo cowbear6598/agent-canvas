@@ -32,8 +32,6 @@ export type {
   ConnectionBaseTriggerMode,
   TriggerMode,
   AutoTriggerMode,
-  DecideStatus,
-  ConnectionStatus,
 } from "./connection.js";
 export { toConnectionPublic } from "./connection.js";
 

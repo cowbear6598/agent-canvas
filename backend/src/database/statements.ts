@@ -85,10 +85,6 @@ function buildStatements(db: Database): {
     selectById: ReturnType<Database["prepare"]>;
     update: ReturnType<Database["prepare"]>;
     updateReturning: ReturnType<Database["prepare"]>;
-    updateConnectionStatus: ReturnType<Database["prepare"]>;
-    updateConnectionStatusReturning: ReturnType<Database["prepare"]>;
-    updateDecideStatus: ReturnType<Database["prepare"]>;
-    clearDecideStatusByPodId: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     deleteByCanvasId: ReturnType<Database["prepare"]>;
     selectByPodId: ReturnType<Database["prepare"]>;
@@ -190,6 +186,7 @@ function buildStatements(db: Database): {
     settleDirectPathway: ReturnType<Database["prepare"]>;
     selectRunRepoPathsByRunId: ReturnType<Database["prepare"]>;
     selectExecutionPathsByRunId: ReturnType<Database["prepare"]>;
+    selectRunIdsByWorkspacePath: ReturnType<Database["prepare"]>;
     clearRunRepoPathsByRunId: ReturnType<Database["prepare"]>;
     clearExecutionPathsByRunId: ReturnType<Database["prepare"]>;
   };
@@ -448,12 +445,12 @@ function buildStatements(db: Database): {
       insert: db.prepare(
         `INSERT INTO connections (
           id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
-          trigger_mode, decide_status, decide_reason, connection_status,
+          trigger_mode,
           summary_model, summary_provider, summary_thinking_level, direct_enabled,
           label, description
         ) VALUES (
           $id, $canvasId, $sourcePodId, $sourceAnchor, $targetPodId, $targetAnchor,
-          $triggerMode, $decideStatus, $decideReason, $connectionStatus,
+          $triggerMode,
           $summaryModel, $summaryProvider, $summaryThinkingLevel, $directEnabled,
           $label, $description
         )`,
@@ -468,8 +465,7 @@ function buildStatements(db: Database): {
         `UPDATE connections SET
           source_pod_id = $sourcePodId, source_anchor = $sourceAnchor,
           target_pod_id = $targetPodId, target_anchor = $targetAnchor,
-          trigger_mode = $triggerMode, decide_status = $decideStatus,
-          decide_reason = $decideReason, connection_status = $connectionStatus,
+          trigger_mode = $triggerMode,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
           summary_thinking_level = $summaryThinkingLevel,
           direct_enabled = $directEnabled,
@@ -481,30 +477,13 @@ function buildStatements(db: Database): {
         `UPDATE connections SET
           source_pod_id = $sourcePodId, source_anchor = $sourceAnchor,
           target_pod_id = $targetPodId, target_anchor = $targetAnchor,
-          trigger_mode = $triggerMode, decide_status = $decideStatus,
-          decide_reason = $decideReason, connection_status = $connectionStatus,
+          trigger_mode = $triggerMode,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
           summary_thinking_level = $summaryThinkingLevel,
           direct_enabled = $directEnabled,
           label = $label, description = $description
         WHERE canvas_id = $canvasId AND id = $id
         RETURNING *`,
-      ),
-      updateConnectionStatus: db.prepare(
-        "UPDATE connections SET connection_status = $connectionStatus WHERE canvas_id = $canvasId AND id = $id",
-      ),
-      // RETURNING 版本：UPDATE 後直接回傳更新後的行，免去額外 SELECT
-      updateConnectionStatusReturning: db.prepare(
-        "UPDATE connections SET connection_status = $connectionStatus WHERE canvas_id = $canvasId AND id = $id RETURNING *",
-      ),
-      updateDecideStatus: db.prepare(
-        `UPDATE connections SET
-          decide_status = $decideStatus, decide_reason = $decideReason
-        WHERE canvas_id = $canvasId AND id = $id`,
-      ),
-      clearDecideStatusByPodId: db.prepare(
-        `UPDATE connections SET decide_status = 'none', decide_reason = NULL
-        WHERE canvas_id = $canvasId AND source_pod_id = $podId`,
       ),
       deleteById: db.prepare(
         "DELETE FROM connections WHERE canvas_id = ? AND id = ?",
@@ -873,6 +852,11 @@ function buildStatements(db: Database): {
             run_repo_path IS NOT NULL OR
             workspace_path IS NOT NULL
           )`,
+      ),
+      selectRunIdsByWorkspacePath: db.prepare(
+        `SELECT DISTINCT run_id
+        FROM run_pod_instances
+        WHERE workspace_path = ?`,
       ),
       clearRunRepoPathsByRunId: db.prepare(
         "UPDATE run_pod_instances SET run_repo_path = NULL WHERE run_id = ?",

@@ -1,24 +1,16 @@
-import { WebSocketResponseEvents } from "../../schemas/index.js";
 import type {
-  WorkflowSourcesMergedPayload,
   Connection,
   AutoTriggerMode,
-  ConnectionUpdatedPayload,
 } from "../../types/index.js";
-import { toConnectionPublic } from "../../types/index.js";
 import type {
   ExecutionServiceMethods,
   TriggerStrategy,
   HandleMultiInputForConnectionParams,
 } from "./types.js";
 import type { RunContext } from "../../types/run.js";
-import { podStore } from "../podStore.js";
 import { runStore } from "../runStore.js";
-import { socketService } from "../socketService.js";
-import { connectionStore } from "../connectionStore.js";
 import { pendingTargetStore } from "../pendingTargetStore.js";
 import { runQueueService } from "./runQueueService.js";
-import { workflowStateService } from "./workflowStateService.js";
 import { logger } from "../../utils/logger.js";
 import {
   formatMergedSummaries,
@@ -26,10 +18,10 @@ import {
   getMultiInputGroupConnections,
 } from "./workflowHelpers.js";
 import { LazyInitializable } from "./lazyInitializable.js";
-import { MERGED_CONTENT_PREVIEW_MAX_LENGTH } from "./constants.js";
 import { createStatusDelegate } from "./workflowStatusDelegate.js";
 import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
 import { getErrorMessage } from "../../utils/errorHelpers.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 interface MultiInputServiceDeps {
   executionService: ExecutionServiceMethods;
@@ -48,19 +40,22 @@ interface MultiInputTriggerMetadata {
 
 class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps> {
   private buildMultiInputTriggerMetadata(
-    canvasId: string,
+    runContext: RunContext,
     targetPodId: string,
     completedSummaries: Map<string, string>,
   ): MultiInputTriggerMetadata {
     const sourcePodIds = Array.from(completedSummaries.keys());
     const sourcePodIdSet = new Set(sourcePodIds);
     const participatingConnectionIds = getMultiInputGroupConnections(
-      canvasId,
+      runContext,
       targetPodId,
     )
       .filter((conn) => sourcePodIdSet.has(conn.sourcePodId))
       .map((conn) => conn.id);
-    const sourcePods = podStore.getByIds(canvasId, sourcePodIds);
+    const sourcePods = runWorkflowSnapshotStore.getPods(
+      runContext.runId,
+      sourcePodIds,
+    );
     const sourcePodNames = sourcePodIds.map((podId) => {
       const pod = sourcePods.get(podId);
       return pod?.name ?? podId;
@@ -81,7 +76,10 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     triggerMode: AutoTriggerMode,
     runContext: RunContext,
   ): void {
-    const targetPod = podStore.getById(canvasId, connection.targetPodId);
+    const targetPod = runWorkflowSnapshotStore.getPod(
+      runContext.runId,
+      connection.targetPodId,
+    );
     logger.log(
       "Run",
       "Update",
@@ -89,7 +87,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     );
 
     const metadata = this.buildMultiInputTriggerMetadata(
-      canvasId,
+      runContext,
       connection.targetPodId,
       completedSummaries,
     );
@@ -149,7 +147,10 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     }
 
     const sourcePodIds = Array.from(completedSummaries.keys());
-    const sourcePods = podStore.getByIds(canvasId, sourcePodIds);
+    const sourcePods = runWorkflowSnapshotStore.getPods(
+      runContext.runId,
+      sourcePodIds,
+    );
     const mergedContent = formatMergedSummaries(completedSummaries, (podId) =>
       sourcePods.get(podId),
     );
@@ -174,25 +175,18 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     );
 
     if (!ready) {
-      workflowStateService.emitPendingStatus(
-        canvasId,
-        connection.targetPodId,
-        runContext,
-      );
       return "not-ready";
     }
 
     if (hasRejection) {
-      const targetPod = podStore.getById(canvasId, connection.targetPodId);
+      const targetPod = runWorkflowSnapshotStore.getPod(
+        runContext.runId,
+        connection.targetPodId,
+      );
       logger.log(
         "Workflow",
         "Update",
         `目標「${targetPod?.name ?? connection.targetPodId}」有被拒絕的來源，不觸發`,
-      );
-      workflowStateService.emitPendingStatus(
-        canvasId,
-        connection.targetPodId,
-        runContext,
       );
       return "rejected";
     }
@@ -212,7 +206,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       runContext,
     } = params;
     const requiredSourcePodIds = getMultiInputGroupConnections(
-      canvasId,
+      runContext,
       connection.targetPodId,
     ).map((c) => c.sourcePodId);
 
@@ -225,34 +219,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       runContext,
     );
     if (readiness !== "ready") {
-      // Bug B 收尾：整組 multi-input 被 rejected 時，
-      // 將已 approved 連線的 connectionStatus 收回 idle，
-      // 避免 FE isWorkflowRunning BFS 認為仍在執行導致橡皮擦卡 disabled
-      if (readiness === "rejected") {
-        const groupConnections = getMultiInputGroupConnections(
-          canvasId,
-          connection.targetPodId,
-        );
-        for (const conn of groupConnections) {
-          if (conn.decideStatus === "approved") {
-            connectionStore.updateConnectionStatus(canvasId, conn.id, "idle");
-            const updated = connectionStore.getById(canvasId, conn.id);
-            if (updated) {
-              const payload: ConnectionUpdatedPayload = {
-                requestId: "",
-                canvasId,
-                success: true,
-                connection: toConnectionPublic(updated),
-              };
-              socketService.emitToCanvas(
-                canvasId,
-                WebSocketResponseEvents.CONNECTION_UPDATED,
-                payload,
-              );
-            }
-          }
-        }
-      }
       return;
     }
 
@@ -263,22 +229,20 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     );
     if (!merged) return;
 
-    if (runContext) {
-      const instance = runStore.getPodInstance(
-        runContext.runId,
-        connection.targetPodId,
+    const instance = runStore.getPodInstance(
+      runContext.runId,
+      connection.targetPodId,
+    );
+    if (instance?.status === "running") {
+      this.enqueueIfBusy(
+        canvasId,
+        connection,
+        merged.completedSummaries,
+        merged.mergedContent,
+        triggerMode,
+        runContext,
       );
-      if (instance?.status === "running") {
-        this.enqueueIfBusy(
-          canvasId,
-          connection,
-          merged.completedSummaries,
-          merged.mergedContent,
-          triggerMode,
-          runContext,
-        );
-        return;
-      }
+      return;
     }
 
     this.triggerMergedWorkflow(canvasId, connection, triggerMode, runContext);
@@ -299,30 +263,11 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
 
     const { completedSummaries, mergedContent } = merged;
 
-    const mergedPreview = mergedContent.substring(
-      0,
-      MERGED_CONTENT_PREVIEW_MAX_LENGTH,
-    );
-
     const metadata = this.buildMultiInputTriggerMetadata(
-      canvasId,
+      runContext,
       connection.targetPodId,
       completedSummaries,
     );
-    const mergedPayload: WorkflowSourcesMergedPayload = {
-      canvasId,
-      targetPodId: connection.targetPodId,
-      sourcePodIds: metadata.sourcePodIds,
-      mergedContentPreview: mergedPreview,
-    };
-
-    if (!runContext) {
-      socketService.emitToCanvas(
-        canvasId,
-        WebSocketResponseEvents.WORKFLOW_SOURCES_MERGED,
-        mergedPayload,
-      );
-    }
 
     const strategy = this.deps.strategies[triggerMode];
     const delegate = createStatusDelegate(runContext);

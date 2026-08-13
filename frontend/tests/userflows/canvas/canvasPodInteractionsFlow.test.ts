@@ -72,7 +72,6 @@ function connectionToPod(podId: string): Connection {
     sourceAnchor: "right",
     targetPodId: podId,
     targetAnchor: "left",
-    decideStatus: "none",
     triggerMode: "auto",
     direct: false,
   };

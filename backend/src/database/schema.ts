@@ -321,9 +321,6 @@ function createBaseTables(db: Database): void {
       "target_pod_id TEXT NOT NULL," +
       "target_anchor TEXT NOT NULL," +
       "trigger_mode TEXT NOT NULL DEFAULT 'auto'," +
-      "decide_status TEXT NOT NULL DEFAULT 'none'," +
-      "decide_reason TEXT," +
-      "connection_status TEXT NOT NULL DEFAULT 'idle'," +
       "summary_model TEXT NOT NULL DEFAULT 'sonnet'," +
       // summary_provider 不設 NOT NULL：NULL 代表使用者未指定，
       // runtime 由 connectionExecution 路由 fallback 為 sourcePod.provider。

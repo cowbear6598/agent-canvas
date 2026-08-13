@@ -7,12 +7,14 @@ import { logger } from "./logger.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import type { PodChatAbortedPayload } from "../types/index.js";
 import type { RunContext } from "../types/run.js";
+import { runWorkflowSnapshotStore } from "../services/workflow/runWorkflowSnapshotStore.js";
 
 export const onRunChatComplete = (
   runContext: RunContext,
   canvasId: string,
   podId: string,
 ): void => {
+  const snapshotPod = runWorkflowSnapshotStore.getPod(runContext.runId, podId);
   // source pod 在 calculatePathways 中固定只有 auto pathway（directPathwaySettled 為 null），因此固定傳 'auto'
   runExecutionService.settlePodTrigger(runContext, podId, "auto");
   fireAndForget(
@@ -25,7 +27,11 @@ export const onRunChatComplete = (
     `檢查 Pod「${podId}」自動觸發 Workflow 失敗 (Run: ${runContext.runId})`,
   );
   fireAndForget(
-    memoryMaintainerService.scheduleForCompletedPod(runContext, podId),
+    memoryMaintainerService.scheduleForCompletedPod(
+      runContext,
+      podId,
+      snapshotPod,
+    ),
     "Workflow",
     `執行 Pod「${podId}」記憶維護失敗 (Run: ${runContext.runId})`,
   );

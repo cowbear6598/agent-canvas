@@ -1,5 +1,3 @@
-export { workflowEventEmitter } from "./workflowEventEmitter.js";
-export { workflowStateService } from "./workflowStateService.js";
 export { workflowExecutionService } from "./workflowExecutionService.js";
 export { workflowAutoTriggerService } from "./workflowAutoTriggerService.js";
 export { workflowMultiInputService } from "./workflowMultiInputService.js";
@@ -19,12 +17,8 @@ import { workflowMultiInputService } from "./workflowMultiInputService.js";
 import { workflowExecutionService } from "./workflowExecutionService.js";
 import { runQueueService } from "./runQueueService.js";
 import { runExecutionService } from "./runExecutionService.js";
-import { workflowStateService } from "./workflowStateService.js";
-import { workflowEventEmitter } from "./workflowEventEmitter.js";
 import { branchDecisionService } from "./branchDecisionService.js";
-import { connectionStore } from "../connectionStore.js";
 import { canvasStore } from "../canvasStore.js";
-import { podStore } from "../podStore.js";
 import { pendingTargetStore } from "../pendingTargetStore.js";
 export function initWorkflowServices(): void {
   const sharedStrategies = {
@@ -42,11 +36,7 @@ export function initWorkflowServices(): void {
 
   workflowBranchTriggerService.init({
     branchDecisionService,
-    eventEmitter: workflowEventEmitter,
-    connectionStore,
     canvasStore,
-    podStore,
-    stateService: workflowStateService,
     pendingTargetStore,
     pipeline: workflowPipeline,
     multiInputService: workflowMultiInputService,

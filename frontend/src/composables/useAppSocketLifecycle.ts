@@ -181,7 +181,6 @@ export function useAppSocketLifecycle(
         }
 
         options.unregisterAppReadyListeners();
-        options.canvasContext?.connectionStore?.cleanupWorkflowListeners?.();
         options.resetInitialization();
         canvasStore.reset();
       }

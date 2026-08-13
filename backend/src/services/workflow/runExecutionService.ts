@@ -7,9 +7,7 @@ import {
 import type { RunPodInstance, RunPodInstanceStatus } from "../runStore.js";
 import { isAllPathwaysSettled } from "../../utils/pathwayHelpers.js";
 import type { PathwayState } from "../../types/run.js";
-import { connectionStore } from "../connectionStore.js";
 import type { Connection } from "../../types/index.js";
-import { podStore } from "../podStore.js";
 import { socketService } from "../socketService.js";
 import { abortRegistry } from "../provider/abortRegistry.js";
 import { logger } from "../../utils/logger.js";
@@ -48,6 +46,7 @@ import {
 } from "./runCompletionLifecycle.js";
 import { RunResourceLifecycleService } from "./runResourceLifecycleService.js";
 import { collectCyclicPodIds } from "./workflowLoopPolicy.js";
+import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
 const GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE =
   "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod";
@@ -175,171 +174,140 @@ class RunExecutionService {
     sourcePodId: string,
     triggerMessage: string,
   ): Promise<RunContext> {
+    // snapshot 必須先完整建立，才允許寫入 Run history。
+    const workflowSnapshot = runWorkflowSnapshotStore.capture(
+      canvasId,
+      sourcePodId,
+    );
     const workflowRun = runStore.createRun(
       canvasId,
       sourcePodId,
       triggerMessage,
     );
-
-    const chainPodIds = this.collectChainPodIds(canvasId, sourcePodId);
     const runContext: RunContext = {
       runId: workflowRun.id,
       canvasId,
       sourcePodId,
     };
-    this.cyclicPodIdsByRun.set(
-      workflowRun.id,
-      collectCyclicPodIds(chainPodIds, connectionStore.list(canvasId)),
-    );
-    // 同一 Run 內相同 repositoryId 的 Pod 共用同一份 repo-level workspace
-    const runRepoCache = new Map<
-      string,
-      { workspacePath: string; runRepoPath: string | null }
-    >();
-    const instances: ReturnType<typeof runStore.createPodInstance>[] = [];
-    const provisioningErrors: Array<{ podId: string; error: string }> = [];
-    for (const podId of chainPodIds) {
-      const pathways = this.calculatePathways(
-        canvasId,
-        podId,
-        sourcePodId,
-        chainPodIds,
+    try {
+      runWorkflowSnapshotStore.set(workflowRun.id, workflowSnapshot);
+      const chainPodIds = new Set(workflowSnapshot.pods.keys());
+      const snapshotConnections = [
+        ...workflowSnapshot.connections.values(),
+      ] as Connection[];
+      this.cyclicPodIdsByRun.set(
+        workflowRun.id,
+        collectCyclicPodIds(chainPodIds, snapshotConnections),
       );
+      // 同一 Run 內相同 repositoryId 的 Pod 共用同一份 repo-level workspace
+      const runRepoCache = new Map<
+        string,
+        { workspacePath: string; runRepoPath: string | null }
+      >();
+      const instances: ReturnType<typeof runStore.createPodInstance>[] = [];
+      const provisioningErrors: Array<{ podId: string; error: string }> = [];
+      for (const podId of chainPodIds) {
+        const pathways = this.calculatePathways(
+          podId,
+          sourcePodId,
+          chainPodIds,
+          snapshotConnections,
+        );
+        const pod = runWorkflowSnapshotStore.getPod(workflowRun.id, podId);
+        if (!pod) {
+          throw new Error(`Workflow snapshot 找不到 Pod ${podId}`);
+        }
 
-      const pod = podStore.getById(canvasId, podId);
-      if (!pod) {
+        ensureGoalRuntime(pod, runContext);
+
+        let provisioned: ProvisionedRunExecutionResources;
+        try {
+          provisioned = await provisionRunExecutionResources({
+            pod,
+            runId: workflowRun.id,
+            runRepoCache,
+          });
+        } catch (error) {
+          const message = "建立 run 隔離資源失敗，請稍後再試";
+          logger.error(
+            "Run",
+            "Error",
+            `建立 run 隔離資源失敗（runId=${workflowRun.id}, podId=${podId}）：${error instanceof Error ? error.message : String(error)}`,
+          );
+          const instance = runStore.createPodInstance(
+            workflowRun.id,
+            podId,
+            pathways.autoPathwaySettled,
+            pathways.directPathwaySettled,
+          );
+          runStore.updatePodInstanceStatus(instance.id, "error", message);
+          provisioningErrors.push({ podId, error: message });
+          instances.push(
+            runStore.getPodInstance(workflowRun.id, podId) ?? instance,
+          );
+          continue;
+        }
+
         instances.push(
           runStore.createPodInstance(
             workflowRun.id,
             podId,
             pathways.autoPathwaySettled,
             pathways.directPathwaySettled,
+            provisioned,
           ),
         );
-        logger.warn(
-          "Run",
-          "Warn",
-          `建立 Run 時找不到 pod，略過隔離資源配置（runId=${workflowRun.id}, podId=${podId})`,
-        );
-        continue;
       }
 
-      ensureGoalRuntime(pod, runContext);
-
-      let provisioned: ProvisionedRunExecutionResources;
-      try {
-        provisioned = await provisionRunExecutionResources({
-          pod,
-          runId: workflowRun.id,
-          runRepoCache,
-        });
-      } catch (error) {
-        const message = "建立 run 隔離資源失敗，請稍後再試";
-        logger.error(
-          "Run",
-          "Error",
-          `建立 run 隔離資源失敗（runId=${workflowRun.id}, podId=${podId}）：${error instanceof Error ? error.message : String(error)}`,
-        );
-        const instance = runStore.createPodInstance(
+      const instancesWithNames = instances.map((instance) => {
+        const {
+          runRepoPath: _runRepoPath,
+          workspacePath: _workspacePath,
+          sessionId: _sessionId,
+          ...instanceData
+        } = instance;
+        const pod = runWorkflowSnapshotStore.getPod(
           workflowRun.id,
-          podId,
-          pathways.autoPathwaySettled,
-          pathways.directPathwaySettled,
+          instance.podId,
         );
-        runStore.updatePodInstanceStatus(instance.id, "error", message);
-        provisioningErrors.push({ podId, error: message });
-        instances.push(
-          runStore.getPodInstance(workflowRun.id, podId) ?? instance,
-        );
-        continue;
-      }
+        return { ...instanceData, podName: pod?.name ?? instance.podId };
+      });
+      const sourcePodName =
+        instancesWithNames.find((instance) => instance.podId === sourcePodId)
+          ?.podName ?? sourcePodId;
 
-      // managed MCP entries 由 provider.buildOptions 在實際 chat 啟動時各自取得，
-      // 不再 run pre-provisioning 階段建立 surface（每 pod 子程序 lifecycle 由 provider 管）。
-
-      instances.push(
-        runStore.createPodInstance(
-          workflowRun.id,
-          podId,
-          pathways.autoPathwaySettled,
-          pathways.directPathwaySettled,
-          provisioned,
-        ),
+      logger.log(
+        "Run",
+        "Create",
+        `建立 Run ${workflowRun.id}，共 ${instances.length} 個 pod instance`,
       );
-    }
-
-    const instancesWithNames = instances.map((instance) => {
-      const {
-        runRepoPath: _runRepoPath,
-        workspacePath: _workspacePath,
-        sessionId: _sessionId,
-        ...instanceData
-      } = instance;
-      const pod = podStore.getById(canvasId, instance.podId);
-      return {
-        ...instanceData,
-        podName: pod?.name ?? instance.podId,
-      };
-    });
-
-    const sourcePodName =
-      instancesWithNames.find((i) => i.podId === sourcePodId)?.podName ??
-      sourcePodId;
-
-    logger.log(
-      "Run",
-      "Create",
-      `建立 Run ${workflowRun.id}，共 ${instances.length} 個 pod instance`,
-    );
-
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CREATED, {
-      canvasId,
-      run: { ...workflowRun, podInstances: instancesWithNames, sourcePodName },
-    } as RunCreatedPayload);
-
-    if (provisioningErrors.length > 0) {
-      this.evaluateRunStatus(workflowRun.id, canvasId);
-    }
-
-    this.enforceRunLimit(canvasId);
-
-    return runContext;
-  }
-
-  private collectChainPodIds(
-    canvasId: string,
-    sourcePodId: string,
-  ): Set<string> {
-    const visited = new Set<string>();
-    const queue: string[] = [sourcePodId];
-    let queueHead = 0;
-    visited.add(sourcePodId);
-
-    while (queueHead < queue.length) {
-      const currentId = queue[queueHead];
-      queueHead += 1;
-      if (!currentId) continue;
-
-      const connections = connectionStore.findBySourcePodId(
+      socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CREATED, {
         canvasId,
-        currentId,
-      );
-      for (const conn of connections) {
-        if (!visited.has(conn.targetPodId)) {
-          visited.add(conn.targetPodId);
-          queue.push(conn.targetPodId);
-        }
-      }
-    }
+        run: { ...workflowRun, podInstances: instancesWithNames, sourcePodName },
+      } as RunCreatedPayload);
 
-    return visited;
+      if (provisioningErrors.length > 0) {
+        this.evaluateRunStatus(workflowRun.id, canvasId);
+      }
+      this.enforceRunLimit(canvasId);
+      return runContext;
+    } catch (error) {
+      this.cyclicPodIdsByRun.delete(workflowRun.id);
+      runWorkflowSnapshotStore.delete(workflowRun.id);
+      try {
+        await this.resourceLifecycle.cleanupRunResources(workflowRun.id);
+      } finally {
+        runStore.deleteRun(workflowRun.id);
+      }
+      throw error;
+    }
   }
 
   private calculatePathways(
-    canvasId: string,
     podId: string,
     sourcePodId: string,
     chainPodIds: Set<string>,
+    connections: Connection[],
   ): { autoPathwaySettled: PathwayState; directPathwaySettled: PathwayState } {
     if (podId === sourcePodId) {
       return {
@@ -348,9 +316,10 @@ class RunExecutionService {
       };
     }
 
-    const connections = connectionStore.findByTargetPodId(canvasId, podId);
-    const chainConnections = connections.filter((c) =>
-      chainPodIds.has(c.sourcePodId),
+    const chainConnections = connections.filter(
+      (connection) =>
+        connection.targetPodId === podId &&
+        chainPodIds.has(connection.sourcePodId),
     );
 
     if (chainConnections.length === 0) {
@@ -474,7 +443,7 @@ class RunExecutionService {
       const instances = runStore.getPodInstancesByRunId(runContext.runId);
       cyclicPodIds = collectCyclicPodIds(
         instances.map((instance) => instance.podId),
-        connectionStore.list(runContext.canvasId),
+        runWorkflowSnapshotStore.listConnections(runContext.runId),
       );
       this.cyclicPodIdsByRun.set(runContext.runId, cyclicPodIds);
     }
@@ -577,7 +546,7 @@ class RunExecutionService {
    */
   private settleUnreachablePaths(runId: string, canvasId: string): void {
     const instances = runStore.getPodInstancesByRunId(runId);
-    const connections = connectionStore.list(canvasId);
+    const connections = runWorkflowSnapshotStore.listConnections(runId);
     const instancePodIds = new Set(instances.map((i) => i.podId));
 
     // 建立 podId → instance 的 Map 索引，查找 O(1)，避免 find() 線性搜尋
@@ -797,6 +766,16 @@ class RunExecutionService {
    * 巢狀條件超過閾值，加此說明
    */
   private evaluateRunStatus(runId: string, canvasId: string): void {
+    const existingRun = runStore.getRun(runId);
+    if (!existingRun || RUN_TERMINAL_STATUSES.has(existingRun.status)) return;
+    if (!runWorkflowSnapshotStore.has(runId)) {
+      logger.error(
+        "Run",
+        "Error",
+        `執行中的 Run 缺少 Workflow snapshot（runId=${runId}）`,
+      );
+      return;
+    }
     this.settleUnreachablePaths(runId, canvasId);
 
     const instances = runStore.getPodInstancesByRunId(runId);
@@ -828,8 +807,13 @@ class RunExecutionService {
     const snapshotEntries = buildCompletedRunSnapshotEntries(
       canvasId,
       instances,
-      (entryCanvasId, podId) => podStore.getById(entryCanvasId, podId),
+      (_entryCanvasId, podId) => runWorkflowSnapshotStore.getPod(runId, podId),
     );
+    const definitionPods = [
+      ...runWorkflowSnapshotStore.getRequired(runId).pods.values(),
+    ];
+    // 定義 snapshot 僅屬於 active Run；進入任一終態即同步移除。
+    runWorkflowSnapshotStore.delete(runId);
 
     // Run 自然完成時立即回收所有 run 級隔離資源
     const completionLifecycle = completeRunLifecycle({
@@ -843,7 +827,10 @@ class RunExecutionService {
           snapshotPath,
         ),
       scheduleRepositoriesForCompletedRun: (runContext) =>
-        memoryMaintainerService.scheduleRepositoriesForCompletedRun(runContext),
+        memoryMaintainerService.scheduleRepositoriesForCompletedRun(
+          runContext,
+          definitionPods,
+        ),
       cleanupRunResources: (lifecycleRunId) =>
         this.resourceLifecycle.cleanupRunResources(lifecycleRunId),
     });
@@ -952,6 +939,7 @@ class RunExecutionService {
     // 防禦性清理：處理 Run 中途被砍、或 evaluateRunStatus 清理失敗的情況
     await this.resourceLifecycle.cleanupRunResources(runId);
     runRepoActivitySnapshotService.clearRun(runId);
+    runWorkflowSnapshotStore.delete(runId);
 
     runStore.deleteRun(runId);
 

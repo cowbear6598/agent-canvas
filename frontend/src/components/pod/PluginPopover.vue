@@ -106,16 +106,8 @@ const buildNextIds = (
   return current.filter((id) => id !== pluginId);
 };
 
-const resolvePluginErrorDescription = (err: unknown): string => {
-  const reason =
-    err !== null && typeof err === "object" && "reason" in err
-      ? (err as Record<string, unknown>).reason
-      : undefined;
-
-  return reason === "pod-busy"
-    ? t("pod.slot.pluginsBusyTooltip")
-    : t("pod.slot.pluginsToggleFailed");
-};
+const resolvePluginErrorDescription = (_err: unknown): string =>
+  t("pod.slot.pluginsToggleFailed");
 
 const handleToggle = async (
   pluginId: string,

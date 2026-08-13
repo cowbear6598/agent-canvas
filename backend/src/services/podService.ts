@@ -2,7 +2,6 @@ import { podStore } from "./podStore.js";
 import { workspaceService } from "./workspace/index.js";
 import { canvasStore } from "./canvasStore.js";
 import { socketService } from "./socketService.js";
-import { workflowStateService } from "./workflow/index.js";
 import { connectionStore } from "./connectionStore.js";
 import { repositoryNoteStore } from "./noteStores.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
@@ -14,8 +13,9 @@ import type { Pod } from "../types/pod.js";
 import { toPodPublicView } from "../types/pod.js";
 import { logger } from "../utils/logger.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { abortRegistry } from "./provider/abortRegistry.js";
 import { memoryStateService } from "./memoryStateService.js";
+import { runStore } from "./runStore.js";
+import { deferredPodWorkspaceCleanupService } from "./runtime/deferredPodWorkspaceCleanupService.js";
 
 interface CreatePodResult {
   pod: Pod;
@@ -56,23 +56,10 @@ export async function deletePodWithCleanup(
     return err(createI18nError("errors.podNotFound", { id: podId }));
   }
 
-  // 若 Pod 有正在執行的查詢，先中止以避免記憶體洩漏（含 Run 模式的多個並行查詢）
-  abortRegistry.abortByPodId(podId);
-
-  workflowStateService.handleSourceDeletion(canvasId, podId);
-
-  const deleteResult = await workspaceService.deleteWorkspace(
+  // 先保留引用清單；Pod 定義成功刪除後才安排實體目錄清理。
+  const runIdsUsingWorkspace = runStore.getRunIdsByWorkspacePath(
     pod.workspacePath,
   );
-  if (!deleteResult.success) {
-    logger.error(
-      "Pod",
-      "Delete",
-      `無法刪除 Pod ${podId} 的工作區`,
-      deleteResult.error,
-    );
-  }
-
   const deletedNoteIdsPayload = deleteAllPodNotes(canvasId, podId);
   connectionStore.deleteByPodId(canvasId, podId);
   memoryStateService.clearScopeMaintenanceRecords("pod", podId);
@@ -82,6 +69,27 @@ export async function deletePodWithCleanup(
   if (!deleted) {
     return err(createI18nError("errors.podDeleteFailed"));
   }
+
+  // Canvas 定義已移除；仍被 Run 使用的 Pod 工作目錄延後至最後一個 Run 釋放。
+  const isWorkspaceDeletionDeferred =
+    deferredPodWorkspaceCleanupService.defer(
+      pod.workspacePath,
+      runIdsUsingWorkspace,
+    );
+  if (!isWorkspaceDeletionDeferred) {
+    const deleteResult = await workspaceService.deleteWorkspace(
+      pod.workspacePath,
+    );
+    if (!deleteResult.success) {
+      logger.error(
+        "Pod",
+        "Delete",
+        `無法刪除 Pod ${podId} 的工作區`,
+        deleteResult.error,
+      );
+    }
+  }
+
   const hasDeletedNotes =
     deletedNoteIdsPayload !== undefined &&
     Object.keys(deletedNoteIdsPayload).length > 0;

@@ -10,6 +10,7 @@ import { config } from "../../src/config/index.js";
 import type { Connection } from "../../src/types/index.js";
 import type { RunContext } from "../../src/types/run.js";
 import path from "path";
+import { runWorkflowSnapshotStore } from "../../src/services/workflow/runWorkflowSnapshotStore.js";
 
 const CANVAS_ID = "canvas-branch";
 const SOURCE_POD_ID = "pod-source";
@@ -44,9 +45,6 @@ function makeConnection(
     targetPodId,
     targetAnchor: "left",
     triggerMode: "branch",
-    decideStatus: "none",
-    decideReason: null,
-    connectionStatus: "idle",
     summaryModel: "sonnet",
     summaryProvider: "claude",
     summaryThinkingLevel: null,
@@ -89,6 +87,20 @@ describe("BranchDecisionService", () => {
       multiInstance: false,
       skillIds: [],
     })) as typeof podStore.getById);
+    vi.spyOn(runWorkflowSnapshotStore, "getPod").mockImplementation(
+      (_runId, podId) => podStore.getById(CANVAS_ID, podId),
+    );
+    vi.spyOn(runWorkflowSnapshotStore, "getRequired").mockReturnValue({
+      canvasId: CANVAS_ID,
+      sourcePodId: SOURCE_POD_ID,
+      connectionLineConfig: {
+        connectionLineProvider: "claude",
+        connectionLineModel: "sonnet",
+        connectionLineThinkingLevel: "high",
+      },
+      pods: new Map(),
+      connections: new Map(),
+    });
   });
 
   it("應透過 bounded transcript helper 傳入 recentMessages 與 persisted summary", async () => {
@@ -183,10 +195,16 @@ describe("BranchDecisionService", () => {
     const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
     const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
     runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
-    vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
-      connectionLineProvider: "codex",
-      connectionLineModel: "gpt-5.5",
-      connectionLineThinkingLevel: "medium",
+    vi.mocked(runWorkflowSnapshotStore.getRequired).mockReturnValue({
+      canvasId: CANVAS_ID,
+      sourcePodId: SOURCE_POD_ID,
+      connectionLineConfig: {
+        connectionLineProvider: "codex",
+        connectionLineModel: "gpt-5.5",
+        connectionLineThinkingLevel: "medium",
+      },
+      pods: new Map(),
+      connections: new Map(),
     });
 
     await branchDecisionService.decideBranch(
@@ -211,10 +229,16 @@ describe("BranchDecisionService", () => {
 
   it("branch 決策忽略 connection branch 欄位並使用 Connection Line 統一設定", async () => {
     const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
-    vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
-      connectionLineProvider: "claude",
-      connectionLineModel: "sonnet",
-      connectionLineThinkingLevel: "low",
+    vi.mocked(runWorkflowSnapshotStore.getRequired).mockReturnValue({
+      canvasId: CANVAS_ID,
+      sourcePodId: SOURCE_POD_ID,
+      connectionLineConfig: {
+        connectionLineProvider: "claude",
+        connectionLineModel: "sonnet",
+        connectionLineThinkingLevel: "low",
+      },
+      pods: new Map(),
+      connections: new Map(),
     });
 
     await branchDecisionService.decideBranch(
@@ -230,7 +254,7 @@ describe("BranchDecisionService", () => {
       makeRunContext(run.id),
     );
 
-    expect(configStore.getConnectionLineModelConfig).toHaveBeenCalled();
+    expect(configStore.getConnectionLineModelConfig).not.toHaveBeenCalled();
     expect(branchDecider.decide).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "claude",

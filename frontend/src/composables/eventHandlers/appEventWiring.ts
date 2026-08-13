@@ -14,7 +14,6 @@ import {
   getRunEventListeners,
   getRunStandaloneListeners,
 } from "./runEventHandlers";
-import { getWorkflowEventListeners } from "./workflowEventHandlers";
 
 export interface AppEventListener {
   event: string;
@@ -29,7 +28,6 @@ export interface AppEventListenerClient {
 export const listeners: AppEventListener[] = [
   ...getPodEventListeners(),
   ...getConnectionEventListeners(),
-  ...getWorkflowEventListeners(),
   ...getNoteEventListeners(),
   ...getCanvasEventListeners(),
   ...getIntegrationEventListeners(),

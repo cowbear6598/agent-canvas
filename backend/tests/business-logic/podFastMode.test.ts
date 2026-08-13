@@ -161,7 +161,7 @@ describe("Pod Fast mode", () => {
     expect(podStore.getById(CANVAS_ID, pod.id)?.fastModeEnabled).toBe(false);
   });
 
-  it("Provider 查詢進行中拒絕切換，並維持原本 Fast 狀態", () => {
+  it("既有查詢進行中仍可切換，變更供後續 Run 使用", () => {
     const pod = createOpusPod();
     podCommandService.setFastMode({
       canvasId: CANVAS_ID,
@@ -181,7 +181,7 @@ describe("Pod Fast mode", () => {
         existingPod: enabledPod,
         enabled: false,
       }),
-    ).toThrowError(expect.objectContaining({ code: "POD_BUSY" }));
-    expect(podStore.getById(CANVAS_ID, pod.id)?.fastModeEnabled).toBe(true);
+    ).not.toThrow();
+    expect(podStore.getById(CANVAS_ID, pod.id)?.fastModeEnabled).toBe(false);
   });
 });
