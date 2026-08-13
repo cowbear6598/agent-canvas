@@ -47,17 +47,6 @@ export interface HandlerConfig {
   responseEvent: string;
 }
 
-export function defineHandlerConfig<TSchema extends z.ZodType>(config: {
-  event: string;
-  handler: ValidatedHandler<z.infer<TSchema>>;
-  schema: TSchema;
-  responseEvent: string;
-}): HandlerConfig {
-  // HandlerConfig.handler 宣告為 ValidatedHandler<never>，但實際 runtime 行為只要符合函式簽名即可。
-  // z.infer<TSchema> 在 runtime 不存在，兩者的函式結構完全相同，因此此轉換是安全的。
-  return config as unknown as HandlerConfig;
-}
-
 export function createHandlerGroup(config: { name: string; handlers: readonly HandlerConfig[] }): HandlerGroup {
   return {
     name: config.name,

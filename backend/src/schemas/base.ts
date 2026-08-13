@@ -7,12 +7,7 @@ export const positionSchema = z.object({
   x: z.number(),
   y: z.number(),
 });
-export const resourceNameSchema = z.string()
-  .regex(/^[a-zA-Z0-9_-]+$/, '名稱只允許英文字母、數字、底線（_）、連字號（-）')
-  .min(1)
-  .max(100);
 export const resourceIdSchema = z.string().regex(/^[a-zA-Z0-9_-]+$/).min(1).max(100);
-export const groupIdSchema = z.string().regex(/^[a-zA-Z0-9-]+$/, '群組 ID 格式不正確').nullable();
 
 export const coordinateSchema = z.number().finite().min(-100000).max(100000);
 
@@ -71,31 +66,3 @@ export const podUnbindBaseSchema = z.object({
   canvasId: canvasIdSchema,
   podId: podIdSchema,
 });
-
-export const moveToGroupSchema = z.object({
-  requestId: requestIdSchema,
-  itemId: resourceIdSchema,
-  groupId: groupIdSchema,
-});
-
-export function createResourceReadSchema(idFieldName: string): z.ZodObject<z.ZodRawShape> {
-  return z.object({
-    requestId: requestIdSchema,
-    canvasId: canvasIdSchema,
-    [idFieldName]: resourceIdSchema,
-  });
-}
-
-export function createResourceCreateSchema(): z.ZodObject<{
-  requestId: typeof requestIdSchema;
-  canvasId: typeof canvasIdSchema;
-  name: typeof resourceNameSchema;
-  content: z.ZodString;
-}> {
-  return z.object({
-    requestId: requestIdSchema,
-    canvasId: canvasIdSchema,
-    name: resourceNameSchema,
-    content: z.string().max(10000000),
-  });
-}

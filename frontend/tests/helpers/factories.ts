@@ -8,20 +8,10 @@ import type {
 import type {
   Message,
   MessageRole,
-  ToolUseInfo,
-  ToolUseStatus,
 } from "@/types/chat";
 import type { BaseNote } from "@/types/note";
 import type { Repository, RepositoryNote } from "@/types/repository";
-import type { Group } from "@/types/group";
 import type { WorkflowRun, RunPodInstance } from "@/types/run";
-import type {
-  IntegrationApp,
-  IntegrationBinding,
-  IntegrationProviderConfig,
-  IntegrationResource,
-} from "@/types/integration";
-import { defineComponent, h } from "vue";
 
 // 計數器
 let canvasCounter = 0;
@@ -29,15 +19,9 @@ let podCounter = 0;
 let connectionCounter = 0;
 let messageCounter = 0;
 let noteCounter = 0;
-let scheduleCounter = 0;
 let repositoryCounter = 0;
-let groupCounter = 0;
 let runCounter = 0;
 let runPodInstanceCounter = 0;
-let integrationProviderCounter = 0;
-let integrationAppCounter = 0;
-let integrationResourceCounter = 0;
-let integrationBindingCounter = 0;
 
 /**
  * 重置所有 factory 計數器，確保跨測試檔案不互相污染 ID 值。
@@ -49,15 +33,9 @@ export function resetFactoryCounters(): void {
   connectionCounter = 0;
   messageCounter = 0;
   noteCounter = 0;
-  scheduleCounter = 0;
   repositoryCounter = 0;
-  groupCounter = 0;
   runCounter = 0;
   runPodInstanceCounter = 0;
-  integrationProviderCounter = 0;
-  integrationAppCounter = 0;
-  integrationResourceCounter = 0;
-  integrationBindingCounter = 0;
 }
 
 /**
@@ -77,7 +55,6 @@ export function createMockCanvas(overrides?: Partial<Canvas>): Canvas {
  * 建立 Mock Schedule
  */
 export function createMockSchedule(overrides?: Partial<Schedule>): Schedule {
-  scheduleCounter++;
   return {
     frequency: "every-day" as FrequencyType,
     second: 0,
@@ -173,28 +150,6 @@ export function createMockMessage(overrides?: Partial<Message>): Message {
 }
 
 /**
- * 建立 Mock Assistant Message (含 toolUse)
- */
-export function createMockAssistantMessage(
-  overrides?: Partial<Message>,
-): Message {
-  const toolUse: ToolUseInfo = {
-    toolUseId: `tool-${messageCounter + 1}`,
-    toolName: "Bash",
-    input: { command: 'echo "test"' },
-    output: "test",
-    status: "completed" as ToolUseStatus,
-  };
-
-  return createMockMessage({
-    role: "assistant" as MessageRole,
-    content: "Assistant response",
-    toolUse: [toolUse],
-    ...overrides,
-  });
-}
-
-/**
  * 建立 Mock Note (依類型)
  * TODO Phase 6: canvas paste 重構後補回 mcpServer 型別
  */
@@ -257,18 +212,6 @@ export function createMockRepositoryNote(
 }
 
 /**
- * 建立 Mock Group
- */
-export function createMockGroup(overrides?: Partial<Group>): Group {
-  return {
-    id: `group-${++groupCounter}`,
-    name: `Group ${groupCounter}`,
-    type: "command",
-    ...overrides,
-  };
-}
-
-/**
  * 建立 Mock WorkflowRun
  */
 export function createMockWorkflowRun(
@@ -301,114 +244,6 @@ export function createMockRunPodInstance(
     status: "pending",
     autoPathwaySettled: "not-applicable",
     directPathwaySettled: "not-applicable",
-    ...overrides,
-  };
-}
-
-/**
- * 建立 Mock integration resource。
- */
-export function createMockIntegrationResource(
-  overrides?: Partial<IntegrationResource>,
-): IntegrationResource {
-  const id = ++integrationResourceCounter;
-  return {
-    id: `resource-${id}`,
-    label: `Resource ${id}`,
-    ...overrides,
-  };
-}
-
-/**
- * 建立 Mock integration app。
- */
-export function createMockIntegrationApp(
-  overrides?: Partial<IntegrationApp>,
-): IntegrationApp {
-  const id = ++integrationAppCounter;
-  const provider = overrides?.provider ?? "slack";
-  return {
-    id: `app-${id}`,
-    name: `Integration App ${id}`,
-    connectionStatus: "connected",
-    provider,
-    resources: [createMockIntegrationResource()],
-    raw: {},
-    ...overrides,
-  };
-}
-
-/**
- * 建立 Mock integration binding。
- */
-export function createMockIntegrationBinding(
-  overrides?: Partial<IntegrationBinding>,
-): IntegrationBinding {
-  const id = ++integrationBindingCounter;
-  return {
-    provider: "slack",
-    appId: `app-${id}`,
-    resourceId: `resource-${id}`,
-    extra: {},
-    ...overrides,
-  };
-}
-
-const MockIntegrationIcon = defineComponent({
-  name: "MockIntegrationIcon",
-  setup() {
-    return () => h("span");
-  },
-});
-
-/**
- * 建立 Mock integration provider config。
- */
-export function createMockIntegrationProviderConfig(
-  overrides?: Partial<IntegrationProviderConfig>,
-): IntegrationProviderConfig {
-  const id = ++integrationProviderCounter;
-  const name = overrides?.name ?? `provider-${id}`;
-
-  return {
-    name,
-    label: `Provider ${id}`,
-    icon: MockIntegrationIcon,
-    description: `Integration provider ${id}`,
-    createFormFields: [],
-    resourceLabel: "Resource",
-    emptyResourceHint: "No resources",
-    emptyAppHint: "No apps",
-    connectionStatusConfig: {
-      connected: {
-        dotClass: "bg-green-500",
-        bg: "bg-green-50",
-        label: "Connected",
-      },
-      disconnected: {
-        dotClass: "bg-gray-400",
-        bg: "bg-gray-50",
-        label: "Disconnected",
-      },
-      error: {
-        dotClass: "bg-red-500",
-        bg: "bg-red-50",
-        label: "Error",
-      },
-    },
-    transformApp: (rawApp) =>
-      createMockIntegrationApp({
-        provider: name,
-        raw: rawApp,
-      }),
-    getResources: (app) => app.resources,
-    buildCreatePayload: (formValues) => ({ ...formValues }),
-    buildDeletePayload: (appId) => ({ appId }),
-    buildBindPayload: (appId, resourceId, extra) => ({
-      appId,
-      resourceId,
-      extra,
-    }),
     ...overrides,
   };
 }

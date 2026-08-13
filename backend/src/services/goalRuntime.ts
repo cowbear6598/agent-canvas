@@ -141,17 +141,6 @@ export function normalizeGoalRuntimeSnapshot(
   };
 }
 
-/**
- * 判斷 Pod 的 goal 設定是否符合啟用 Goal Runtime 的條件。
- * goal 為 null/undefined 時視為「尚未設定 goal」，同樣視為 eligible（不排除）。
- * 只有當 goal 存在但 todos 不是陣列（資料損毀）時才回傳 false。
- */
-export function isGoalRuntimeEligible(
-  goal: PodGoal | null | undefined,
-): boolean {
-  return goal == null || Array.isArray(goal.todos);
-}
-
 export function createGoalRuntimeState(
   goal: PodGoal | null | undefined,
 ): GoalRuntimeState {

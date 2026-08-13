@@ -1,26 +1,6 @@
-import type { ModelType, PodProvider } from "./pod";
+import type { ModelType } from "./pod";
 
 export const DEFAULT_SUMMARY_MODEL = "sonnet" as const satisfies ModelType;
-export const DEFAULT_AI_DECIDE_MODEL = "sonnet" as const satisfies ModelType;
-
-export interface GlobalConfig {
-  timezoneOffset: number;
-  backupGitRemoteUrl: string;
-  backupTime: string;
-  backupEnabled: boolean;
-  memoryProvider: PodProvider;
-  memoryModel: string;
-  memoryThinkingLevel: string | null;
-  connectionLineProvider: PodProvider;
-  connectionLineModel: string;
-  connectionLineThinkingLevel: string | null;
-}
-
-export const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
-  { value: "opus", label: "Opus" },
-  { value: "sonnet", label: "Sonnet" },
-  { value: "haiku", label: "Haiku" },
-];
 
 export const TIMEZONE_OPTIONS: { value: number; label: string }[] = [
   { value: -12, label: "UTC-12" },

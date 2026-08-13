@@ -35,7 +35,3 @@ export function buildRunRepoDirectoryName(
 ): string {
   return `${repositoryId}${RUN_REPO_DIRECTORY_SEPARATOR}${runId}`;
 }
-
-export function isRunRepoDirectoryName(directoryName: string): boolean {
-  return parseRunRepoDirectoryName(directoryName) !== null;
-}

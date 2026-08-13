@@ -51,7 +51,6 @@ export const PROGRESS_REMOVE_DELAY_MS = 1000;
 export const PROGRESS_REMOVE_DELAY_ON_ERROR_MS = 2000;
 
 export const RUN_TRIGGER_MESSAGE_PREVIEW_LENGTH = 40;
-export const RUN_RESPONSE_SUMMARY_LENGTH = 60;
 export const MAX_RUNS_PER_CANVAS = 30;
 
 // === 畫布互動常數 ===

@@ -47,21 +47,8 @@ function buildNoteByIdMap<TNote extends NoteWithIndexSignature>(
 }
 
 /**
- * @internal 僅供模組內部與測試使用，不應從 index.ts re-export 給外部消費。
- */
-export function collectBoundNotesFromStore<
-  T,
-  TNote extends NoteWithIndexSignature,
->(podId: string, store: StoreWithNotes<TNote>, mapFn: (note: TNote) => T): T[] {
-  return store.notes
-    .filter((note) => note.boundToPodId === podId)
-    .map((note) => mapFn(note));
-}
-
-/**
  * 利用預建的 groupBy Map 取出指定 podId 的 bound notes，O(1) 查找。
- * 相較 collectBoundNotesFromStore 每次都全掃 store.notes，
- * 此版本需呼叫者先以 buildBoundNotesByPodMap 建立 Map。
+ * 呼叫者需先以 buildBoundNotesByPodMap 建立 Map。
  */
 function collectBoundNotesFromMap<T, TNote extends NoteWithIndexSignature>(
   podId: string,
@@ -171,17 +158,6 @@ function collectNoteFromElement(
   if (note) {
     collectorInfo.array.push(note);
   }
-}
-
-export function createUnboundNoteCollector<T>(
-  store: StoreWithNotes,
-  mapFn: (note: NoteWithIndexSignature) => T,
-): (noteId: string) => T | null {
-  return (noteId: string): T | null => {
-    const note = store.notes.find((note) => note.id === noteId);
-    if (!note || note.boundToPodId !== null) return null;
-    return mapFn(note);
-  };
 }
 
 /**

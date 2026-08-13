@@ -22,11 +22,6 @@ export interface PodCreatePayload {
   goal?: PodGoal | null;
 }
 
-/** 查詢可用 Provider 列表 */
-export interface ProviderListPayload {
-  requestId: string;
-}
-
 export interface PodListPayload {
   requestId: string;
   canvasId: string;
@@ -323,15 +318,6 @@ export interface RepositoryClearMemoryPayload {
   repositoryId: string;
 }
 
-/** 查詢指定 Provider 的 MCP server 清單 */
-export interface McpListPayload {
-  requestId: string;
-  /** claude / codex / opencode 三個 provider 皆支援 MCP 清單查詢 */
-  provider: "claude" | "codex" | "opencode";
-  /** 同 provider 的不同 Pod 可能帶不同 built-in MCP */
-  podId: string;
-}
-
 export interface ManagedMcpRegistryListPayload {
   requestId: string;
 }
@@ -488,11 +474,6 @@ export interface RunLoadPodMessagesPayload {
     beforeMessageId: string;
     beforeItemType?: "message" | "goal-round-divider";
   } | null;
-}
-
-export interface BackupTestConnectionPayload {
-  requestId: string;
-  gitRemoteUrl: string;
 }
 
 export interface BackupTriggerPayload {

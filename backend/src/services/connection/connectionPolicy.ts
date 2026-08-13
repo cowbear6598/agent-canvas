@@ -34,47 +34,6 @@ export function resolveProviderDefaultModel(
     : undefined;
 }
 
-export function shouldResetDecideState(
-  oldMode: string,
-  newMode: string,
-): boolean {
-  return oldMode === "branch" && (newMode === "auto" || newMode === "direct");
-}
-
-export function resolveBranchDefaults(
-  sourcePod?: Pod | null,
-): {
-  provider: ProviderName;
-  model: string;
-} {
-  const provider = sourcePod?.provider ?? "claude";
-  const sourceModel =
-    typeof sourcePod?.providerConfig?.model === "string" &&
-    sourcePod.providerConfig.model.trim().length > 0
-      ? sourcePod.providerConfig.model
-      : undefined;
-
-  if (provider === "opencode") {
-    if (sourceModel) {
-      return { provider, model: sourceModel };
-    }
-    return {
-      provider: "claude",
-      model: resolveProviderDefaultModel("claude") ?? "sonnet",
-    };
-  }
-
-  const model = resolveProviderDefaultModel(provider);
-  if (model) {
-    return { provider, model };
-  }
-
-  return {
-    provider: "claude",
-    model: resolveProviderDefaultModel("claude") ?? "sonnet",
-  };
-}
-
 export function resolveSourceThinkingLevel(sourcePod?: Pod | null): string | null {
   const thinkingLevel = sourcePod?.providerConfig?.thinkingLevel;
   return typeof thinkingLevel === "string" && thinkingLevel.trim().length > 0

@@ -12,18 +12,6 @@ export function validateResourceId(id: string): boolean {
   return id.length <= 100;
 }
 
-export const validateCommandId = validateResourceId;
-
-export function validatePodId(podId: string): boolean {
-  if (!podId) {
-    return false;
-  }
-
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    podId,
-  );
-}
-
 export function isPathWithinDirectory(
   filePath: string,
   directory: string,

@@ -487,10 +487,6 @@ function getFallbackSkillName(skills: SkillInfo[]): string | null {
   return parts.at(-1) ?? null;
 }
 
-function getSourceLabel(sourceType: ManagedBundleSource["type"]): string {
-  return sourceType === "github" ? "GitHub" : "本地上傳";
-}
-
 async function extractOptionalPluginMetadata(
   installPath: string,
 ): Promise<{ displayName: string | null; description: string | null }> {
@@ -935,10 +931,6 @@ export async function refreshAllPlugins(): Promise<
 
   const updatedRecords = await Promise.all(records.map(refreshOnePlugin));
   return ok(updatedRecords);
-}
-
-export function describePluginRecordSource(record: ManagedPluginRecord): string {
-  return `${getSourceLabel(record.source.type)} · ${record.source.ref}`;
 }
 
 export function formatBundleImportError(error: string): string {

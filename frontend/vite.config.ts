@@ -100,7 +100,6 @@ export function createViteConfig(mode: string): UserConfig {
               if (
                 normalizedId.includes("/lucide-vue-next/") ||
                 normalizedId.includes("/reka-ui/") ||
-                normalizedId.includes("/radix-vue/") ||
                 normalizedId.includes("/vue-draggable-plus/")
               ) {
                 return "ui-vendor";

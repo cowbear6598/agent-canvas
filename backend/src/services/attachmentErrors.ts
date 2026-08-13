@@ -1,6 +1,5 @@
 import { createI18nError } from "../utils/i18nError.js";
 import {
-  ERROR_CODE_ATTACHMENT_EMPTY,
   ERROR_CODE_ATTACHMENT_TOO_LARGE,
   ERROR_CODE_ATTACHMENT_INVALID_NAME,
   ERROR_CODE_ATTACHMENT_DISK_FULL,
@@ -8,7 +7,6 @@ import {
   ERROR_CODE_ATTACHMENT_INVALID_ARCHIVE,
   ERROR_CODE_ATTACHMENT_ARCHIVE_TOO_LARGE,
   ERROR_CODE_UPLOAD_SESSION_NOT_FOUND,
-  I18N_KEY_ATTACHMENT_EMPTY,
   I18N_KEY_ATTACHMENT_TOO_LARGE,
   I18N_KEY_ATTACHMENT_INVALID_NAME,
   I18N_KEY_ATTACHMENT_DISK_FULL,
@@ -17,19 +15,6 @@ import {
   I18N_KEY_ATTACHMENT_ARCHIVE_TOO_LARGE,
   I18N_KEY_UPLOAD_SESSION_NOT_FOUND,
 } from "../types/errorCodes.js";
-
-/**
- * 上傳內容為空（0 bytes）。
- */
-export class AttachmentEmptyError extends Error {
-  readonly code = ERROR_CODE_ATTACHMENT_EMPTY;
-  readonly i18nError = createI18nError(I18N_KEY_ATTACHMENT_EMPTY);
-
-  constructor() {
-    super("附件內容不能為空");
-    this.name = "AttachmentEmptyError";
-  }
-}
 
 /**
  * 附件超過允許的最大檔案大小。

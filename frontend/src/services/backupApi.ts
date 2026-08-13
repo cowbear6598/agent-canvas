@@ -3,27 +3,8 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "@/types/websocket/events";
-import type {
-  BackupTestConnectionPayload,
-  BackupTriggerPayload,
-} from "@/types/websocket/requests";
-import type {
-  BackupTestConnectionResultPayload,
-  BackupTriggerResultPayload,
-} from "@/types/websocket/responses";
-
-export async function testBackupConnection(
-  gitRemoteUrl: string,
-): Promise<BackupTestConnectionResultPayload> {
-  return createWebSocketRequest<
-    BackupTestConnectionPayload,
-    BackupTestConnectionResultPayload
-  >({
-    requestEvent: WebSocketRequestEvents.BACKUP_TEST_CONNECTION,
-    responseEvent: WebSocketResponseEvents.BACKUP_TEST_CONNECTION_RESULT,
-    payload: { gitRemoteUrl },
-  });
-}
+import type { BackupTriggerPayload } from "@/types/websocket/requests";
+import type { BackupTriggerResultPayload } from "@/types/websocket/responses";
 
 export async function triggerBackup(
   gitRemoteUrl: string,

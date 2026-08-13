@@ -69,23 +69,6 @@ export function simulateEvent(eventName: string, payload: unknown): void {
 }
 
 /**
- * 模擬觸發斷線事件
- */
-export function simulateDisconnect(
-  event: string | MockDisconnectEvent,
-): void {
-  const disconnectEvent =
-    typeof event === "string" ? { reason: event } : event;
-
-  mockWebSocketClient.isConnected.value = false;
-  mockWebSocketClient.disconnectReason.value = disconnectEvent.reason;
-
-  disconnectListeners.forEach((callback) => {
-    callback(disconnectEvent);
-  });
-}
-
-/**
  * 重置所有 Mock
  */
 export function resetMockWebSocket(): void {

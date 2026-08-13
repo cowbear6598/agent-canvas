@@ -32,10 +32,7 @@ import {
   failWorkflowChatStage,
   launchWorkflowChatStage,
 } from "./workflowTriggerStages.js";
-import {
-  getUserVisibleErrorMessage,
-  UserVisibleError,
-} from "../../utils/userVisibleError.js";
+import { getUserVisibleErrorMessage } from "../../utils/userVisibleError.js";
 import { resolveLoopSessionContinuity } from "./workflowLoopPolicy.js";
 import { runWorkflowSnapshotStore } from "./runWorkflowSnapshotStore.js";
 
@@ -44,17 +41,6 @@ interface ExecutionServiceDeps {
   branchTriggerService: BranchTriggerMethods;
   autoTriggerService: AutoTriggerMethods;
   directTriggerService: TriggerStrategy;
-}
-
-/**
- * 代表預期的使用者可見業務錯誤，訊息可安全傳送給客戶端。
- * 拋出此類別的錯誤時，message 會直接廣播；其他 Error 則以通用訊息替代。
- */
-export class WorkflowUserError extends UserVisibleError {
-  constructor(message: string) {
-    super(message);
-    this.name = "WorkflowUserError";
-  }
 }
 
 /**

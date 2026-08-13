@@ -31,10 +31,6 @@ export interface PodListResultPayload extends ResultPayload {
   pods?: Pod[];
 }
 
-export interface PodMovedPayload extends ResultPayload {
-  pod?: Pod;
-}
-
 export interface PodRenamedPayload extends ResultPayload {
   pod?: Pod;
 }
@@ -328,25 +324,6 @@ export interface ManagedMcpRegistryTestResultPayload extends ResultPayload {
   lastError: string | null;
 }
 
-export interface ManagedMcpRegistryUpdatedPayload extends ResultPayload {
-  action?: "saved" | "deleted" | "diagnostics";
-  registryId?: string;
-  runId?: string;
-  item?: ManagedMcpRegistryItem;
-}
-
-export interface ManagedMcpSurfaceIgnoredTargetPayload {
-  name: string;
-  reason: string;
-}
-
-export interface ManagedMcpSurfaceTargetsIgnoredPayload extends ResultPayload {
-  runId: string;
-  podId: string;
-  podName?: string;
-  ignored: ManagedMcpSurfaceIgnoredTargetPayload[];
-}
-
 export interface PodMcpAvailabilityListResultPayload extends ResultPayload {
   podId: string;
   items: PodMcpAvailabilityItem[];
@@ -561,22 +538,6 @@ export interface RunToolResultPayload {
   toolName: string;
   output: string;
 }
-
-/** Provider 列表查詢結果，包含每個 Provider 的預設選項與可選模型清單 */
-export interface ProviderListResultPayload extends ResultPayload {
-  providers?: Array<{
-    name: PodProvider;
-    /** Provider 預設執行時選項（已移除 pathToClaudeCodeExecutable 等伺服器敏感路徑） */
-    defaultOptions: Record<string, unknown>;
-    /**
-     * Provider 聲告支援的模型清單，前端模型選擇器依此動態渲染選項。
-     * 每個元素為 { label, value } pair，label 供 UI 顯示、value 為實際 model id。
-     */
-    availableModels: ReadonlyArray<{ label: string; value: string }>;
-  }>;
-}
-
-export type BackupTestConnectionResultPayload = ResultPayload;
 
 export type BackupTriggerResultPayload = ResultPayload;
 

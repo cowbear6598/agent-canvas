@@ -1297,8 +1297,7 @@
   },
   "shared": {
     "providerModelSelector": {
-      "providerLabel": "Provider",
-      "modelLabel": "Model"
+      "providerLabel": "Provider"
     }
   }
 }

@@ -15,9 +15,3 @@ export interface InstalledPlugin {
   installedAt: string;
   updatedAt: string;
 }
-
-export function getInstalledPluginSourceLabel(
-  source: InstalledPluginSource,
-): string {
-  return source.type === "github" ? "GitHub" : "本地上傳";
-}

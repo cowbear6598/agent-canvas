@@ -13,10 +13,6 @@ import {
 } from "./subMessageHelpers";
 import { createAssistantMessageShape } from "./chatMessageActions";
 
-export function buildRunPodCacheKey(runId: string, podId: string): string {
-  return `${runId}:${podId}`;
-}
-
 /** sub-message ID 分隔符，統一定義以避免散落的 magic string */
 const SUB_MESSAGE_ID_SEPARATOR = "-";
 
