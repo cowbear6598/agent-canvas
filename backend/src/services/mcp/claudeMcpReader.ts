@@ -90,6 +90,25 @@ function isBlockedEnvKey(key: string): boolean {
   return ENV_KEY_BLACKLIST_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
+function parseServerEnv(name: string, rawEnv: unknown): Record<string, string> {
+  if (!rawEnv || typeof rawEnv !== "object" || Array.isArray(rawEnv)) return {};
+
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(rawEnv)) {
+    if (typeof value !== "string") continue;
+    if (isBlockedEnvKey(key)) {
+      logger.warn(
+        "McpServer",
+        "Warn",
+        `claudeMcpReader：MCP server「${name}」的 env key「${key}」屬高風險黑名單，已略過`,
+      );
+      continue;
+    }
+    env[key] = value;
+  }
+  return env;
+}
+
 /**
  * 將 mcpServers 物件（Record<name, value>）轉換為 McpServerEntry 陣列。
  * command 必須是非空字串，否則略過該筆。
@@ -113,29 +132,7 @@ function parseMcpServersRecord(
 
     // env 必須是 string → string 的物件，否則預設空物件
     // 黑名單 key（LD_*、DYLD_*、PATH 等）一律過濾，防止注入動態連結器或覆蓋系統路徑
-    const env: Record<string, string> = {};
-    if (
-      value.env &&
-      typeof value.env === "object" &&
-      !Array.isArray(value.env)
-    ) {
-      for (const [k, v] of Object.entries(
-        value.env as Record<string, unknown>,
-      )) {
-        if (typeof v === "string") {
-          if (isBlockedEnvKey(k)) {
-            // 黑名單 key：記錄 warn 後略過，不傳入 SDK
-            logger.warn(
-              "McpServer",
-              "Warn",
-              `claudeMcpReader：MCP server「${name}」的 env key「${k}」屬高風險黑名單，已略過`,
-            );
-            continue;
-          }
-          env[k] = v;
-        }
-      }
-    }
+    const env = parseServerEnv(name, value.env);
 
     result.push({ name, command: value.command, args, env });
   }

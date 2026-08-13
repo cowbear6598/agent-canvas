@@ -263,7 +263,6 @@ class WorkflowBranchTriggerService
       this.shouldDeferToMultiInput(canvasId, connection.targetPodId, runContext)
     ) {
       await this.handleRejectedMultiInput(
-        canvasId,
         sourcePodId,
         connection,
         runContext,
@@ -272,7 +271,6 @@ class WorkflowBranchTriggerService
   }
 
   private async handleRejectedMultiInput(
-    canvasId: string,
     sourcePodId: string,
     connection: Connection,
     runContext: RunContext,

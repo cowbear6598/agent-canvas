@@ -37,32 +37,18 @@ interface UseGitCloneProgressReturn {
  */
 function getErrorMessage(error: string): string {
   const lowerError = error.toLowerCase()
-
-  if (error.includes('ALREADY_EXISTS')) {
-    return t('composable.gitClone.repoExists')
-  }
-
-  if (lowerError.includes('authentication') || lowerError.includes('401') || lowerError.includes('403')) {
-    return t('composable.gitClone.authFailed')
-  }
-
-  if (lowerError.includes('not found') || lowerError.includes('404')) {
-    return t('composable.gitClone.notFound')
-  }
-
-  if (lowerError.includes('network') || lowerError.includes('timeout')) {
-    return t('composable.gitClone.networkFailed')
-  }
-
-  if (lowerError.includes('branch') || lowerError.includes('ref')) {
-    return t('composable.gitClone.branchNotFound')
-  }
-
-  if (lowerError.includes('space') || lowerError.includes('disk')) {
-    return t('composable.gitClone.diskFull')
-  }
-
-  return error
+  const rules: Array<{ terms: string[]; key: string; source?: string }> = [
+    { terms: ['ALREADY_EXISTS'], key: 'composable.gitClone.repoExists', source: error },
+    { terms: ['authentication', '401', '403'], key: 'composable.gitClone.authFailed' },
+    { terms: ['not found', '404'], key: 'composable.gitClone.notFound' },
+    { terms: ['network', 'timeout'], key: 'composable.gitClone.networkFailed' },
+    { terms: ['branch', 'ref'], key: 'composable.gitClone.branchNotFound' },
+    { terms: ['space', 'disk'], key: 'composable.gitClone.diskFull' },
+  ]
+  const matchedRule = rules.find(({ terms, source }) =>
+    terms.some((term) => (source ?? lowerError).includes(term)),
+  )
+  return matchedRule ? t(matchedRule.key) : error
 }
 
 export function useGitCloneProgress(): UseGitCloneProgressReturn {

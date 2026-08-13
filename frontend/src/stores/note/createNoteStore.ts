@@ -12,13 +12,8 @@ import { useSendCanvasAction } from "@/composables/useSendCanvasAction";
 import { createNoteBindingActions } from "./noteBindingActions";
 import type { UnbindBehavior } from "./noteBindingActions";
 import { createNotePositionActions } from "./notePositionActions";
-import type {
-  CRUDEventsConfig,
-  CRUDPayloadConfig,
-} from "./createResourceCRUDActions";
 import type { ToastCategory } from "@/composables/useToast";
 import { removeById } from "@/lib/arrayHelpers";
-import { buildCRUDActions } from "./buildCRUDActions";
 import { t } from "@/i18n";
 import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
 
@@ -34,21 +29,6 @@ interface NoteItem extends BaseNote {
 // 用於 groupId 存取的最小介面，實際 TItem 可能包含更多欄位
 interface ItemWithGroupId {
   groupId?: string | null;
-}
-
-export interface NoteCRUDConfig<
-  TItem extends { id: string; name: string },
-  TReadResult extends { id: string; name: string } = {
-    id: string;
-    name: string;
-    content: string;
-  },
-> {
-  resourceType: string;
-  methodPrefix: string;
-  toastCategory: ToastCategory;
-  events: CRUDEventsConfig;
-  payloadConfig: CRUDPayloadConfig<TItem, string, string, TReadResult>;
 }
 
 export interface NoteStoreConfig<
@@ -87,7 +67,6 @@ export interface NoteStoreConfig<
   createNotePayload: (item: TItem, x: number, y: number) => object;
   getItemId?: (item: TItem) => string;
   getItemName?: (item: TItem) => string;
-  crudConfig?: NoteCRUDConfig<{ id: string; name: string }>;
   customActions?: TCustomActions;
 }
 
@@ -558,7 +537,6 @@ export function createNoteStore<
       },
 
       ...(config.customActions ?? ({} as TCustomActions)),
-      ...buildCRUDActions(config),
     },
   });
 }

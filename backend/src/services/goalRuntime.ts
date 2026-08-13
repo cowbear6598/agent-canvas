@@ -531,6 +531,17 @@ function isGoalRuntimeToolResult(
   );
 }
 
+function parseGoalRuntimeContentBlocks(
+  content: unknown[],
+): GoalRuntimeToolResult | null {
+  for (const block of content) {
+    if (!isRecord(block) || typeof block.text !== "string") continue;
+    const parsed = parseGoalRuntimeToolResult(block.text);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 export function parseGoalRuntimeToolResult(
   output: unknown,
 ): GoalRuntimeToolResult | null {
@@ -557,16 +568,7 @@ export function parseGoalRuntimeToolResult(
   }
 
   const content = output.content;
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (isRecord(block) && typeof block.text === "string") {
-        const parsed = parseGoalRuntimeToolResult(block.text);
-        if (parsed) return parsed;
-      }
-    }
-  }
-
-  return null;
+  return Array.isArray(content) ? parseGoalRuntimeContentBlocks(content) : null;
 }
 
 function inferGoalRuntimeToolNameFromInput(

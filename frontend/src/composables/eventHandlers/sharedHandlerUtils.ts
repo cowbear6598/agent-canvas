@@ -31,22 +31,26 @@ export const isCurrentCanvas = (canvasId: string): boolean => {
   return canvasStore.activeCanvasId === canvasId;
 };
 
+function shouldSkipCanvasPayload(
+  payload: BasePayload,
+  skipCanvasCheck: boolean,
+): boolean {
+  if (skipCanvasCheck) return false;
+  if (payload.canvasId === undefined) {
+    logger.warn(
+      "[createUnifiedHandler] 收到事件但 payload 缺少 canvasId，已略過（若此事件不需 canvasId 過濾，請傳入 skipCanvasCheck: true）",
+    );
+    return true;
+  }
+  return payload.canvasId !== null && !isCurrentCanvas(payload.canvasId);
+}
+
 export function createUnifiedHandler<T extends BasePayload>(
   handler: (payload: T, isOwnOperation: boolean) => void,
   options?: UnifiedHandlerOptions,
 ): (payload: T) => void {
   return (payload: T): void => {
-    if (!options?.skipCanvasCheck) {
-      if (payload.canvasId === undefined) {
-        logger.warn(
-          "[createUnifiedHandler] 收到事件但 payload 缺少 canvasId，已略過（若此事件不需 canvasId 過濾，請傳入 skipCanvasCheck: true）",
-        );
-        return;
-      }
-      if (payload.canvasId !== null && !isCurrentCanvas(payload.canvasId)) {
-        return;
-      }
-    }
+    if (shouldSkipCanvasPayload(payload, options?.skipCanvasCheck === true)) return;
 
     const isOwnOperation = payload.requestId
       ? tryResolvePendingRequest(payload.requestId, payload)

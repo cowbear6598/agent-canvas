@@ -153,18 +153,20 @@ function restoreBinding(binding: IntegrationBinding): void {
   });
 }
 
+function refreshConnectedAppResources(): void {
+  if (isNoResource.value) return;
+
+  for (const app of apps.value) {
+    if (app.connectionStatus !== "connected") continue;
+    integrationStore.refreshAppResources(props.provider, app.id);
+  }
+}
+
 function initializeOpenState(): void {
   if (!props.open || !config.value) return;
 
   if (!hasInitializedOpenState.value) {
-    if (!isNoResource.value) {
-      for (const app of apps.value) {
-        if (app.connectionStatus === "connected") {
-          integrationStore.refreshAppResources(props.provider, app.id);
-        }
-      }
-    }
-
+    refreshConnectedAppResources();
     initExtraValues();
     hasInitializedOpenState.value = true;
   }

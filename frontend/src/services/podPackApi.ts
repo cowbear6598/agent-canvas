@@ -9,12 +9,14 @@ import type {
 type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 
 function getErrorKey(code: string): string {
-  if (code.includes("TOO_LARGE") || code.includes("SIZE_INVALID")) return "tooLarge";
-  if (code.includes("MANIFEST") || code.includes("VERSION")) return "invalidManifest";
-  if (code.includes("ARCHIVE") || code.includes("ZIP") || code.includes("PATH")) return "invalidArchive";
-  if (code.includes("NOT_FOUND") || code.includes("MISSING") || code.includes("REFERENCE")) return "missingDependency";
-  if (code.includes("CREATE_FAILED") || code.includes("CHANGED_DURING_IMPORT")) return "atomicFailed";
-  return "failed";
+  const rules: Array<{ terms: string[]; key: string }> = [
+    { terms: ["TOO_LARGE", "SIZE_INVALID"], key: "tooLarge" },
+    { terms: ["MANIFEST", "VERSION"], key: "invalidManifest" },
+    { terms: ["ARCHIVE", "ZIP", "PATH"], key: "invalidArchive" },
+    { terms: ["NOT_FOUND", "MISSING", "REFERENCE"], key: "missingDependency" },
+    { terms: ["CREATE_FAILED", "CHANGED_DURING_IMPORT"], key: "atomicFailed" },
+  ];
+  return rules.find(({ terms }) => terms.some((term) => code.includes(term)))?.key ?? "failed";
 }
 
 async function readError(response: FetchResponse): Promise<never> {

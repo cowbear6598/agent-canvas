@@ -101,6 +101,41 @@ export function resolvePluginBridgeDbPath(
   return resolveAppDataPaths(options).canvasDbPath;
 }
 
+interface PluginSkillEntry {
+  pluginId: string;
+  skillName: string;
+  description: string;
+  skillMdPath: string;
+  skillDir: string;
+}
+
+async function listPluginSkillEntries(
+  pluginId: string,
+  installPath: string,
+): Promise<PluginSkillEntry[]> {
+  try {
+    const skills = await listSkillsForPlugin(installPath);
+    return skills.map((skill) => {
+      const skillDir =
+        skill.skillName === ""
+          ? installPath
+          : path.join(installPath, skill.skillName);
+      return {
+        pluginId,
+        skillName: skill.skillName,
+        description: skill.description,
+        skillMdPath: path.join(skillDir, "SKILL.md"),
+        skillDir,
+      };
+    });
+  } catch (error) {
+    console.error(
+      `[plugin-mcp-bridge] 掃描 plugin 技能失敗，pluginId: ${pluginId}，installPath: ${installPath}，原因: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
+  }
+}
+
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -152,36 +187,10 @@ async function main(): Promise<void> {
     const { name } = request.params;
 
     if (name === "list_skills") {
-      const results: Array<{
-        pluginId: string;
-        skillName: string;
-        description: string;
-        skillMdPath: string;
-        skillDir: string;
-      }> = [];
+      const results: PluginSkillEntry[] = [];
 
       for (const [pluginId, installPath] of podScope.entries()) {
-        try {
-          const skills = await listSkillsForPlugin(installPath);
-          for (const skill of skills) {
-            const skillDir =
-              skill.skillName === ""
-                ? installPath
-                : path.join(installPath, skill.skillName);
-            results.push({
-              pluginId,
-              skillName: skill.skillName,
-              description: skill.description,
-              skillMdPath: path.join(skillDir, "SKILL.md"),
-              skillDir,
-            });
-          }
-        } catch (error) {
-          // 單個 plugin 讀取失敗不中斷整體，跳過
-          console.error(
-            `[plugin-mcp-bridge] 掃描 plugin 技能失敗，pluginId: ${pluginId}，installPath: ${installPath}，原因: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
+        results.push(...(await listPluginSkillEntries(pluginId, installPath)));
       }
 
       return successResult(results);

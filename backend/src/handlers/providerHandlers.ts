@@ -124,7 +124,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
  */
 export async function handleProviderList(
   connectionId: string,
-  payload: ProviderListPayload,
+  _payload: ProviderListPayload,
   requestId: string,
 ): Promise<void> {
   const providers = buildProviderListPayload();

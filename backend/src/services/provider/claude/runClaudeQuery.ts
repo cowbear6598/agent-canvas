@@ -445,6 +445,46 @@ function* dispatchSDKMessage(
 
 // ─── runClaudeQuery ──────────────────────────────────────────────────────────
 
+class ClaudeStderrDiagnostics {
+  private readonly chunks: string[] = [];
+  private yielded = false;
+  private resolveSignal: (() => void) | null = null;
+
+  enqueue(chunk: string): void {
+    const sanitizedChunk = sanitizeSensitiveInfo(chunk);
+    logger.warn("Chat", "Warn", `[claude-sdk stderr] ${sanitizedChunk}`);
+    if (this.yielded || sanitizedChunk.trim().length === 0) return;
+
+    this.chunks.push(sanitizedChunk);
+    this.resolveSignal?.();
+    this.resolveSignal = null;
+  }
+
+  drain(): Extract<NormalizedEvent, { type: "error" }> | null {
+    if (this.chunks.length === 0) return null;
+    const joined = this.chunks.splice(0).join("").trim();
+    if (!joined || this.yielded) return null;
+
+    const event = buildClaudeStderrDiagnostic(joined);
+    if (!event) return null;
+    this.yielded = true;
+    return event;
+  }
+
+  waitForSignal(): Promise<{ source: "stderr" }> {
+    if (this.chunks.length > 0) {
+      return Promise.resolve({ source: "stderr" });
+    }
+    return new Promise((resolve): void => {
+      this.resolveSignal = (): void => resolve({ source: "stderr" });
+    });
+  }
+
+  clearSignal(): void {
+    this.resolveSignal = null;
+  }
+}
+
 /**
  * 呼叫 Claude SDK query()，並將 SDKMessage 轉換為 NormalizedEvent 串流。
  *
@@ -482,9 +522,7 @@ export async function* runClaudeQuery(
     pluginCatalogText: options.pluginCatalogText ?? "",
     hiddenSections: hiddenBootstrapSections,
   });
-  const pendingStderrChunks: string[] = [];
-  let hasYieldedStderrDiagnostic = false;
-  let resolveStderrSignal: (() => void) | null = null;
+  const stderrDiagnostics = new ClaudeStderrDiagnostics();
 
   // 建立 abortController，供 ctx.abortSignal 橋接
   const abortController = new AbortController();
@@ -494,56 +532,6 @@ export async function* runClaudeQuery(
     const onAbort = (): void => abortController.abort();
     abortSignal.addEventListener("abort", onAbort, { once: true });
   }
-
-  // 一次建構完整 sdkOptions，使用物件展開將 ClaudeOptions 映射到 SDK Options 格式；
-  // 選填欄位（mcpServers / plugins / resume）只在有值時才包含，
-  // 避免傳入 undefined 干擾 SDK 行為
-  const enqueueStderrDiagnostic = (chunk: string): void => {
-    const sanitizedChunk = sanitizeSensitiveInfo(chunk);
-    logger.warn("Chat", "Warn", `[claude-sdk stderr] ${sanitizedChunk}`);
-
-    if (hasYieldedStderrDiagnostic || sanitizedChunk.trim().length === 0) {
-      return;
-    }
-
-    pendingStderrChunks.push(sanitizedChunk);
-    if (resolveStderrSignal) {
-      resolveStderrSignal();
-      resolveStderrSignal = null;
-    }
-  };
-
-  const drainPendingStderrDiagnostic = (): Extract<
-    NormalizedEvent,
-    { type: "error" }
-  > | null => {
-    if (pendingStderrChunks.length === 0) return null;
-
-    const joined = pendingStderrChunks.splice(0).join("").trim();
-    if (!joined) return null;
-
-    if (hasYieldedStderrDiagnostic) {
-      return null;
-    }
-
-    const diagnosticEvent = buildClaudeStderrDiagnostic(joined);
-    if (!diagnosticEvent) return null;
-
-    hasYieldedStderrDiagnostic = true;
-    return diagnosticEvent;
-  };
-
-  const waitForStderrSignal = (): Promise<{ source: "stderr" }> => {
-    if (pendingStderrChunks.length > 0) {
-      return Promise.resolve({ source: "stderr" });
-    }
-
-    return new Promise<{ source: "stderr" }>((resolve) => {
-      resolveStderrSignal = (): void => {
-        resolve({ source: "stderr" });
-      };
-    });
-  };
 
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
@@ -555,7 +543,7 @@ export async function* runClaudeQuery(
     model: options.model,
     abortController,
     // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 SDK 只寫 stderr 時前端完全靜默
-    stderr: enqueueStderrDiagnostic,
+    stderr: (chunk) => stderrDiagnostics.enqueue(chunk),
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.thinking ? { thinking: options.thinking } : {}),
@@ -581,7 +569,7 @@ export async function* runClaudeQuery(
 
   // 以 race 同時等待 SDK message 與 stderr 診斷，避免 SDK 只寫 stderr 時前端完全靜默
   while (true) {
-    const stderrDiagnostic = drainPendingStderrDiagnostic();
+    const stderrDiagnostic = stderrDiagnostics.drain();
     if (stderrDiagnostic) {
       yield stderrDiagnostic;
       continue;
@@ -589,14 +577,14 @@ export async function* runClaudeQuery(
 
     const winner = await Promise.race([
       nextResultPromise.then((result) => ({ source: "sdk" as const, result })),
-      waitForStderrSignal(),
+      stderrDiagnostics.waitForSignal(),
     ]);
 
     if (winner.source === "stderr") {
       continue;
     }
 
-    resolveStderrSignal = null;
+    stderrDiagnostics.clearSignal();
 
     if (winner.result.done) {
       break;
@@ -607,7 +595,7 @@ export async function* runClaudeQuery(
     yield* dispatchSDKMessage(sdkMessage, state);
   }
 
-  const finalStderrDiagnostic = drainPendingStderrDiagnostic();
+  const finalStderrDiagnostic = stderrDiagnostics.drain();
   if (finalStderrDiagnostic) {
     yield finalStderrDiagnostic;
   }

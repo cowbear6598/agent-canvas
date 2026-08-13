@@ -10,8 +10,29 @@ import {
 import { useUploadStore } from "@/stores/upload/uploadStore";
 import { useChatStore } from "@/stores/chat/chatStore";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
+import type { UploadFileEntry } from "@/types/upload";
 
 type ValidateDropResult = { ok: true } | { ok: false; toastKey: string };
+
+function containsDirectory(items: DataTransferItemList | null | undefined): boolean {
+  if (!items) return false;
+  return Array.from(items).some(
+    (item) => item.webkitGetAsEntry?.()?.isDirectory === true,
+  );
+}
+
+function hasOversizedFile(files: File[]): boolean {
+  return files.some((file) => file.size > MAX_POD_DROP_FILE_BYTES);
+}
+
+function hasUnsafeFileName(files: File[]): boolean {
+  return files.some(
+    (file) =>
+      file.name.includes("/") ||
+      file.name.includes("\\") ||
+      file.name.includes(".."),
+  );
+}
 
 /**
  * 純函式：驗證 drop 事件中的 items 與 files 是否合法。
@@ -27,38 +48,23 @@ export function validateDropFiles(
   items: DataTransferItemList | null | undefined,
   files: FileList | null | undefined,
 ): ValidateDropResult {
-  // 1. 資料夾偵測
-  if (items) {
-    for (let i = 0; i < items.length; i++) {
-      const entry = items[i]?.webkitGetAsEntry?.();
-      if (entry?.isDirectory) {
-        return { ok: false, toastKey: "errors.attachmentFolderNotAllowed" };
-      }
-    }
+  if (containsDirectory(items)) {
+    return { ok: false, toastKey: "errors.attachmentFolderNotAllowed" };
   }
 
-  // 2. 空檔清單
   if (!files || files.length === 0) {
     return { ok: false, toastKey: "errors.attachmentEmpty" };
   }
 
-  // 3. 單檔大小超過上限
-  for (const file of Array.from(files)) {
-    if (file.size > MAX_POD_DROP_FILE_BYTES) {
-      return { ok: false, toastKey: "errors.attachmentTooLarge" };
-    }
+  const fileList = Array.from(files);
+  if (hasOversizedFile(fileList)) {
+    return { ok: false, toastKey: "errors.attachmentTooLarge" };
   }
 
   // 4. 檔案名稱路徑字元過濾（defense-in-depth：後端有雙重防禦，前端提前擋下）
   // 含 '/'、'\'、或 '..' 的名稱視為路徑穿越風險，整批拒絕
-  for (const file of Array.from(files)) {
-    if (
-      file.name.includes("/") ||
-      file.name.includes("\\") ||
-      file.name.includes("..")
-    ) {
-      return { ok: false, toastKey: "errors.attachmentInvalidName" };
-    }
+  if (hasUnsafeFileName(fileList)) {
+    return { ok: false, toastKey: "errors.attachmentInvalidName" };
   }
 
   return { ok: true };
@@ -111,6 +117,59 @@ export function usePodFileDrop(
   const { toast } = useToast();
 
   const isDragOver = ref(false);
+
+  const uploadEntries = async (
+    podId: string,
+    canvasId: string,
+    uploadSessionId: string,
+    entries: UploadFileEntry[],
+  ): Promise<void> => {
+    const uploadStore = useUploadStore();
+
+    await Promise.allSettled(
+      entries.map(async (entry) => {
+        try {
+          await uploadFile(
+            entry.file,
+            canvasId,
+            uploadSessionId,
+            ({ loaded }) => {
+              uploadStore.updateFileProgress(podId, entry.id, loaded);
+            },
+          );
+          uploadStore.markFileSuccess(podId, entry.id);
+        } catch (error) {
+          uploadStore.markFileFailed(
+            podId,
+            entry.id,
+            resolveFailureReason(error),
+          );
+        }
+      }),
+    );
+  };
+
+  const finalizeAndSend = async (
+    podId: string,
+    uploadSessionId: string,
+    preserveErrorMessage: boolean,
+    chatStore: ReturnType<typeof useChatStore>,
+  ): Promise<void> => {
+    const uploadStore = useUploadStore();
+    if (!uploadStore.finalizeUpload(podId).ok) return;
+
+    try {
+      await chatStore.sendMessageWithUploadSession(podId, uploadSessionId);
+    } catch (error) {
+      toast({
+        title:
+          preserveErrorMessage && error instanceof Error
+            ? error.message
+            : t("composable.chat.podDropSendFailed"),
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDragEnter = (event: DragEvent): void => {
     event.preventDefault();
@@ -169,44 +228,8 @@ export function usePodFileDrop(
     const podState = uploadStore.getUploadState(podId);
     const fileEntries = podState.files;
 
-    // 對每個檔案並行上傳；個別包 try/catch，單檔失敗不中斷其他
-    await Promise.allSettled(
-      fileEntries.map(async (entry) => {
-        try {
-          await uploadFile(
-            entry.file,
-            canvasId,
-            uploadSessionId,
-            ({ loaded }) => {
-              uploadStore.updateFileProgress(podId, entry.id, loaded);
-            },
-          );
-          uploadStore.markFileSuccess(podId, entry.id);
-        } catch (err) {
-          const reason = resolveFailureReason(err);
-          uploadStore.markFileFailed(podId, entry.id, reason);
-        }
-      }),
-    );
-
-    // 所有上傳結束後，依結果決定後續行為
-    const result = uploadStore.finalizeUpload(podId);
-
-    if (result.ok) {
-      // 全部成功：送 WS 訊息，由後端根據 uploadSessionId 組裝附件
-      try {
-        await chatStore.sendMessageWithUploadSession(podId, uploadSessionId);
-      } catch (error) {
-        toast({
-          title:
-            error instanceof Error
-              ? error.message
-              : t("composable.chat.podDropSendFailed"),
-          variant: "destructive",
-        });
-      }
-    }
-    // ok=false 時不送訊息，UI 由 PodUploadOverlay 顯示失敗清單
+    await uploadEntries(podId, canvasId, uploadSessionId, fileEntries);
+    await finalizeAndSend(podId, uploadSessionId, true, chatStore);
   };
 
   /**
@@ -263,40 +286,8 @@ export function usePodFileDrop(
       failedEntries.map((f) => f.id),
     );
 
-    // 只對失敗的檔案重新上傳；成功的檔案不重傳
-    await Promise.allSettled(
-      failedEntries.map(async (entry) => {
-        try {
-          await uploadFile(
-            entry.file,
-            canvasId,
-            uploadSessionId,
-            ({ loaded }) => {
-              uploadStore.updateFileProgress(podId, entry.id, loaded);
-            },
-          );
-          uploadStore.markFileSuccess(podId, entry.id);
-        } catch (err) {
-          const reason = resolveFailureReason(err);
-          uploadStore.markFileFailed(podId, entry.id, reason);
-        }
-      }),
-    );
-
-    const result = uploadStore.finalizeUpload(podId);
-
-    if (result.ok) {
-      // 所有（含先前已成功的）檔案均成功，送 WS 訊息
-      try {
-        await chatStore.sendMessageWithUploadSession(podId, uploadSessionId);
-      } catch {
-        toast({
-          title: t("composable.chat.podDropSendFailed"),
-          variant: "destructive",
-        });
-      }
-    }
-    // ok=false：部分仍失敗，維持 upload-failed 狀態，UI 繼續顯示失敗清單
+    await uploadEntries(podId, canvasId, uploadSessionId, failedEntries);
+    await finalizeAndSend(podId, uploadSessionId, false, chatStore);
   };
 
   return {

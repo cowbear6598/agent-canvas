@@ -600,28 +600,7 @@ class RunExecutionService {
       );
       if (!settled) continue;
 
-      // 所有路徑已 settled 且狀態已更新時，發送 WebSocket 通知
-      if (
-        isAllPathwaysSettled(
-          instance.autoPathwaySettled,
-          instance.directPathwaySettled,
-        ) &&
-        (instance.status === "skipped" || instance.status === "completed")
-      ) {
-        socketService.emitToCanvas(
-          canvasId,
-          WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
-          {
-            runId,
-            canvasId,
-            podId: instance.podId,
-            status: instance.status,
-            completedAt: new Date().toISOString(),
-            autoPathwaySettled: instance.autoPathwaySettled,
-            directPathwaySettled: instance.directPathwaySettled,
-          } satisfies RunPodStatusChangedPayload,
-        );
-      }
+      this.emitSettledInstanceStatus(runId, canvasId, instance);
 
       // 只將剛 settle 的 instance 的直接下游加入佇列，
       // 避免重新掃描全部 instances（O(N) → O(下游數量)）
@@ -638,6 +617,34 @@ class RunExecutionService {
         }
       }
     }
+  }
+
+  private emitSettledInstanceStatus(
+    runId: string,
+    canvasId: string,
+    instance: RunPodInstance,
+  ): void {
+    const isSettled = isAllPathwaysSettled(
+      instance.autoPathwaySettled,
+      instance.directPathwaySettled,
+    );
+    const hasSettledStatus =
+      instance.status === "skipped" || instance.status === "completed";
+    if (!isSettled || !hasSettledStatus) return;
+
+    socketService.emitToCanvas(
+      canvasId,
+      WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+      {
+        runId,
+        canvasId,
+        podId: instance.podId,
+        status: instance.status,
+        completedAt: new Date().toISOString(),
+        autoPathwaySettled: instance.autoPathwaySettled,
+        directPathwaySettled: instance.directPathwaySettled,
+      } satisfies RunPodStatusChangedPayload,
+    );
   }
 
   errorPodInstance(
@@ -690,15 +697,7 @@ class RunExecutionService {
     status: RunPodInstanceStatus,
     options?: { evaluateRun?: boolean; errorMessage?: string },
   ): void {
-    // deleteRun race guard — see runExecutionService.deleteRun
-    // 兩階段過濾：先用 activeRunStreams 做 O(1) 廉價判斷，
-    // 只有 activeRunStreams 已不含此 runId（cancellation 已啟動）時，才 fallback 查 DB 確認。
-    if (!this.activeStreams.hasRun(runContext.runId)) {
-      const run = runStore.getRun(runContext.runId);
-      if (shouldIgnorePodStatusUpdateForRun(run)) {
-        return;
-      }
-    }
+    if (this.shouldIgnoreStatusUpdate(runContext.runId)) return;
 
     const instance = runStore.getPodInstance(runContext.runId, podId);
     if (!instance) {
@@ -710,30 +709,57 @@ class RunExecutionService {
       return;
     }
 
-    if (options?.errorMessage) {
-      runStore.updatePodInstanceStatus(
-        instance.id,
-        status,
-        options.errorMessage,
-      );
-    } else {
-      runStore.updatePodInstanceStatus(instance.id, status);
-    }
+    this.persistPodInstanceStatus(instance.id, status, options?.errorMessage);
 
     const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
     if (!updatedInstance) {
       return;
     }
 
-    // running 時記錄啟動時間；其他狀態保留原有的 triggeredAt（與 SQL CASE WHEN 邏輯一致）
+    this.emitPodInstanceStatus(
+      runContext,
+      podId,
+      status,
+      updatedInstance,
+      options?.errorMessage,
+    );
+
+    if (options?.evaluateRun) {
+      this.evaluateRunStatus(runContext.runId, runContext.canvasId);
+    }
+  }
+
+  private shouldIgnoreStatusUpdate(runId: string): boolean {
+    if (this.activeStreams.hasRun(runId)) return false;
+    return shouldIgnorePodStatusUpdateForRun(runStore.getRun(runId));
+  }
+
+  private persistPodInstanceStatus(
+    instanceId: string,
+    status: RunPodInstanceStatus,
+    errorMessage?: string,
+  ): void {
+    if (errorMessage) {
+      runStore.updatePodInstanceStatus(instanceId, status, errorMessage);
+      return;
+    }
+    runStore.updatePodInstanceStatus(instanceId, status);
+  }
+
+  private emitPodInstanceStatus(
+    runContext: RunContext,
+    podId: string,
+    status: RunPodInstanceStatus,
+    instance: RunPodInstance,
+    errorMessage?: string,
+  ): void {
     const triggeredAt =
       status === "running"
         ? new Date().toISOString()
-        : (updatedInstance.triggeredAt ?? undefined);
-    const isTerminal = isTerminalPodStatus(status);
-    const completedAt = isTerminal
+        : (instance.triggeredAt ?? undefined);
+    const completedAt = isTerminalPodStatus(status)
       ? new Date().toISOString()
-      : (updatedInstance.completedAt ?? undefined);
+      : (instance.completedAt ?? undefined);
 
     socketService.emitToCanvas(
       runContext.canvasId,
@@ -743,19 +769,14 @@ class RunExecutionService {
         canvasId: runContext.canvasId,
         podId,
         status,
-        lastResponseSummary: updatedInstance.lastResponseSummary ?? undefined,
-        errorMessage:
-          options?.errorMessage ?? updatedInstance.errorMessage ?? undefined,
+        lastResponseSummary: instance.lastResponseSummary ?? undefined,
+        errorMessage: errorMessage ?? instance.errorMessage ?? undefined,
         triggeredAt,
         completedAt,
-        autoPathwaySettled: updatedInstance.autoPathwaySettled,
-        directPathwaySettled: updatedInstance.directPathwaySettled,
+        autoPathwaySettled: instance.autoPathwaySettled,
+        directPathwaySettled: instance.directPathwaySettled,
       } satisfies RunPodStatusChangedPayload,
     );
-
-    if (options?.evaluateRun) {
-      this.evaluateRunStatus(runContext.runId, runContext.canvasId);
-    }
   }
 
   /**
@@ -791,6 +812,17 @@ class RunExecutionService {
     ) {
       return;
     }
+
+    this.completeTerminalRun(runId, canvasId, currentRun, instances, newStatus);
+  }
+
+  private completeTerminalRun(
+    runId: string,
+    canvasId: string,
+    currentRun: NonNullable<ReturnType<typeof runStore.getRun>>,
+    instances: RunPodInstance[],
+    newStatus: Parameters<typeof runStore.updateRunStatus>[1],
+  ): void {
 
     runStore.updateRunStatus(runId, newStatus);
     const updatedRun = runStore.getRun(runId);

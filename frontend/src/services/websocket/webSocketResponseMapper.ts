@@ -59,32 +59,28 @@ function translateIfKnown(
   return translated === key ? null : translated;
 }
 
+function resolveStructuredError(error: WebSocketErrorObject): string | null {
+  if (
+    typeof error.code === "string" &&
+    MESSAGE_ALLOWED_ERROR_CODES.has(error.code) &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  if (typeof error.code === "string") {
+    return translateIfKnown(`websocket.errors.${error.code}`, error.params);
+  }
+  return typeof error.key === "string"
+    ? translateIfKnown(error.key, error.params)
+    : null;
+}
+
 function resolveWebSocketErrorMessage(
   rawError: WebSocketBaseResponse["error"],
   rawCode?: unknown,
 ): string {
   if (rawError && typeof rawError === "object") {
-    if (
-      typeof rawError.code === "string" &&
-      MESSAGE_ALLOWED_ERROR_CODES.has(rawError.code) &&
-      typeof rawError.message === "string"
-    ) {
-      return rawError.message;
-    }
-
-    if (typeof rawError.code === "string") {
-      return (
-        translateIfKnown(`websocket.errors.${rawError.code}`, rawError.params) ??
-        t("common.error.unknown")
-      );
-    }
-
-    if (typeof rawError.key === "string") {
-      return (
-        translateIfKnown(rawError.key, rawError.params) ??
-        t("common.error.unknown")
-      );
-    }
+    return resolveStructuredError(rawError) ?? t("common.error.unknown");
   }
 
   if (typeof rawCode === "string") {

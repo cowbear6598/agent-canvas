@@ -22,6 +22,7 @@ import { runExecutionService } from "../services/workflow/runExecutionService.js
 import {
   toConnectionPublic,
   toPodPublicView,
+  type Connection,
   type Pod,
   type ScheduleConfig,
 } from "../types/index.js";
@@ -116,6 +117,60 @@ const connectionPatchSchema = z
     branchThinkingLevel: z.string().min(1).max(200).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "至少需要一個更新欄位");
+
+type ConnectionCreateInput = z.infer<typeof connectionCreateSchema>;
+
+function normalizeConnectionMode(
+  triggerMode: ConnectionCreateInput["triggerMode"],
+): { triggerMode?: "auto" | "branch"; direct?: boolean } {
+  if (triggerMode === undefined) return {};
+  if (triggerMode === "direct") return { triggerMode: "auto", direct: true };
+  return { triggerMode };
+}
+
+function emitAgentConnectionUpdated(
+  canvasId: string,
+  connection: Connection,
+  connections: Connection[] = [connection],
+): void {
+  socketService.emitToCanvas(
+    canvasId,
+    WebSocketResponseEvents.CONNECTION_UPDATED,
+    {
+      requestId: randomUUID(),
+      canvasId,
+      success: true,
+      connection: toConnectionPublic(connection),
+      connections: connections.map(toConnectionPublic),
+    },
+  );
+}
+
+function applyCreatedConnectionSettings(
+  canvasId: string,
+  connection: Connection | undefined,
+  data: Pick<
+    ConnectionCreateInput,
+    "triggerMode" | "branchProvider" | "branchModel" | "branchThinkingLevel"
+  >,
+): Connection | undefined {
+  if (!connection) return undefined;
+  const hasSettings = Object.values(data).some((value) => value !== undefined);
+  if (!hasSettings) return connection;
+
+  const updated = connectionStore.update(canvasId, connection.id, {
+    ...normalizeConnectionMode(data.triggerMode),
+    ...(data.branchProvider !== undefined && {
+      branchProvider: data.branchProvider,
+    }),
+    ...(data.branchModel !== undefined && { branchModel: data.branchModel }),
+    ...(data.branchThinkingLevel !== undefined && {
+      branchThinkingLevel: data.branchThinkingLevel,
+    }),
+  });
+  if (updated) emitAgentConnectionUpdated(canvasId, updated);
+  return updated;
+}
 const draftSchema = z.object({
   name: z.string().min(1).max(50),
   pods: z.array(podCreateSchema).min(1).max(50),
@@ -397,15 +452,12 @@ export async function handleAgentConnectionCreate(
       branchThinkingLevel,
       ...connectionInput
     } = parsed.data;
-    const triggerMode =
-      rawTriggerMode === "direct" ? "auto" : rawTriggerMode;
     const result = connectionCommandService.create({
       canvasId: resolved.canvasId,
       requestId: randomUUID(),
       payload: {
         ...connectionInput,
-        ...(triggerMode !== undefined && { triggerMode }),
-        ...(rawTriggerMode === "direct" && { direct: true }),
+        ...normalizeConnectionMode(rawTriggerMode),
         canvasId: resolved.canvasId,
         requestId: randomUUID(),
       },
@@ -413,35 +465,16 @@ export async function handleAgentConnectionCreate(
       targetPod,
     });
     dispatchApplicationCommand(result);
-    let connection = result.data.connection;
-    if (
-      connection &&
-      (rawTriggerMode !== undefined ||
-        branchProvider !== undefined ||
-        branchModel !== undefined ||
-        branchThinkingLevel !== undefined)
-    ) {
-      connection = connectionStore.update(resolved.canvasId, connection.id, {
-        ...(triggerMode !== undefined && { triggerMode }),
-        ...(rawTriggerMode === "direct" && { direct: true }),
-        ...(branchProvider !== undefined && { branchProvider }),
-        ...(branchModel !== undefined && { branchModel }),
-        ...(branchThinkingLevel !== undefined && { branchThinkingLevel }),
-      });
-      if (connection) {
-        socketService.emitToCanvas(
-          resolved.canvasId,
-          WebSocketResponseEvents.CONNECTION_UPDATED,
-          {
-            requestId: randomUUID(),
-            canvasId: resolved.canvasId,
-            success: true,
-            connection: toConnectionPublic(connection),
-            connections: [toConnectionPublic(connection)],
-          },
-        );
-      }
-    }
+    const connection = applyCreatedConnectionSettings(
+      resolved.canvasId,
+      result.data.connection,
+      {
+        triggerMode: rawTriggerMode,
+        branchProvider,
+        branchModel,
+        branchThinkingLevel,
+      },
+    );
     return jsonResponse({ connection }, HTTP_STATUS.CREATED);
   } catch (error) {
     return jsonResponse(
@@ -465,29 +498,20 @@ export async function handleAgentConnectionUpdate(
   if (parsed.error) return parsed.error;
   try {
     const { triggerMode: rawTriggerMode, ...connectionUpdates } = parsed.data;
-    const triggerMode =
-      rawTriggerMode === "direct" ? "auto" : rawTriggerMode;
     const result = connectionStore.updateBranchSiblingSettings(
       resolved.canvasId,
       connectionId,
       {
         ...connectionUpdates,
-        ...(triggerMode !== undefined && { triggerMode }),
-        ...(rawTriggerMode === "direct" && { direct: true }),
+        ...normalizeConnectionMode(rawTriggerMode),
       },
     );
     if (!result) return jsonResponse({ error: "找不到 Connection" }, HTTP_STATUS.NOT_FOUND);
     const connections = result.updatedConnections.map(toConnectionPublic);
-    socketService.emitToCanvas(
+    emitAgentConnectionUpdated(
       resolved.canvasId,
-      WebSocketResponseEvents.CONNECTION_UPDATED,
-      {
-        requestId: randomUUID(),
-        canvasId: resolved.canvasId,
-        success: true,
-        connection: toConnectionPublic(result.targetConnection),
-        connections,
-      },
+      result.targetConnection,
+      result.updatedConnections,
     );
     return jsonResponse(
       { connection: toConnectionPublic(result.targetConnection), connections },

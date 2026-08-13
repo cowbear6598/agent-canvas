@@ -135,7 +135,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
   }
 
   private getMergedContentOrNull(
-    canvasId: string,
     targetPodId: string,
     runContext: RunContext,
   ): { completedSummaries: Map<string, string>; mergedContent: string } | null {
@@ -159,7 +158,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
   }
 
   private async checkMultiInputReadiness(
-    canvasId: string,
     sourcePodId: string,
     connection: Connection,
     requiredSourcePodIds: string[],
@@ -211,7 +209,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     ).map((c) => c.sourcePodId);
 
     const readiness = await this.checkMultiInputReadiness(
-      canvasId,
       sourcePodId,
       connection,
       requiredSourcePodIds,
@@ -223,7 +220,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     }
 
     const merged = this.getMergedContentOrNull(
-      canvasId,
       connection.targetPodId,
       runContext,
     );
@@ -255,7 +251,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     runContext: RunContext,
   ): void {
     const merged = this.getMergedContentOrNull(
-      canvasId,
       connection.targetPodId,
       runContext,
     );

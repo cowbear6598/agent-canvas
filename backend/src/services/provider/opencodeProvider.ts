@@ -296,6 +296,49 @@ async function getOrCreateRunScopedServer(
   return server;
 }
 
+type OpencodeServer = { close(): void; url: string };
+
+async function resolveOpencodeServer(
+  podId: string,
+  mcpEntries: PodMcpEntry[],
+  runContext: RunContext | undefined,
+): Promise<{
+  baseUrl: string | null;
+  transientServer: OpencodeServer | null;
+}> {
+  if (mcpEntries.length === 0) {
+    return {
+      baseUrl: _getServerState().baseUrl,
+      transientServer: null,
+    };
+  }
+
+  try {
+    if (runContext) {
+      const cached = await getOrCreateRunScopedServer(
+        runContext.runId,
+        podId,
+        mcpEntries,
+      );
+      return { baseUrl: cached.url, transientServer: null };
+    }
+
+    const transientServer = await _createServer({
+      port: 0,
+      timeout: OPENCODE_TRANSIENT_SERVER_TIMEOUT_MS,
+      config: buildOpencodeTransientServerConfig(mcpEntries),
+    });
+    return { baseUrl: transientServer.url, transientServer };
+  } catch (error) {
+    logger.error(
+      "Chat",
+      "Error",
+      `[OpencodeProvider] transient server 啟動失敗：${error instanceof Error ? error.message : String(error)}`,
+    );
+    return { baseUrl: null, transientServer: null };
+  }
+}
+
 /**
  * Run 結束時統一關閉所有屬於該 runId 的 transient server 並清除快取。
  * 由 runExecutionService 的生命週期 hook 呼叫。
@@ -401,60 +444,14 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     // transientServer 建立之後到 method 結束全部包在同一個 try/finally，
     // 確保 session 建立失敗、session ID 為空、abort 提前觸發等所有路徑都會 close
     try {
-      let baseUrl: string | null = null;
       const mcpEntries = options.mcpEntries ?? [];
-
-      if (mcpEntries.length > 0) {
-        try {
-          if (runContext) {
-            // Run 期間同一 (runId, podId) 復用同一個 transient server，
-            // 避免 gate retry 每輪都付出 server 冷啟動成本。
-            // 快取的 server 由 cleanupOpencodeRunServers 在 Run 結束時統一關閉，
-            // 此處 transientServer 保持 null（不走 closeTransientServer 關閉）。
-            const cached = await getOrCreateRunScopedServer(
-              runContext.runId,
-              podId,
-              mcpEntries,
-            );
-            baseUrl = cached.url;
-          } else {
-            // 無 runContext（單次對話模式）：建立 request-scoped transient server，
-            // 由外層 finally 的 closeTransientServer 負責關閉。
-            transientServer = await _createServer({
-              // 使用 ephemeral port，避免與既有全域 opencode server 的 4096 衝突
-              port: 0,
-              timeout: OPENCODE_TRANSIENT_SERVER_TIMEOUT_MS,
-              config: buildOpencodeTransientServerConfig(mcpEntries),
-            });
-            baseUrl = transientServer.url;
-          }
-        } catch (err) {
-          logger.error(
-            "Chat",
-            "Error",
-            `[OpencodeProvider] transient server 啟動失敗：${err instanceof Error ? err.message : String(err)}`,
-          );
-          yield buildOpencodeSystemError({
-            content: "opencode server 連線失敗，請重啟後端",
-            fatal: true,
-            code: "opencode_server_unreachable",
-            recovery: "unrecoverable",
-          });
-          return;
-        }
-      } else {
-        const serverState = _getServerState();
-        if (!serverState.baseUrl) {
-          yield buildOpencodeSystemError({
-            content: "opencode server 連線失敗，請重啟後端",
-            fatal: true,
-            code: "opencode_server_unreachable",
-            recovery: "unrecoverable",
-          });
-          return;
-        }
-        baseUrl = serverState.baseUrl;
-      }
+      const serverResolution = await resolveOpencodeServer(
+        podId,
+        mcpEntries,
+        runContext,
+      );
+      transientServer = serverResolution.transientServer;
+      const { baseUrl } = serverResolution;
 
       if (!baseUrl) {
         yield buildOpencodeSystemError({

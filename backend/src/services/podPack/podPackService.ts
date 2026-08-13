@@ -104,6 +104,68 @@ function validateEntries(entries: ArchiveEntries): void {
   }
 }
 
+function readValidatedArchiveEntry(
+  bytes: Uint8Array,
+  view: DataView,
+  cursor: number,
+  decoder: TextDecoder,
+): { name: string; nextCursor: number; uncompressedSize: number } {
+  if (
+    cursor + 46 > bytes.byteLength ||
+    readUint32LE(view, cursor) !== ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
+  ) {
+    throw new Error("POD_PACK_ARCHIVE_INVALID");
+  }
+
+  const header = readCentralDirectoryEntryHeader(view, cursor);
+  if (isZip64Entry(header) || isZipSymlink(header.externalAttributes)) {
+    throw new Error("POD_PACK_ZIP_ENTRY_UNSUPPORTED");
+  }
+  if (
+    header.nextCursor > bytes.byteLength ||
+    header.localHeaderOffset + 4 > bytes.byteLength ||
+    readUint32LE(view, header.localHeaderOffset) !==
+      ZIP_LOCAL_FILE_HEADER_SIGNATURE
+  ) {
+    throw new Error("POD_PACK_ARCHIVE_INVALID");
+  }
+
+  const name = decoder.decode(
+    bytes.subarray(
+      header.fileNameOffset,
+      header.fileNameOffset + header.fileNameLength,
+    ),
+  );
+  if (!isSafeArchivePath(name)) throw new Error(`POD_PACK_PATH_INVALID:${name}`);
+  if (header.uncompressedSize > MAX_POD_PACK_ENTRY_BYTES) {
+    throw new Error(`POD_PACK_ENTRY_TOO_LARGE:${name}`);
+  }
+  return {
+    name,
+    nextCursor: header.nextCursor,
+    uncompressedSize: header.uncompressedSize,
+  };
+}
+
+function validateCentralDirectory(
+  bytes: Uint8Array,
+  view: DataView,
+  offset: number,
+  totalEntries: number,
+): void {
+  const decoder = new TextDecoder();
+  let cursor = offset;
+  let totalSize = 0;
+  for (let index = 0; index < totalEntries; index += 1) {
+    const entry = readValidatedArchiveEntry(bytes, view, cursor, decoder);
+    totalSize += entry.uncompressedSize;
+    if (totalSize > MAX_POD_PACK_UNCOMPRESSED_BYTES) {
+      throw new Error("POD_PACK_UNCOMPRESSED_TOO_LARGE");
+    }
+    cursor = entry.nextCursor;
+  }
+}
+
 function inflateArchive(bytes: Uint8Array): ArchiveEntries {
   const opened = openZipCentralDirectory(bytes);
   if (!opened) throw new Error("POD_PACK_ARCHIVE_INVALID");
@@ -118,27 +180,12 @@ function inflateArchive(bytes: Uint8Array): ArchiveEntries {
   if (endRecord.centralDirectoryOffset >= bytes.byteLength || centralEnd > bytes.byteLength) {
     throw new Error("POD_PACK_ARCHIVE_INVALID");
   }
-  const decoder = new TextDecoder();
-  let cursor = endRecord.centralDirectoryOffset;
-  let total = 0;
-  for (let index = 0; index < endRecord.totalEntries; index += 1) {
-    if (cursor + 46 > bytes.byteLength || readUint32LE(view, cursor) !== ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE) {
-      throw new Error("POD_PACK_ARCHIVE_INVALID");
-    }
-    const header = readCentralDirectoryEntryHeader(view, cursor);
-    if (isZip64Entry(header) || isZipSymlink(header.externalAttributes)) {
-      throw new Error("POD_PACK_ZIP_ENTRY_UNSUPPORTED");
-    }
-    if (header.nextCursor > bytes.byteLength || header.localHeaderOffset + 4 > bytes.byteLength || readUint32LE(view, header.localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE) {
-      throw new Error("POD_PACK_ARCHIVE_INVALID");
-    }
-    const name = decoder.decode(bytes.subarray(header.fileNameOffset, header.fileNameOffset + header.fileNameLength));
-    if (!isSafeArchivePath(name)) throw new Error(`POD_PACK_PATH_INVALID:${name}`);
-    if (header.uncompressedSize > MAX_POD_PACK_ENTRY_BYTES) throw new Error(`POD_PACK_ENTRY_TOO_LARGE:${name}`);
-    total += header.uncompressedSize;
-    if (total > MAX_POD_PACK_UNCOMPRESSED_BYTES) throw new Error("POD_PACK_UNCOMPRESSED_TOO_LARGE");
-    cursor = header.nextCursor;
-  }
+  validateCentralDirectory(
+    bytes,
+    view,
+    endRecord.centralDirectoryOffset,
+    endRecord.totalEntries,
+  );
   let entries: ArchiveEntries;
   try { entries = unzipSync(bytes); } catch { throw new Error("POD_PACK_ARCHIVE_INVALID"); }
   validateEntries(entries);
@@ -262,18 +309,25 @@ export async function createPodPackArchive(rawInput: unknown): Promise<Uint8Arra
   return archive;
 }
 
-export function parsePodPackArchive(bytes: Uint8Array): { manifest: PodPackManifest; entries: ArchiveEntries } {
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_POD_PACK_BYTES) throw new Error("POD_PACK_SIZE_INVALID");
-  const entries = inflateArchive(bytes);
+function parseManifest(entries: ArchiveEntries): PodPackManifest {
   const manifestBytes = entries["manifest.json"];
   if (!manifestBytes) throw new Error("POD_PACK_MANIFEST_MISSING");
   let raw: unknown;
   try { raw = JSON.parse(new TextDecoder().decode(manifestBytes)); } catch { throw new Error("POD_PACK_MANIFEST_JSON_INVALID"); }
   const parsed = podPackManifestSchema.safeParse(raw);
   if (!parsed.success) throw new Error("POD_PACK_MANIFEST_INVALID");
-  const manifest = parsed.data;
+  return parsed.data;
+}
+
+function validateUniqueManifestIds(manifest: PodPackManifest): void {
   if (new Set(manifest.pods.map((pod) => pod.originalId)).size !== manifest.pods.length) throw new Error("POD_PACK_DUPLICATE_POD_ID");
   if (new Set(manifest.plugins.map((plugin) => plugin.originalId)).size !== manifest.plugins.length) throw new Error("POD_PACK_DUPLICATE_PLUGIN_ID");
+}
+
+function validatePluginBundles(
+  manifest: PodPackManifest,
+  entries: ArchiveEntries,
+): void {
   for (const plugin of manifest.plugins) {
     const bundle = entries[plugin.bundlePath];
     if (!bundle) throw new Error(`POD_PACK_PLUGIN_BUNDLE_MISSING:${plugin.originalId}`);
@@ -285,10 +339,16 @@ export function parsePodPackArchive(bytes: Uint8Array): { manifest: PodPackManif
     }
     plugin.executableFiles = listExecutableFiles(files);
   }
+}
+
+function validateManagedMcps(manifest: PodPackManifest): void {
   for (const mcp of manifest.managedMcps) {
     const { originalName: _name, fingerprint, ...portable } = mcp;
     if (fingerprintMcp(portable) !== fingerprint) throw new Error(`POD_PACK_MCP_FINGERPRINT_MISMATCH:${mcp.originalName}`);
   }
+}
+
+function validateManifestReferences(manifest: PodPackManifest): void {
   const podIds = new Set(manifest.pods.map((pod) => pod.originalId));
   const pluginIds = new Set(manifest.plugins.map((plugin) => plugin.originalId));
   for (const pod of manifest.pods) {
@@ -297,6 +357,16 @@ export function parsePodPackArchive(bytes: Uint8Array): { manifest: PodPackManif
   if (manifest.connections.some((connection) => !podIds.has(connection.originalSourcePodId) || !podIds.has(connection.originalTargetPodId))) {
     throw new Error("POD_PACK_CONNECTION_REFERENCE_INVALID");
   }
+}
+
+export function parsePodPackArchive(bytes: Uint8Array): { manifest: PodPackManifest; entries: ArchiveEntries } {
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_POD_PACK_BYTES) throw new Error("POD_PACK_SIZE_INVALID");
+  const entries = inflateArchive(bytes);
+  const manifest = parseManifest(entries);
+  validateUniqueManifestIds(manifest);
+  validatePluginBundles(manifest, entries);
+  validateManagedMcps(manifest);
+  validateManifestReferences(manifest);
   return { manifest, entries };
 }
 
@@ -394,7 +464,227 @@ function generateImportPodName(original: string, existingNames: Set<string>): st
   return candidate;
 }
 
-export async function importPodPackArchive(bytes: Uint8Array, options: { canvasId: string; targetX: number; targetY: number }): Promise<{
+interface PodPackImportOptions {
+  canvasId: string;
+  targetX: number;
+  targetY: number;
+}
+
+interface ImportArtifacts {
+  pluginIds: string[];
+  pluginPaths: string[];
+  mcpIds: string[];
+  podIds: string[];
+  workspacePaths: string[];
+  connectionIds: string[];
+}
+
+function createImportArtifacts(): ImportArtifacts {
+  return {
+    pluginIds: [],
+    pluginPaths: [],
+    mcpIds: [],
+    podIds: [],
+    workspacePaths: [],
+    connectionIds: [],
+  };
+}
+
+async function importPlugins(
+  manifest: PodPackManifest,
+  entries: ArchiveEntries,
+  preview: PodPackPreview,
+  artifacts: ImportArtifacts,
+): Promise<Map<string, string>> {
+  const pluginMap = new Map<string, string>();
+  for (const item of preview.plugins) {
+    const manifestPlugin = manifest.plugins.find(
+      (plugin) => plugin.originalId === item.originalKey,
+    )!;
+    if (item.action === "reuse") {
+      const existing = (await installedPluginFingerprints()).get(item.fingerprint);
+      if (!existing) throw new Error("POD_PACK_PLUGIN_CHANGED_DURING_IMPORT");
+      pluginMap.set(item.originalKey, existing.id);
+      continue;
+    }
+
+    const sourceRef = `${item.fingerprint}-${randomUUID().slice(0, 8)}`;
+    const installPath = resolveUploadInstallPath(sourceRef);
+    artifacts.pluginPaths.push(installPath);
+    await writePluginBundle(entries[manifestPlugin.bundlePath]!, installPath);
+    const now = new Date().toISOString();
+    const record = managedPluginStore.insert({
+      id: `podpack:${sourceRef}`,
+      source: { type: "upload", ref: sourceRef },
+      githubRepo: sourceRef,
+      displayName: item.resolvedName,
+      description: manifestPlugin.description,
+      installPath,
+      installedAt: now,
+      updatedAt: now,
+    });
+    artifacts.pluginIds.push(record.id);
+    pluginMap.set(item.originalKey, record.id);
+  }
+  return pluginMap;
+}
+
+function importManagedMcps(
+  manifest: PodPackManifest,
+  preview: PodPackPreview,
+  artifacts: ImportArtifacts,
+): Map<string, string> {
+  const mcpMap = new Map<string, string>();
+  const existingMcps = managedMcpStore.list();
+  const mcpByFingerprint = new Map(
+    existingMcps.map((record) => [
+      fingerprintMcp(mcpPortableConfig(record)),
+      record,
+    ]),
+  );
+
+  for (const item of preview.managedMcps) {
+    const source = manifest.managedMcps.find(
+      (mcp) => mcp.originalName === item.originalKey,
+    )!;
+    const existing = mcpByFingerprint.get(item.fingerprint);
+    if (existing) {
+      mcpMap.set(item.originalKey, existing.name);
+      continue;
+    }
+
+    const record =
+      source.transport === "stdio"
+        ? managedMcpStore.save({
+            name: item.resolvedName,
+            enabled: source.enabled,
+            transport: "stdio",
+            command: source.command ?? "",
+            args: source.args,
+            cwd: null,
+            env: Object.fromEntries(source.envKeys.map((key) => [key, ""])),
+          })
+        : managedMcpStore.save({
+            name: item.resolvedName,
+            enabled: source.enabled,
+            transport: source.transport,
+            url: source.url ?? "",
+          });
+    artifacts.mcpIds.push(record.id);
+    mcpMap.set(item.originalKey, record.name);
+  }
+  return mcpMap;
+}
+
+async function importPods(
+  manifest: PodPackManifest,
+  options: PodPackImportOptions,
+  pluginMap: Map<string, string>,
+  mcpMap: Map<string, string>,
+  artifacts: ImportArtifacts,
+): Promise<{
+  pods: Array<ReturnType<typeof podStore.create>["pod"]>;
+  idMapping: Record<string, string>;
+}> {
+  const idMapping: Record<string, string> = {};
+  const positionedPods = positionImportedPods(
+    manifest,
+    options.targetX,
+    options.targetY,
+    pluginMap,
+    mcpMap,
+  );
+  const pods: Array<ReturnType<typeof podStore.create>["pod"]> = [];
+  const existingNames = new Set(
+    podStore.list(options.canvasId).map((pod) => pod.name),
+  );
+
+  for (const item of positionedPods) {
+    const name = generateImportPodName(item.name, existingNames);
+    existingNames.add(name);
+    const { pod } = podStore.create(options.canvasId, {
+      name,
+      x: item.x,
+      y: item.y,
+      rotation: item.rotation,
+      provider: item.provider,
+      providerConfig: item.providerConfig,
+      fastModeEnabled: item.fastModeEnabled,
+      mcpServerNames: item.mcpServerNames,
+      pluginIds: item.pluginIds,
+      repositoryId: null,
+      goal: item.goal,
+    });
+    pods.push(pod);
+    artifacts.podIds.push(pod.id);
+    artifacts.workspacePaths.push(pod.workspacePath);
+
+    const workspaceResult = await workspaceService.createWorkspace(
+      pod.workspacePath,
+    );
+    if (!workspaceResult.success) {
+      throw new Error("POD_PACK_WORKSPACE_CREATE_FAILED");
+    }
+    idMapping[item.originalId] = pod.id;
+  }
+  return { pods, idMapping };
+}
+
+function importConnections(
+  manifest: PodPackManifest,
+  canvasId: string,
+  podIdMapping: Record<string, string>,
+  artifacts: ImportArtifacts,
+): Array<ReturnType<typeof connectionStore.create>> {
+  const connections: Array<ReturnType<typeof connectionStore.create>> = [];
+  for (const item of manifest.connections) {
+    const sourcePodId = podIdMapping[item.originalSourcePodId];
+    const targetPodId = podIdMapping[item.originalTargetPodId];
+    if (!sourcePodId || !targetPodId) {
+      throw new Error("POD_PACK_CONNECTION_REFERENCE_INVALID");
+    }
+
+    const connection = connectionStore.create(canvasId, {
+      sourcePodId,
+      sourceAnchor: item.sourceAnchor,
+      targetPodId,
+      targetAnchor: item.targetAnchor,
+      triggerMode: item.triggerMode,
+      direct: item.direct,
+      summaryProvider: item.summaryProvider ?? undefined,
+      summaryModel: item.summaryModel,
+      summaryThinkingLevel: item.summaryThinkingLevel,
+      label: item.label,
+      description: item.description,
+      branchProvider: item.branchProvider ?? undefined,
+      branchModel: item.branchModel ?? undefined,
+      branchThinkingLevel: item.branchThinkingLevel,
+    });
+    connections.push(connection);
+    artifacts.connectionIds.push(connection.id);
+  }
+  return connections;
+}
+
+async function rollbackImport(
+  canvasId: string,
+  artifacts: ImportArtifacts,
+): Promise<void> {
+  for (const id of artifacts.connectionIds.reverse()) {
+    connectionStore.delete(canvasId, id);
+  }
+  for (const id of artifacts.podIds.reverse()) podStore.delete(canvasId, id);
+  for (const workspacePath of artifacts.workspacePaths) {
+    await workspaceService.deleteWorkspace(workspacePath);
+  }
+  for (const id of artifacts.mcpIds.reverse()) managedMcpStore.delete(id);
+  for (const id of artifacts.pluginIds.reverse()) managedPluginStore.delete(id);
+  for (const installPath of artifacts.pluginPaths) {
+    await fs.rm(installPath, { recursive: true, force: true });
+  }
+}
+
+export async function importPodPackArchive(bytes: Uint8Array, options: PodPackImportOptions): Promise<{
   success: true;
   preview: PodPackPreview;
   createdPods: ReturnType<typeof toPodPublicView>[];
@@ -403,103 +693,32 @@ export async function importPodPackArchive(bytes: Uint8Array, options: { canvasI
 }> {
   const { manifest, entries } = parsePodPackArchive(bytes);
   const preview = await resolvePreview(manifest);
-  const createdPluginIds: string[] = [];
-  const createdPluginPaths: string[] = [];
-  const createdMcpIds: string[] = [];
-  const createdPodIds: string[] = [];
-  const createdWorkspacePaths: string[] = [];
-  const createdConnectionIds: string[] = [];
-  const pluginMap = new Map<string, string>();
-  const mcpMap = new Map<string, string>();
+  const artifacts = createImportArtifacts();
   try {
-    for (const item of preview.plugins) {
-      const manifestPlugin = manifest.plugins.find((plugin) => plugin.originalId === item.originalKey)!;
-      if (item.action === "reuse") {
-        const existing = (await installedPluginFingerprints()).get(item.fingerprint);
-        if (!existing) throw new Error("POD_PACK_PLUGIN_CHANGED_DURING_IMPORT");
-        pluginMap.set(item.originalKey, existing.id);
-        continue;
-      }
-      const sourceRef = `${item.fingerprint}-${randomUUID().slice(0, 8)}`;
-      const installPath = resolveUploadInstallPath(sourceRef);
-      createdPluginPaths.push(installPath);
-      await writePluginBundle(entries[manifestPlugin.bundlePath]!, installPath);
-      const now = new Date().toISOString();
-      const record = managedPluginStore.insert({ id: `podpack:${sourceRef}`, source: { type: "upload", ref: sourceRef }, githubRepo: sourceRef, displayName: item.resolvedName, description: manifestPlugin.description, installPath, installedAt: now, updatedAt: now });
-      createdPluginIds.push(record.id);
-      pluginMap.set(item.originalKey, record.id);
-    }
-    const existingMcps = managedMcpStore.list();
-    const mcpByFingerprint = new Map(existingMcps.map((record) => [fingerprintMcp(mcpPortableConfig(record)), record]));
-    for (const item of preview.managedMcps) {
-      const source = manifest.managedMcps.find((mcp) => mcp.originalName === item.originalKey)!;
-      const existing = mcpByFingerprint.get(item.fingerprint);
-      if (existing) { mcpMap.set(item.originalKey, existing.name); continue; }
-      const record = source.transport === "stdio"
-        ? managedMcpStore.save({ name: item.resolvedName, enabled: source.enabled, transport: "stdio", command: source.command ?? "", args: source.args, cwd: null, env: Object.fromEntries(source.envKeys.map((key) => [key, ""])) })
-        : managedMcpStore.save({ name: item.resolvedName, enabled: source.enabled, transport: source.transport, url: source.url ?? "" });
-      createdMcpIds.push(record.id);
-      mcpMap.set(item.originalKey, record.name);
-    }
-    const podIdMapping: Record<string, string> = {};
-    const positionedPods = positionImportedPods(manifest, options.targetX, options.targetY, pluginMap, mcpMap);
-    const createdPods = [];
-    const existingNames = new Set(podStore.list(options.canvasId).map((pod) => pod.name));
-    for (const item of positionedPods) {
-      const name = generateImportPodName(item.name, existingNames);
-      existingNames.add(name);
-      const { pod } = podStore.create(options.canvasId, {
-        name,
-        x: item.x,
-        y: item.y,
-        rotation: item.rotation,
-        provider: item.provider,
-        providerConfig: item.providerConfig,
-        fastModeEnabled: item.fastModeEnabled,
-        mcpServerNames: item.mcpServerNames,
-        pluginIds: item.pluginIds,
-        repositoryId: null,
-        goal: item.goal,
-      });
-      createdPods.push(pod);
-      createdPodIds.push(pod.id);
-      createdWorkspacePaths.push(pod.workspacePath);
-      const workspaceResult = await workspaceService.createWorkspace(pod.workspacePath);
-      if (!workspaceResult.success) throw new Error("POD_PACK_WORKSPACE_CREATE_FAILED");
-      podIdMapping[item.originalId] = pod.id;
-    }
-    const createdConnections = [];
-    for (const item of manifest.connections) {
-      const sourcePodId = podIdMapping[item.originalSourcePodId];
-      const targetPodId = podIdMapping[item.originalTargetPodId];
-      if (!sourcePodId || !targetPodId) throw new Error("POD_PACK_CONNECTION_REFERENCE_INVALID");
-      const connection = connectionStore.create(options.canvasId, {
-        sourcePodId,
-        sourceAnchor: item.sourceAnchor,
-        targetPodId,
-        targetAnchor: item.targetAnchor,
-        triggerMode: item.triggerMode,
-        direct: item.direct,
-        summaryProvider: item.summaryProvider ?? undefined,
-        summaryModel: item.summaryModel,
-        summaryThinkingLevel: item.summaryThinkingLevel,
-        label: item.label,
-        description: item.description,
-        branchProvider: item.branchProvider ?? undefined,
-        branchModel: item.branchModel ?? undefined,
-        branchThinkingLevel: item.branchThinkingLevel,
-      });
-      createdConnections.push(connection);
-      createdConnectionIds.push(connection.id);
-    }
-    return { success: true as const, preview, createdPods: createdPods.map(toPodPublicView), createdConnections: createdConnections.map(toConnectionPublic), podIdMapping };
+    const pluginMap = await importPlugins(manifest, entries, preview, artifacts);
+    const mcpMap = importManagedMcps(manifest, preview, artifacts);
+    const { pods, idMapping } = await importPods(
+      manifest,
+      options,
+      pluginMap,
+      mcpMap,
+      artifacts,
+    );
+    const connections = importConnections(
+      manifest,
+      options.canvasId,
+      idMapping,
+      artifacts,
+    );
+    return {
+      success: true,
+      preview,
+      createdPods: pods.map(toPodPublicView),
+      createdConnections: connections.map(toConnectionPublic),
+      podIdMapping: idMapping,
+    };
   } catch (error) {
-    for (const id of createdConnectionIds.reverse()) connectionStore.delete(options.canvasId, id);
-    for (const id of createdPodIds.reverse()) podStore.delete(options.canvasId, id);
-    for (const workspacePath of createdWorkspacePaths) await workspaceService.deleteWorkspace(workspacePath);
-    for (const id of createdMcpIds.reverse()) managedMcpStore.delete(id);
-    for (const id of createdPluginIds.reverse()) managedPluginStore.delete(id);
-    for (const installPath of createdPluginPaths) await fs.rm(installPath, { recursive: true, force: true });
+    await rollbackImport(options.canvasId, artifacts);
     throw error;
   }
 }

@@ -55,6 +55,38 @@ function setRepositoryMemoryState(
   }
 }
 
+function getRepositoryMemoryToggleMessages(memoryEnabled: boolean): {
+  failureTitle: string;
+  failureDescription: string;
+  successTitle: string;
+} {
+  return memoryEnabled
+    ? {
+        failureTitle: t("canvas.podContextMenu.repoMemoryEnableFailed"),
+        failureDescription: t(
+          "canvas.podContextMenu.repoMemoryEnableFailedDesc",
+        ),
+        successTitle: t("canvas.podContextMenu.repoMemoryEnabled"),
+      }
+    : {
+        failureTitle: t("canvas.podContextMenu.repoMemoryDisableFailed"),
+        failureDescription: t(
+          "canvas.podContextMenu.repoMemoryDisableFailedDesc",
+        ),
+        successTitle: t("canvas.podContextMenu.repoMemoryDisabled"),
+      };
+}
+
+function resolveRepositoryId(
+  payload: {
+    repository?: { id: string };
+    repositoryId?: string;
+  },
+  fallbackId: string,
+): string {
+  return payload.repository?.id ?? payload.repositoryId ?? fallbackId;
+}
+
 interface RepositoryStoreCustomActions {
   createRepository(name: string): Promise<{
     success: boolean;
@@ -379,6 +411,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       repositoryId: string,
       memoryEnabled: boolean,
     ): Promise<{ success: boolean; repositoryId: string; pods: Pod[] }> {
+      const messages = getRepositoryMemoryToggleMessages(memoryEnabled);
       const result = await executeRepositoryAction<
         RepositorySetMemoryEnabledPayload,
         RepositoryMemoryEnabledSetPayload
@@ -391,16 +424,8 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         },
         {
           errorCategory: "Repository",
-          errorAction: t(
-            memoryEnabled
-              ? "canvas.podContextMenu.repoMemoryEnableFailed"
-              : "canvas.podContextMenu.repoMemoryDisableFailed",
-          ),
-          errorMessage: t(
-            memoryEnabled
-              ? "canvas.podContextMenu.repoMemoryEnableFailedDesc"
-              : "canvas.podContextMenu.repoMemoryDisableFailedDesc",
-          ),
+          errorAction: messages.failureTitle,
+          errorMessage: messages.failureDescription,
         },
       );
 
@@ -411,36 +436,23 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       if (!result.data.success) {
         showErrorToast(
           "Repository",
-          t(
-            memoryEnabled
-              ? "canvas.podContextMenu.repoMemoryEnableFailed"
-              : "canvas.podContextMenu.repoMemoryDisableFailed",
-          ),
-          t(
-            memoryEnabled
-              ? "canvas.podContextMenu.repoMemoryEnableFailedDesc"
-              : "canvas.podContextMenu.repoMemoryDisableFailedDesc",
-          ),
+          messages.failureTitle,
+          messages.failureDescription,
         );
         return { success: false, repositoryId, pods: [] };
       }
 
-      const resolvedRepositoryId =
-        result.data.repository?.id ?? result.data.repositoryId ?? repositoryId;
+      const resolvedRepositoryId = resolveRepositoryId(
+        result.data,
+        repositoryId,
+      );
       setRepositoryMemoryState(this.availableItems, resolvedRepositoryId, {
         hasRepoMemory: result.data.repository?.hasRepoMemory,
         repoMemoryEnabled: result.data.repository?.repoMemoryEnabled,
       });
       syncRepositoryPodsToPodStore(result.data.pods ?? []);
 
-      showSuccessToast(
-        "Repository",
-        t(
-          memoryEnabled
-            ? "canvas.podContextMenu.repoMemoryEnabled"
-            : "canvas.podContextMenu.repoMemoryDisabled",
-        ),
-      );
+      showSuccessToast("Repository", messages.successTitle);
 
       return {
         success: true,
@@ -538,13 +550,16 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         return { success: false, repositoryId, pods: [] };
       }
 
-      const resolvedRepositoryId =
-        result.data.repository?.id ?? result.data.repositoryId ?? repositoryId;
+      const resolvedRepositoryId = resolveRepositoryId(
+        result.data,
+        repositoryId,
+      );
+      const pods = result.data.pods ?? [];
       setRepositoryMemoryState(this.availableItems, resolvedRepositoryId, {
         hasRepoMemory: false,
         repoMemoryEnabled: result.data.repository?.repoMemoryEnabled,
       });
-      syncRepositoryPodsToPodStore(result.data.pods ?? []);
+      syncRepositoryPodsToPodStore(pods);
 
       showSuccessToast(
         "Repository",
@@ -557,7 +572,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       return {
         success: true,
         repositoryId: resolvedRepositoryId,
-        pods: result.data.pods ?? [],
+        pods,
       };
     },
 

@@ -12,6 +12,7 @@ import type {
   RunPodStatus,
   PathwayState,
   RunMessagesPageInfo,
+  RunMessagesPageCursor,
   RunChatTimelineItem,
   RunGoalRoundDivider,
 } from "@/types/run";
@@ -85,6 +86,84 @@ const TERMINAL_RUN_POD_STATUSES: ReadonlySet<RunPodStatus> = new Set([
   "error",
   "skipped",
 ]);
+
+type RunPodInstance = WorkflowRun["podInstances"][number];
+
+interface PodInstanceStatusUpdate {
+  runId: string;
+  podId: string;
+  status: RunPodStatus;
+  lastResponseSummary?: string;
+  errorMessage?: string;
+  triggeredAt?: string;
+  completedAt?: string;
+  autoPathwaySettled?: PathwayState;
+  directPathwaySettled?: PathwayState;
+}
+
+function setIfDefined<T, K extends keyof T>(
+  target: T,
+  key: K,
+  value: T[K] | undefined,
+): void {
+  if (value !== undefined) target[key] = value;
+}
+
+function applyPodInstanceUpdate(
+  podInstance: RunPodInstance,
+  payload: PodInstanceStatusUpdate,
+): void {
+  setIfDefined(
+    podInstance,
+    "lastResponseSummary",
+    payload.lastResponseSummary,
+  );
+  setIfDefined(podInstance, "errorMessage", payload.errorMessage);
+  setIfDefined(podInstance, "triggeredAt", payload.triggeredAt);
+  setIfDefined(podInstance, "completedAt", payload.completedAt);
+  setIfDefined(
+    podInstance,
+    "autoPathwaySettled",
+    payload.autoPathwaySettled,
+  );
+  setIfDefined(
+    podInstance,
+    "directPathwaySettled",
+    payload.directPathwaySettled,
+  );
+}
+
+function resolveOlderMessagesTarget(state: RunState): {
+  runId: string;
+  podId: string;
+  cursor: RunMessagesPageCursor;
+} | null {
+  const target = state.activeRunChatModal;
+  const cursor = state.activeRunChatPageInfo.nextCursor;
+  if (
+    !target ||
+    state.isLoadingOlderPodMessages ||
+    !state.activeRunChatPageInfo.hasMore ||
+    !cursor
+  ) {
+    return null;
+  }
+  return { ...target, cursor };
+}
+
+function isRunChatRequestStale(
+  state: RunState,
+  requestToken: number,
+  runId: string,
+  podId: string,
+): boolean {
+  const activeTarget = state.activeRunChatModal;
+  return (
+    requestToken !== state.activeRunChatRequestToken ||
+    activeTarget?.runId !== runId ||
+    activeTarget.podId !== podId
+  );
+}
 
 export const useRunStore = defineStore("run", {
   state: (): RunState => ({
@@ -214,17 +293,7 @@ export const useRunStore = defineStore("run", {
       }
     },
 
-    updatePodInstanceStatus(payload: {
-      runId: string;
-      podId: string;
-      status: RunPodStatus;
-      lastResponseSummary?: string;
-      errorMessage?: string;
-      triggeredAt?: string;
-      completedAt?: string;
-      autoPathwaySettled?: PathwayState;
-      directPathwaySettled?: PathwayState;
-    }): void {
+    updatePodInstanceStatus(payload: PodInstanceStatusUpdate): void {
       // runsById Map 提供 O(1) 查找
       const run = this.runsById.get(payload.runId);
       if (!run) return;
@@ -241,24 +310,7 @@ export const useRunStore = defineStore("run", {
         podInstance.status = payload.status;
       }
 
-      if (payload.lastResponseSummary !== undefined) {
-        podInstance.lastResponseSummary = payload.lastResponseSummary;
-      }
-      if (payload.errorMessage !== undefined) {
-        podInstance.errorMessage = payload.errorMessage;
-      }
-      if (payload.triggeredAt !== undefined) {
-        podInstance.triggeredAt = payload.triggeredAt;
-      }
-      if (payload.completedAt !== undefined) {
-        podInstance.completedAt = payload.completedAt;
-      }
-      if (payload.autoPathwaySettled !== undefined) {
-        podInstance.autoPathwaySettled = payload.autoPathwaySettled;
-      }
-      if (payload.directPathwaySettled !== undefined) {
-        podInstance.directPathwaySettled = payload.directPathwaySettled;
-      }
+      applyPodInstanceUpdate(podInstance, payload);
     },
 
     isActiveRunChatTarget(runId: string, podId: string): boolean {
@@ -376,26 +428,20 @@ export const useRunStore = defineStore("run", {
           }),
         });
 
-        if (response.success && response.timelineItems) {
-          if (
-            requestToken !== this.activeRunChatRequestToken ||
-            !this.isActiveRunChatTarget(runId, podId)
-          ) {
-            return;
-          }
+        if (!response.success || !response.timelineItems) return;
+        if (isRunChatRequestStale(this, requestToken, runId, podId)) return;
 
-          const loadedTimelineItems =
-            response.timelineItems.map(toRunChatTimelineItem);
-          const liveTimelineItems =
-            this.runChatMessages.get(runId)?.get(podId) ?? [];
-          this.setActiveRunChatTimelineItems(
-            runId,
-            podId,
-            mergeLoadedTimelineItems(loadedTimelineItems, liveTimelineItems),
-          );
-          this.activeRunChatPageInfo =
-            response.pageInfo ?? createEmptyRunChatPageInfo();
-        }
+        const loadedTimelineItems =
+          response.timelineItems.map(toRunChatTimelineItem);
+        const liveTimelineItems =
+          this.runChatMessages.get(runId)?.get(podId) ?? [];
+        this.setActiveRunChatTimelineItems(
+          runId,
+          podId,
+          mergeLoadedTimelineItems(loadedTimelineItems, liveTimelineItems),
+        );
+        this.activeRunChatPageInfo =
+          response.pageInfo ?? createEmptyRunChatPageInfo();
       } catch (error) {
         logger.error("[RunStore] 載入 Run 對話失敗", error);
         showErrorToast("Run", t("common.error.load"));
@@ -413,11 +459,8 @@ export const useRunStore = defineStore("run", {
     },
 
     async loadOlderActiveRunChatMessages(): Promise<void> {
-      const activeTarget = this.activeRunChatModal;
+      const activeTarget = resolveOlderMessagesTarget(this);
       if (!activeTarget) return;
-      if (this.isLoadingOlderPodMessages) return;
-      if (!this.activeRunChatPageInfo.hasMore) return;
-      if (!this.activeRunChatPageInfo.nextCursor) return;
 
       const canvasId = getActiveCanvasIdOrWarn("RunStore");
       if (!canvasId) return;
@@ -435,7 +478,7 @@ export const useRunStore = defineStore("run", {
           payload: buildCanvasPodCommandPayload(canvasId, activeTarget.podId, {
             runId: activeTarget.runId,
             limit: RUN_CHAT_PAGE_SIZE,
-            cursor: this.activeRunChatPageInfo.nextCursor,
+            cursor: activeTarget.cursor,
           }),
         });
 

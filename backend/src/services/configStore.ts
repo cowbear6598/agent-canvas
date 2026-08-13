@@ -178,14 +178,16 @@ export class ConfigStore {
   }
 
   private validateModelConfigUpdate(data: Partial<ConfigData>): void {
-    const updatesMemoryConfig =
-      data.memoryProvider !== undefined ||
-      data.memoryModel !== undefined ||
-      data.memoryThinkingLevel !== undefined;
-    const updatesConnectionLineConfig =
-      data.connectionLineProvider !== undefined ||
-      data.connectionLineModel !== undefined ||
-      data.connectionLineThinkingLevel !== undefined;
+    const updatesMemoryConfig = this.hasDefinedValue(
+      data.memoryProvider,
+      data.memoryModel,
+      data.memoryThinkingLevel,
+    );
+    const updatesConnectionLineConfig = this.hasDefinedValue(
+      data.connectionLineProvider,
+      data.connectionLineModel,
+      data.connectionLineThinkingLevel,
+    );
 
     if (!updatesMemoryConfig && !updatesConnectionLineConfig) {
       return;
@@ -214,6 +216,34 @@ export class ConfigStore {
             : current.connectionLineThinkingLevel,
       });
     }
+  }
+
+  private hasDefinedValue(...values: unknown[]): boolean {
+    return values.some((value) => value !== undefined);
+  }
+
+  private updateDefinedSettings(
+    entries: Array<{ key: string; value: string | number | boolean | undefined }>,
+  ): void {
+    for (const { key, value } of entries) {
+      if (value === undefined) continue;
+      this.stmts.globalSettings.upsert.run({
+        $key: key,
+        $value: String(value),
+      });
+    }
+  }
+
+  private updateNullableSetting(
+    key: string,
+    value: string | null | undefined,
+  ): void {
+    if (value === undefined) return;
+    if (value === null) {
+      this.stmts.globalSettings.deleteByKey.run(key);
+      return;
+    }
+    this.stmts.globalSettings.upsert.run({ $key: key, $value: value });
   }
 
   private buildConnectionLineModelConfig(
@@ -311,89 +341,36 @@ export class ConfigStore {
 
   update(data: Partial<ConfigData>): ConfigData {
     this.validateModelConfigUpdate(data);
+    this.updateDefinedSettings([
+      { key: TIMEZONE_OFFSET_KEY, value: data.timezoneOffset },
+      { key: BACKUP_GIT_REMOTE_URL_KEY, value: data.backupGitRemoteUrl },
+      { key: BACKUP_TIME_KEY, value: data.backupTime },
+      { key: BACKUP_ENABLED_KEY, value: data.backupEnabled },
+      { key: MEMORY_PROVIDER_KEY, value: data.memoryProvider },
+      { key: MEMORY_MODEL_KEY, value: data.memoryModel },
+    ]);
+    this.updateNullableSetting(
+      MEMORY_THINKING_LEVEL_KEY,
+      data.memoryThinkingLevel,
+    );
 
-    if (data.timezoneOffset !== undefined) {
-      this.stmts.globalSettings.upsert.run({
-        $key: TIMEZONE_OFFSET_KEY,
-        $value: String(data.timezoneOffset),
-      });
-    }
-
-    if (data.backupGitRemoteUrl !== undefined) {
-      this.stmts.globalSettings.upsert.run({
-        $key: BACKUP_GIT_REMOTE_URL_KEY,
-        $value: data.backupGitRemoteUrl,
-      });
-    }
-
-    if (data.backupTime !== undefined) {
-      this.stmts.globalSettings.upsert.run({
-        $key: BACKUP_TIME_KEY,
-        $value: data.backupTime,
-      });
-    }
-
-    if (data.backupEnabled !== undefined) {
-      this.stmts.globalSettings.upsert.run({
-        $key: BACKUP_ENABLED_KEY,
-        $value: data.backupEnabled ? "true" : "false",
-      });
-    }
-
-    if (data.memoryProvider !== undefined) {
-      this.stmts.globalSettings.upsert.run({
-        $key: MEMORY_PROVIDER_KEY,
-        $value: data.memoryProvider,
-      });
-    }
-
-    if (data.memoryModel !== undefined) {
-      this.stmts.globalSettings.upsert.run({
-        $key: MEMORY_MODEL_KEY,
-        $value: data.memoryModel,
-      });
-    }
-
-    if (data.memoryThinkingLevel !== undefined) {
-      if (data.memoryThinkingLevel === null) {
-        this.stmts.globalSettings.deleteByKey.run(MEMORY_THINKING_LEVEL_KEY);
-      } else {
-        this.stmts.globalSettings.upsert.run({
-          $key: MEMORY_THINKING_LEVEL_KEY,
-          $value: data.memoryThinkingLevel,
-        });
-      }
-    }
-
-    if (data.connectionLineProvider !== undefined) {
+    if (
+      this.hasDefinedValue(
+        data.connectionLineProvider,
+        data.connectionLineModel,
+        data.connectionLineThinkingLevel,
+      )
+    ) {
       this.invalidateConnectionLineModelConfigCache();
-      this.stmts.globalSettings.upsert.run({
-        $key: CONNECTION_LINE_PROVIDER_KEY,
-        $value: data.connectionLineProvider,
-      });
     }
-
-    if (data.connectionLineModel !== undefined) {
-      this.invalidateConnectionLineModelConfigCache();
-      this.stmts.globalSettings.upsert.run({
-        $key: CONNECTION_LINE_MODEL_KEY,
-        $value: data.connectionLineModel,
-      });
-    }
-
-    if (data.connectionLineThinkingLevel !== undefined) {
-      this.invalidateConnectionLineModelConfigCache();
-      if (data.connectionLineThinkingLevel === null) {
-        this.stmts.globalSettings.deleteByKey.run(
-          CONNECTION_LINE_THINKING_LEVEL_KEY,
-        );
-      } else {
-        this.stmts.globalSettings.upsert.run({
-          $key: CONNECTION_LINE_THINKING_LEVEL_KEY,
-          $value: data.connectionLineThinkingLevel,
-        });
-      }
-    }
+    this.updateDefinedSettings([
+      { key: CONNECTION_LINE_PROVIDER_KEY, value: data.connectionLineProvider },
+      { key: CONNECTION_LINE_MODEL_KEY, value: data.connectionLineModel },
+    ]);
+    this.updateNullableSetting(
+      CONNECTION_LINE_THINKING_LEVEL_KEY,
+      data.connectionLineThinkingLevel,
+    );
 
     return this.getAll();
   }

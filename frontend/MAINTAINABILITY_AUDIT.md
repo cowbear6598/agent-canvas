@@ -58,7 +58,7 @@
 - 維護 available items、notes、groups、拖拉狀態、動畫狀態、loading/error。
 - 提供 note/item/group 查詢 getter，包含 item id index、pod 綁定查詢、group 排序與刪除條件。
 - 透過 WebSocket 載入 item/note、建立 note、刪除 note、刪除 item。
-- 組合 note position、note binding、resource CRUD、event sync、group action。
+- 組合 note position、note binding、event sync、group action 與資源專屬 custom actions。
 - 將後端 event 轉為 state mutation，包含 add/update/remove note、item、group。
 - 依 config 組裝動態 payload、event name 與 toast category。
 
@@ -67,13 +67,13 @@
 - WebSocket：`createWebSocketRequest`、`useSendCanvasAction`、`useWebSocketErrorHandler`。
 - UI/error：`useDeleteItem`、`useToast`、`ToastCategory`、`t`。
 - Canvas guard：`requireActiveCanvas`、`getActiveCanvasIdOrWarn`。
-- Note helper：`createNoteBindingActions`、`createNotePositionActions`、`buildCRUDActions`。
-- Resource config/type：`CRUDEventsConfig`、`CRUDPayloadConfig`、`BaseNote`、`Group`、`BasePayload`、`BaseResponse`、`UnbindBehavior`。
+- Note helper：`createNoteBindingActions`、`createNotePositionActions`。
+- Resource config/type：`BaseNote`、`Group`、`BasePayload`、`BaseResponse`、`UnbindBehavior`。
 - Utility：`removeById`。
 
 #### 外部事件入口
 
-- Factory config 入口：`NoteStoreConfig.events`、`bindEvents`、`unbindEvents`、`deleteItemEvents`、`groupEvents`、`crudConfig`、`customActions`。
+- Factory config 入口：`NoteStoreConfig.events`、`bindEvents`、`unbindEvents`、`deleteItemEvents`、`groupEvents`、`customActions`。
 - 主動請求：`fetchWithActiveCanvasId()`、`loadItems()`、`loadNotesFromBackend()`、`createNote()`、`deleteNote()`、`deleteItem()`。
 - Note/item event sync：`addNoteFromEvent()`、`updateNoteFromEvent()`、`removeNoteFromEvent()`、`addItemFromEvent()`、`updateItemFromEvent()`、`removeItemFromEvent()`。
 - Group event sync：`addGroupFromEvent()`、`removeGroupFromEvent()`、`updateItemGroupId()`、`toggleGroupExpand()`。

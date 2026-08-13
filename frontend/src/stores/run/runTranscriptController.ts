@@ -58,6 +58,22 @@ export function getRunChatMessagesFromTimeline(
   return timelineItems.filter(isRunChatMessage);
 }
 
+function mergeTimelineItem(
+  loadedItem: RunChatTimelineItem,
+  liveItem: RunChatTimelineItem,
+): RunChatTimelineItem {
+  if (!isRunChatMessage(loadedItem) || !isRunChatMessage(liveItem)) {
+    return liveItem;
+  }
+  return {
+    ...loadedItem,
+    ...liveItem,
+    metadata: liveItem.metadata ?? loadedItem.metadata,
+    toolUse: liveItem.toolUse ?? loadedItem.toolUse,
+    subMessages: liveItem.subMessages ?? loadedItem.subMessages,
+  };
+}
+
 export function mergeLoadedTimelineItems(
   loadedItems: RunChatTimelineItem[],
   liveItems: RunChatTimelineItem[],
@@ -76,19 +92,8 @@ export function mergeLoadedTimelineItems(
 
   for (const item of liveItems) {
     const existing = mergedById.get(item.id);
-    if (existing && isRunChatMessage(existing) && isRunChatMessage(item)) {
-      mergedById.set(item.id, {
-        ...existing,
-        ...item,
-        metadata: item.metadata ?? existing.metadata,
-        toolUse: item.toolUse ?? existing.toolUse,
-        subMessages: item.subMessages ?? existing.subMessages,
-      });
-      continue;
-    }
-
     if (existing) {
-      mergedById.set(item.id, item);
+      mergedById.set(item.id, mergeTimelineItem(existing, item));
       continue;
     }
 
@@ -175,6 +180,83 @@ export function setActiveRunChatMessages(
   setActiveRunChatTimelineItems(state, runId, podId, messages);
 }
 
+function getOrCreatePodTimeline(
+  state: RunTranscriptStateShape,
+  runId: string,
+  podId: string,
+): {
+  podMap: Map<string, RunChatTimelineItem[]>;
+  timelineItems: RunChatTimelineItem[];
+} {
+  let podMap = state.runChatMessages.get(runId);
+  if (!podMap) {
+    podMap = new Map();
+    state.runChatMessages.set(runId, podMap);
+  }
+
+  return { podMap, timelineItems: podMap.get(podId) ?? [] };
+}
+
+function resolveKnownMessageIndex(
+  state: RunTranscriptStateShape,
+  timelineItems: RunChatTimelineItem[],
+  messageId: string,
+): number | undefined {
+  const cachedIndex = state.messageIndexCache.get(messageId);
+  if (cachedIndex === undefined) return undefined;
+
+  const cachedItem = timelineItems[cachedIndex];
+  return cachedItem && isRunChatMessage(cachedItem) && cachedItem.id === messageId
+    ? cachedIndex
+    : undefined;
+}
+
+function resolveStreamContent(
+  state: RunTranscriptStateShape,
+  timelineItems: RunChatTimelineItem[],
+  payload: {
+    messageId: string;
+    content: string;
+    receivedDelta?: string;
+  },
+  knownIndex: number | undefined,
+): { delta: string; nextContent: string } {
+  const existingIndex =
+    knownIndex ?? findMessageIndex(timelineItems, payload.messageId);
+  const existingItem =
+    existingIndex !== -1 ? timelineItems[existingIndex] : undefined;
+  const existingContent =
+    existingItem && isRunChatMessage(existingItem) ? existingItem.content : "";
+  const lastLength =
+    state.accumulatedLengthByMessageId.get(payload.messageId) ?? 0;
+  const delta =
+    payload.receivedDelta ??
+    (payload.content.length < lastLength
+      ? payload.content
+      : payload.content.slice(lastLength));
+
+  return {
+    delta,
+    nextContent:
+      payload.receivedDelta === undefined
+        ? payload.content
+        : `${existingContent}${payload.receivedDelta}`,
+  };
+}
+
+function updateAccumulatedMessageLength(
+  state: RunTranscriptStateShape,
+  messageId: string,
+  contentLength: number,
+  isPartial: boolean,
+): void {
+  if (isPartial) {
+    state.accumulatedLengthByMessageId.set(messageId, contentLength);
+    return;
+  }
+  state.accumulatedLengthByMessageId.delete(messageId);
+}
+
 export function appendRunChatMessage(
   state: RunTranscriptStateShape,
   payload: {
@@ -188,50 +270,28 @@ export function appendRunChatMessage(
     receivedDelta?: string;
   },
 ): void {
-  let podMap = state.runChatMessages.get(payload.runId);
-  if (!podMap) {
-    podMap = new Map();
-    state.runChatMessages.set(payload.runId, podMap);
-  }
-  const timelineItems = podMap.get(payload.podId) ?? [];
-
-  const cachedIndex = state.messageIndexCache.get(payload.messageId);
-  const cachedItem =
-    cachedIndex !== undefined ? timelineItems[cachedIndex] : undefined;
-  const knownIndex =
-    cachedItem !== undefined &&
-    isRunChatMessage(cachedItem) &&
-    cachedItem.id === payload.messageId
-      ? cachedIndex
-      : undefined;
-  const existingIndex =
-    knownIndex ?? findMessageIndex(timelineItems, payload.messageId);
-  const existingMessage =
-    existingIndex !== -1 ? timelineItems[existingIndex] : undefined;
-  const existingContent =
-    existingMessage !== undefined && isRunChatMessage(existingMessage)
-      ? existingMessage.content
-      : "";
-  const lastLength =
-    state.accumulatedLengthByMessageId.get(payload.messageId) ?? 0;
-  const delta =
-    payload.receivedDelta ??
-    (payload.content.length < lastLength
-      ? payload.content
-      : payload.content.slice(lastLength));
-  const nextContent =
-    payload.receivedDelta !== undefined
-      ? `${existingContent}${payload.receivedDelta}`
-      : payload.content;
-
-  if (payload.isPartial) {
-    state.accumulatedLengthByMessageId.set(
-      payload.messageId,
-      nextContent.length,
-    );
-  } else {
-    state.accumulatedLengthByMessageId.delete(payload.messageId);
-  }
+  const { podMap, timelineItems } = getOrCreatePodTimeline(
+    state,
+    payload.runId,
+    payload.podId,
+  );
+  const knownIndex = resolveKnownMessageIndex(
+    state,
+    timelineItems,
+    payload.messageId,
+  );
+  const { delta, nextContent } = resolveStreamContent(
+    state,
+    timelineItems,
+    payload,
+    knownIndex,
+  );
+  updateAccumulatedMessageLength(
+    state,
+    payload.messageId,
+    nextContent.length,
+    payload.isPartial,
+  );
 
   upsertMessage(
     timelineItems as Message[],

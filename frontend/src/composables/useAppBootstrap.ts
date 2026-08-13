@@ -211,25 +211,16 @@ export function useAppBootstrap(
     loadingAbortController = null;
   };
 
-  const loadAppData = async (): Promise<void> => {
-    if (
+  const canStartLoading = (): boolean => {
+    return !(
       isInitialized.value ||
       isLoading.value ||
       securityStore.requiresWorkspaceUnlock ||
       securityStore.isBootstrapping
-    ) {
-      return;
-    }
+    );
+  };
 
-    abortLoading();
-
-    loadingAbortController = new AbortController();
-    const currentAbortController = loadingAbortController;
-
-    isLoading.value = true;
-
-    if (checkAbortedAndCleanup(currentAbortController)) return;
-
+  const loadGlobalData = async (): Promise<void> => {
     logger.log("[App] Loading config...");
     await configStore.fetchConfig().catch(() => {
       logger.warn("[App] 載入全域設定失敗，使用預設值");
@@ -241,26 +232,50 @@ export function useAppBootstrap(
       providerCapabilityStore.loadFromBackend(),
       opencodeAliasStore.loadFromBackend(),
     ]);
+  };
 
-    if (checkAbortedAndCleanup(currentAbortController)) return;
+  const ensureDefaultCanvas = async (): Promise<boolean> => {
+    if (canvasStore.canvases.length > 0) return true;
 
-    if (canvasStore.canvases.length === 0) {
-      logger.log("[App] No canvases found, creating default canvas...");
-      const defaultCanvas = await canvasStore.createCanvas("Default");
-      if (!defaultCanvas) {
-        logger.error("[App] Failed to create default canvas");
-        finishLoading(currentAbortController);
-        return;
-      }
-    }
+    logger.log("[App] No canvases found, creating default canvas...");
+    const defaultCanvas = await canvasStore.createCanvas("Default");
+    if (defaultCanvas) return true;
 
-    if (checkAbortedAndCleanup(currentAbortController)) return;
+    logger.error("[App] Failed to create default canvas");
+    return false;
+  };
 
+  const ensureActiveCanvas = async (): Promise<boolean> => {
     if (!canvasStore.activeCanvasId) {
       await securityStore.ensureInitialCanvasSelection();
     }
+    return Boolean(canvasStore.activeCanvasId);
+  };
 
-    if (!canvasStore.activeCanvasId) {
+  const loadAppData = async (): Promise<void> => {
+    if (!canStartLoading()) return;
+
+    abortLoading();
+
+    loadingAbortController = new AbortController();
+    const currentAbortController = loadingAbortController;
+
+    isLoading.value = true;
+
+    if (checkAbortedAndCleanup(currentAbortController)) return;
+
+    await loadGlobalData();
+
+    if (checkAbortedAndCleanup(currentAbortController)) return;
+
+    if (!(await ensureDefaultCanvas())) {
+      finishLoading(currentAbortController);
+      return;
+    }
+
+    if (checkAbortedAndCleanup(currentAbortController)) return;
+
+    if (!(await ensureActiveCanvas())) {
       isInitialized.value = true;
       logger.log("[App] No accessible canvas selected after initialization");
       finishLoading(currentAbortController);

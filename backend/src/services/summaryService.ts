@@ -56,7 +56,7 @@ async function buildSummaryContext(
 
 class SummaryService {
   async generateSummaryForTarget(
-    canvasId: string,
+    _canvasId: string,
     sourcePodId: string,
     targetPodId: string,
     provider: ProviderName,

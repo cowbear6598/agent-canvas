@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, type Ref } from "vue";
 import { getConfig } from "@/services/configApi";
 import type { PodProvider } from "@/types/pod";
 
@@ -7,6 +7,32 @@ interface ModelSettingsConfig {
   provider: PodProvider | null;
   model: string;
   thinkingLevel: string | null;
+}
+
+type LoadedConfig = Awaited<ReturnType<typeof getConfig>>;
+
+function setIfDefined<T>(target: Ref<T>, value: T | undefined): void {
+  if (value !== undefined) target.value = value;
+}
+
+function readModelSettings(
+  config: LoadedConfig,
+  keys: {
+    provider: "memoryProvider" | "connectionLineProvider";
+    model: "memoryModel" | "connectionLineModel";
+    thinkingLevel: "memoryThinkingLevel" | "connectionLineThinkingLevel";
+  },
+): ModelSettingsConfig {
+  const hasConfig = Object.values(keys).some((key) => key in config);
+  if (!hasConfig) {
+    return { provider: null, model: "", thinkingLevel: null };
+  }
+
+  return {
+    provider: config[keys.provider] ?? null,
+    model: config[keys.model] ?? "",
+    thinkingLevel: config[keys.thinkingLevel] ?? null,
+  };
 }
 
 export const useConfigStore = defineStore("config", () => {
@@ -28,46 +54,25 @@ export const useConfigStore = defineStore("config", () => {
 
   const fetchConfig = async (): Promise<void> => {
     const result = await getConfig();
-    const hasMemoryConfig =
-      "memoryProvider" in result ||
-      "memoryModel" in result ||
-      "memoryThinkingLevel" in result;
-    const hasConnectionLineConfig =
-      "connectionLineProvider" in result ||
-      "connectionLineModel" in result ||
-      "connectionLineThinkingLevel" in result;
+    setIfDefined(timezoneOffset, result.timezoneOffset);
+    setIfDefined(backupGitRemoteUrl, result.backupGitRemoteUrl);
+    setIfDefined(backupTime, result.backupTime);
+    setIfDefined(backupEnabled, result.backupEnabled);
 
-    if (result.timezoneOffset !== undefined) {
-      timezoneOffset.value = result.timezoneOffset;
-    }
-    if (result.backupGitRemoteUrl !== undefined) {
-      backupGitRemoteUrl.value = result.backupGitRemoteUrl;
-    }
-    if (result.backupTime !== undefined) {
-      backupTime.value = result.backupTime;
-    }
-    if (result.backupEnabled !== undefined) {
-      backupEnabled.value = result.backupEnabled;
-    }
-    if (hasMemoryConfig) {
-      memoryProvider.value = result.memoryProvider ?? null;
-      memoryModel.value = result.memoryModel ?? "";
-      memoryThinkingLevel.value = result.memoryThinkingLevel ?? null;
-    } else {
-      memoryProvider.value = null;
-      memoryModel.value = "";
-      memoryThinkingLevel.value = null;
-    }
-    if (hasConnectionLineConfig) {
-      connectionLineProvider.value = result.connectionLineProvider ?? null;
-      connectionLineModel.value = result.connectionLineModel ?? "";
-      connectionLineThinkingLevel.value =
-        result.connectionLineThinkingLevel ?? null;
-    } else {
-      connectionLineProvider.value = null;
-      connectionLineModel.value = "";
-      connectionLineThinkingLevel.value = null;
-    }
+    setMemoryConfig(
+      readModelSettings(result, {
+        provider: "memoryProvider",
+        model: "memoryModel",
+        thinkingLevel: "memoryThinkingLevel",
+      }),
+    );
+    setConnectionLineConfig(
+      readModelSettings(result, {
+        provider: "connectionLineProvider",
+        model: "connectionLineModel",
+        thinkingLevel: "connectionLineThinkingLevel",
+      }),
+    );
   };
 
   const setTimezoneOffset = (offset: number): void => {

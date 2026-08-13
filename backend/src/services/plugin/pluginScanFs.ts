@@ -20,22 +20,22 @@ export interface SkillInfo {
 
 // 從 SKILL.md 內容中抽取 description。
 // 優先從 YAML frontmatter 的 description 欄位取值，若無則取第一個非空行。
+function extractFrontmatterDescription(content: string): string | null {
+  if (!content.startsWith("---")) return null;
+  const endIndex = content.indexOf("---", 3);
+  if (endIndex === -1) return null;
+
+  for (const line of content.slice(3, endIndex).split("\n")) {
+    const match = line.match(/^description\s*:\s*(.+)/);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
 function extractDescription(content: string): string {
   const trimmed = content.trim();
-
-  // YAML frontmatter 判斷
-  if (trimmed.startsWith("---")) {
-    const endIdx = trimmed.indexOf("---", 3);
-    if (endIdx !== -1) {
-      const frontmatter = trimmed.slice(3, endIdx);
-      for (const line of frontmatter.split("\n")) {
-        const match = line.match(/^description\s*:\s*(.+)/);
-        if (match) {
-          return match[1].trim();
-        }
-      }
-    }
-  }
+  const frontmatterDescription = extractFrontmatterDescription(trimmed);
+  if (frontmatterDescription) return frontmatterDescription;
 
   // fallback：第一個非空行
   for (const line of trimmed.split("\n")) {
@@ -74,6 +74,27 @@ const SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([
  * 8 層足以涵蓋實務上看到的 marketplace + sub-plugin + skills/<name> 結構。
  */
 const SCAN_MAX_DEPTH = 8;
+
+async function readSkillInfo(
+  installPath: string,
+  currentDir: string,
+): Promise<SkillInfo | null> {
+  const skillMdPath = path.join(currentDir, "SKILL.md");
+  try {
+    const content = await fs.readFile(skillMdPath, "utf-8");
+    return {
+      skillName: path.relative(installPath, currentDir),
+      description: extractDescription(content),
+    };
+  } catch (error) {
+    logger.warn(
+      "Plugin",
+      "Warn",
+      `讀取 SKILL.md 失敗，路徑: ${skillMdPath}，原因: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
 
 // ─── walkForSkillMd ──────────────────────────────────────────────────────────
 
@@ -114,36 +135,18 @@ async function walkForSkillMd(
 
   for (const entry of entries) {
     if (entry.isFile && entry.name === "SKILL.md") {
-      const skillMdPath = path.join(currentDir, entry.name);
-      let content: string;
-      try {
-        content = await fs.readFile(skillMdPath, "utf-8");
-      } catch (error) {
-        logger.warn(
-          "Plugin",
-          "Warn",
-          `讀取 SKILL.md 失敗，路徑: ${skillMdPath}，原因: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        continue;
-      }
-      const relDir = path.relative(installPath, currentDir);
-      results.push({
-        // root SKILL.md 用空字串表示；read_skill 端對應特例處理
-        skillName: relDir,
-        description: extractDescription(content),
-      });
+      const skill = await readSkillInfo(installPath, currentDir);
+      if (skill) results.push(skill);
       continue;
     }
 
-    if (entry.isDir) {
-      if (SCAN_SKIP_DIRS.has(entry.name)) continue;
-      await walkForSkillMd(
-        installPath,
-        path.join(currentDir, entry.name),
-        depth + 1,
-        results,
-      );
-    }
+    if (!entry.isDir || SCAN_SKIP_DIRS.has(entry.name)) continue;
+    await walkForSkillMd(
+      installPath,
+      path.join(currentDir, entry.name),
+      depth + 1,
+      results,
+    );
   }
 }
 

@@ -77,6 +77,40 @@ interface NewConnectionPayload {
   summaryThinkingLevel?: string | null;
 }
 
+type ProviderCapabilityStore = ReturnType<typeof useProviderCapabilityStore>;
+
+function getConfiguredModel(sourcePod: Pod | undefined): string | undefined {
+  const configuredModel = sourcePod?.providerConfig?.model;
+  return typeof configuredModel === "string" && configuredModel.trim().length > 0
+    ? configuredModel
+    : undefined;
+}
+
+function resolveSummaryModel(
+  sourcePod: Pod | undefined,
+  provider: PodProvider | undefined,
+  capabilityStore: ProviderCapabilityStore,
+): string {
+  const configuredModel = getConfiguredModel(sourcePod);
+  if (provider === "opencode" && configuredModel) return configuredModel;
+  return provider
+    ? (capabilityStore.getDefaultModel(provider) ?? DEFAULT_SUMMARY_MODEL)
+    : DEFAULT_SUMMARY_MODEL;
+}
+
+function resolveSummaryThinkingLevel(
+  sourcePod: Pod | undefined,
+  provider: PodProvider | undefined,
+  model: string,
+  capabilityStore: ProviderCapabilityStore,
+): string | null | undefined {
+  if (!provider) return undefined;
+  const configuredLevel = sourcePod?.providerConfig?.thinkingLevel;
+  return typeof configuredLevel === "string"
+    ? configuredLevel
+    : resolveDefaultThinkingLevel(capabilityStore, provider, model);
+}
+
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
   const { toast, showErrorToast, showSuccessToast } = useToast();
@@ -216,23 +250,17 @@ export const useConnectionStore = defineStore("connection", () => {
       ? podStore.getPodById(sourcePodId)
       : undefined;
     const provider = sourcePod?.provider;
-    const configuredModel = sourcePod?.providerConfig?.model;
-    const sourcePodModel =
-      typeof configuredModel === "string" && configuredModel.trim().length > 0
-        ? configuredModel
-        : undefined;
-    const model =
-      (provider === "opencode" ? sourcePodModel : undefined) ??
-      (provider
-        ? providerCapabilityStore.getDefaultModel(provider)
-        : undefined) ??
-      DEFAULT_SUMMARY_MODEL;
-    const configuredThinkingLevel = sourcePod?.providerConfig?.thinkingLevel;
-    const thinkingLevel = provider
-      ? typeof configuredThinkingLevel === "string"
-        ? configuredThinkingLevel
-        : resolveDefaultThinkingLevel(providerCapabilityStore, provider, model)
-      : undefined;
+    const model = resolveSummaryModel(
+      sourcePod,
+      provider,
+      providerCapabilityStore,
+    );
+    const thinkingLevel = resolveSummaryThinkingLevel(
+      sourcePod,
+      provider,
+      model,
+      providerCapabilityStore,
+    );
 
     return { sourcePod, provider, model, thinkingLevel };
   }

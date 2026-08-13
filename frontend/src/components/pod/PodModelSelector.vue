@@ -30,7 +30,6 @@ const isHovered = ref(false);
 const isAnimating = ref(false);
 const isCollapsing = ref(false);
 const pendingTimers = ref<Set<ReturnType<typeof setTimeout>>>(new Set());
-const slotRef = ref<HTMLElement | null>(null);
 
 /**
  * TransitionGroup 的 component ref，用來取得 stack root DOM
@@ -366,7 +365,6 @@ watch(
 <template>
   <!-- 上方中央定位錨點 -->
   <div
-    ref="slotRef"
     class="pod-model-slot"
     :class="{ 'pod-model-slot--disabled': disabled || isOpencodeEmpty }"
     :aria-disabled="disabled || isOpencodeEmpty || undefined"

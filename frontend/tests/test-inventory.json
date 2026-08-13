@@ -175,11 +175,6 @@
       "reason": "cursor upsert/remove 與 color fallback。"
     },
     {
-      "path": "frontend/tests/business-logic/stores/note/createResourceCRUDActions.test.ts",
-      "logicKind": "state-decision",
-      "reason": "replace/merge item 與 CRUD action factory 規則。"
-    },
-    {
       "path": "frontend/tests/business-logic/stores/providerCapabilityStore.test.ts",
       "logicKind": "state-decision",
       "reason": "provider default options、alias 與 graceful fallback 狀態規則。"
@@ -810,16 +805,6 @@
         "F7"
       ],
       "reason": "Note/repository item 載入、綁定、拖曳、刪除與本地事件是畫布流程支援行為。"
-    },
-    {
-      "path": "frontend/tests/business-logic/stores/note/createResourceCRUDActions.test.ts",
-      "currentCategory": "state-decision",
-      "decision": "keep",
-      "mapsTo": [
-        "F7",
-        "F8"
-      ],
-      "reason": "replace/merge item 與 CRUD action factory 是不依賴 UI 的資料轉換與狀態決策。"
     },
     {
       "path": "frontend/tests/business-logic/stores/note/repositoryStore.test.ts",

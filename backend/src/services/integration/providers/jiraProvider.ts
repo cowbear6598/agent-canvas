@@ -176,6 +176,50 @@ function formatJiraEventMessage(
   return messageParts.join("\n");
 }
 
+function simpleWebhookResponse(status: 200 | 403 | 404): Response {
+  const body = status === 404 ? "Not Found" : status === 403 ? "Forbidden" : "OK";
+  return new Response(body, { status });
+}
+
+function resolveWebhookTimestamp(rawPayload: unknown): number | null {
+  if (typeof rawPayload !== "object" || rawPayload === null) return null;
+  const timestamp = (rawPayload as Record<string, unknown>)["timestamp"];
+  return typeof timestamp === "number" ? timestamp : null;
+}
+
+function resolveVerifiedSignature(
+  req: Request,
+  app: IntegrationApp,
+  rawBody: string,
+): string | null {
+  const signature = req.headers.get("X-Hub-Signature");
+  const secret = app.config.webhookSecret;
+  if (!signature || typeof secret !== "string" || secret.length === 0) {
+    return null;
+  }
+  return verifyJiraSignature(secret, rawBody, signature) ? signature : null;
+}
+
+function buildNormalizedJiraEvent(
+  provider: string,
+  appId: string,
+  payload: JiraWebhookPayload,
+  rawEvent: unknown,
+): NormalizedEvent {
+  const issueKey = payload.issue?.key ?? "";
+  const summary = payload.issue?.fields?.summary ?? "";
+  const userName =
+    payload.user?.displayName ?? payload.user?.emailAddress ?? "unknown";
+  return {
+    provider,
+    appId,
+    resourceId: "*",
+    userName,
+    text: formatJiraEventMessage(payload.webhookEvent, issueKey, summary, payload),
+    rawEvent,
+  };
+}
+
 class JiraProvider implements IntegrationProvider {
   readonly name = "jira";
   readonly displayName = "Jira";
@@ -266,13 +310,12 @@ class JiraProvider implements IntegrationProvider {
     subPath?: string,
   ): Promise<Response> {
     if (!subPath || !NAME_PATTERN.test(subPath)) {
-      return new Response("Not Found", { status: 404 });
+      return simpleWebhookResponse(404);
     }
 
-    const appName = subPath;
-    const app = integrationAppStore.getByProviderAndName("jira", appName);
+    const app = integrationAppStore.getByProviderAndName("jira", subPath);
     if (!app) {
-      return new Response("Not Found", { status: 404 });
+      return simpleWebhookResponse(404);
     }
 
     const parsed = await parseWebhookBody(req, MAX_BODY_SIZE);
@@ -280,74 +323,33 @@ class JiraProvider implements IntegrationProvider {
 
     const { rawBody, payload: rawPayload } = parsed;
 
-    const signatureHeader = req.headers.get("X-Hub-Signature");
-    if (!signatureHeader) {
-      return new Response("Forbidden", { status: 403 });
-    }
+    const signature = resolveVerifiedSignature(req, app, rawBody);
+    if (!signature) return simpleWebhookResponse(403);
 
-    const webhookSecret = app.config.webhookSecret;
+    const timestampMs = resolveWebhookTimestamp(rawPayload);
     if (
-      typeof webhookSecret !== "string" ||
-      webhookSecret.length === 0 ||
-      !verifyJiraSignature(webhookSecret, rawBody, signatureHeader)
+      timestampMs === null ||
+      Math.abs(Date.now() - timestampMs) > MAX_WEBHOOK_AGE_MS
     ) {
-      return new Response("Forbidden", { status: 403 });
+      return simpleWebhookResponse(403);
     }
 
-    // 簽章驗證通過後，檢查 timestamp 時間窗口防止重放攻擊
-    const rawPayloadObj =
-      typeof rawPayload === "object" && rawPayload !== null
-        ? (rawPayload as Record<string, unknown>)
-        : null;
-    const timestampMs =
-      rawPayloadObj !== null && typeof rawPayloadObj["timestamp"] === "number"
-        ? rawPayloadObj["timestamp"]
-        : null;
-    if (timestampMs === null) {
-      return new Response("Forbidden", { status: 403 });
-    }
-    if (Math.abs(Date.now() - timestampMs) > MAX_WEBHOOK_AGE_MS) {
-      return new Response("Forbidden", { status: 403 });
-    }
-
-    // 用 signature 做防重放（防止攻擊者重放已驗證的請求）
-    if (dedupTracker.isDuplicate(signatureHeader)) {
-      return new Response("OK", { status: 200 });
-    }
+    if (dedupTracker.isDuplicate(signature)) return simpleWebhookResponse(200);
 
     const schemaResult = jiraWebhookPayloadSchema.safeParse(rawPayload);
-    if (!schemaResult.success) {
-      return new Response("OK", { status: 200 });
-    }
+    if (!schemaResult.success) return simpleWebhookResponse(200);
 
     const webhookPayload = schemaResult.data;
-    const { webhookEvent } = webhookPayload;
-
-    if (!SUPPORTED_EVENTS.has(webhookEvent)) {
-      return new Response("OK", { status: 200 });
+    if (!SUPPORTED_EVENTS.has(webhookPayload.webhookEvent)) {
+      return simpleWebhookResponse(200);
     }
 
-    const issueKey = webhookPayload.issue?.key ?? "";
-    const summary = webhookPayload.issue?.fields?.summary ?? "";
-    const userName =
-      webhookPayload.user?.displayName ??
-      webhookPayload.user?.emailAddress ??
-      "unknown";
-    const text = formatJiraEventMessage(
-      webhookEvent,
-      issueKey,
-      summary,
+    const normalizedEvent = buildNormalizedJiraEvent(
+      this.name,
+      app.id,
       webhookPayload,
+      rawPayload,
     );
-
-    const normalizedEvent: NormalizedEvent = {
-      provider: this.name,
-      appId: app.id,
-      resourceId: "*",
-      userName,
-      text,
-      rawEvent: rawPayload,
-    };
 
     // Jira 要求快速回應，使用 fire-and-forget 非同步處理
     integrationEventPipeline.safeProcessEvent(
@@ -356,7 +358,7 @@ class JiraProvider implements IntegrationProvider {
       normalizedEvent,
     );
 
-    return new Response("OK", { status: 200 });
+    return simpleWebhookResponse(200);
   }
 }
 

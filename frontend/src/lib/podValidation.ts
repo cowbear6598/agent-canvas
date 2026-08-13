@@ -28,6 +28,10 @@ function normalizeGoal(goal: PodGoal | null | undefined): PodGoal | null {
   return todos.length > 0 ? { todos } : null;
 }
 
+function withDefault<T>(value: T | null | undefined, fallback: T): T {
+  return value ?? fallback;
+}
+
 /**
  * 依據 provider 決定預設的 providerConfig。
  * 優先回傳 existing（已有值時不覆蓋）；
@@ -82,17 +86,17 @@ export function enrichPod(pod: Pod): Pod {
 
   return {
     ...pod,
-    x: pod.x ?? 100,
-    y: pod.y ?? 150,
+    x: withDefault(pod.x, 100),
+    y: withDefault(pod.y, 150),
     rotation: pod.rotation ?? Math.random() * 2 - 1,
-    memoryEnabled: pod.memoryEnabled ?? false,
-    repoMemoryEnabled: pod.repoMemoryEnabled ?? false,
-    hasPodMemory: pod.hasPodMemory ?? false,
-    hasRepoMemory: pod.hasRepoMemory ?? false,
-    fastModeEnabled: pod.fastModeEnabled ?? false,
+    memoryEnabled: withDefault(pod.memoryEnabled, false),
+    repoMemoryEnabled: withDefault(pod.repoMemoryEnabled, false),
+    hasPodMemory: withDefault(pod.hasPodMemory, false),
+    hasRepoMemory: withDefault(pod.hasRepoMemory, false),
+    fastModeEnabled: withDefault(pod.fastModeEnabled, false),
     goal,
-    schedule: pod.schedule ?? null,
-    pluginIds: pod.pluginIds ?? [],
+    schedule: withDefault(pod.schedule, null),
+    pluginIds: withDefault(pod.pluginIds, []),
     provider,
     providerConfig: resolveProviderConfig(provider, pod.providerConfig),
   };

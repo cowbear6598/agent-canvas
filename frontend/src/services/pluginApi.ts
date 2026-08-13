@@ -25,30 +25,20 @@ function mapBundleUploadError(
   code: string | undefined,
   message: string | undefined,
 ): string {
-  switch (code) {
-    case "PLUGIN_ALREADY_INSTALLED":
-      return t("errors.bundleUploadAlreadyInstalled");
-    case "BUNDLE_FILE_TOO_LARGE":
-      return t("errors.bundleUploadFileTooLarge");
-    case "BUNDLE_SKILL_NOT_FOUND":
-      return t("errors.bundleUploadSkillMissing");
-    case "EMPTY_BUNDLE_ARCHIVE":
-      return t("errors.bundleUploadArchiveEmpty");
-    case "BUNDLE_PATH_TRAVERSAL":
-      return t("errors.bundleUploadPathTraversal");
-    case "BUNDLE_SYMLINK_FORBIDDEN":
-      return t("errors.bundleUploadSymlinkForbidden");
-    case "BUNDLE_ENTRY_TOO_LARGE":
-      return t("errors.bundleUploadEntryTooLarge");
-    case "BUNDLE_ARCHIVE_TOO_LARGE":
-      return t("errors.bundleUploadArchiveTooLarge");
-    case "BUNDLE_TOO_MANY_FILES":
-      return t("errors.bundleUploadTooManyFiles");
-    case "INVALID_BUNDLE_ARCHIVE":
-      return t("errors.bundleUploadInvalidArchive");
-    default:
-      return message || t("errors.bundleUploadFailed");
-  }
+  const errorKeys: Record<string, string> = {
+    PLUGIN_ALREADY_INSTALLED: "errors.bundleUploadAlreadyInstalled",
+    BUNDLE_FILE_TOO_LARGE: "errors.bundleUploadFileTooLarge",
+    BUNDLE_SKILL_NOT_FOUND: "errors.bundleUploadSkillMissing",
+    EMPTY_BUNDLE_ARCHIVE: "errors.bundleUploadArchiveEmpty",
+    BUNDLE_PATH_TRAVERSAL: "errors.bundleUploadPathTraversal",
+    BUNDLE_SYMLINK_FORBIDDEN: "errors.bundleUploadSymlinkForbidden",
+    BUNDLE_ENTRY_TOO_LARGE: "errors.bundleUploadEntryTooLarge",
+    BUNDLE_ARCHIVE_TOO_LARGE: "errors.bundleUploadArchiveTooLarge",
+    BUNDLE_TOO_MANY_FILES: "errors.bundleUploadTooManyFiles",
+    INVALID_BUNDLE_ARCHIVE: "errors.bundleUploadInvalidArchive",
+  };
+  const errorKey = code ? errorKeys[code] : undefined;
+  return errorKey ? t(errorKey) : message || t("errors.bundleUploadFailed");
 }
 
 export async function listPlugins(): Promise<InstalledPlugin[]> {

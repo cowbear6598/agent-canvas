@@ -344,6 +344,12 @@ function buildMergerUserPrompt(params: {
   );
 }
 
+interface RepositoryMemoryGroup {
+  representativePod: Pod;
+  scopePods: Pod[];
+  workspacePath: string | null;
+}
+
 class MemoryMaintainerService {
   private readonly scopeLocks = new Map<string, Promise<void>>();
 
@@ -633,6 +639,215 @@ class MemoryMaintainerService {
     memoryStateService.writeRepoSummary(scopeId, summary);
   }
 
+  private isScopeEnabled(task: MemoryScopeTask): boolean | undefined {
+    if (task.scopeType === "pod") {
+      return memoryStateService.getPodState(task.pod.id)?.memoryEnabled;
+    }
+    return memoryStateService.getRepoState(task.scopeId)?.memoryEnabled;
+  }
+
+  private startAttempt(
+    task: MemoryScopeTask,
+    jobId: string,
+    attempt: number,
+  ): void {
+    memoryStateService.updateJob(jobId, {
+      status: "running",
+      attemptCount: attempt,
+      errorMessage: null,
+      metadata: {
+        runId: task.runContext.runId,
+        scopeType: task.scopeType,
+      },
+    });
+  }
+
+  private skipDisabledTask(task: MemoryScopeTask, scopeLabel: string): void {
+    logger.log("Memory", "Update", `${scopeLabel} 已略過：memory 已停用`);
+    memoryStateService.clearScopeMaintenanceRecords(task.scopeType, task.scopeId);
+  }
+
+  private completeTaskWithoutEvidence(
+    task: MemoryScopeTask,
+    jobId: string,
+    attempt: number,
+    scopeLabel: string,
+  ): void {
+    logger.log("Memory", "Update", `${scopeLabel} 已略過：沒有可用證據`);
+    memoryStateService.updateJob(jobId, {
+      status: "completed",
+      attemptCount: attempt,
+      metadata: {
+        runId: task.runContext.runId,
+        skippedReason: "no_evidence",
+      },
+    });
+  }
+
+  private recordCandidateObservations(
+    task: MemoryScopeTask,
+    jobId: string,
+    observations: MemoryCandidateResult["observations"],
+  ): void {
+    for (const observation of observations) {
+      memoryStateService.recordObservation({
+        jobId,
+        scopeType: task.scopeType,
+        scopeId: task.scopeId,
+        kind: "candidate",
+        status: observation.accepted ? "accepted" : "rejected",
+        summary: observation.summary,
+        payload: {
+          title: observation.title,
+          reason: observation.reason,
+        },
+      });
+    }
+  }
+
+  private completeTask(
+    task: MemoryScopeTask,
+    jobId: string,
+    attempt: number,
+    acceptedObservationCount: number,
+    mergedResult: Extract<
+      Awaited<ReturnType<MemoryMaintainerService["runValidatedSummaryMerger"]>>,
+      { success: true }
+    >,
+    scopeLabel: string,
+  ): void {
+    const finalSummary = mergedResult.data.summary;
+    this.writeSummary(task.scopeType, task.scopeId, finalSummary);
+    memoryStateService.recordObservation({
+      jobId,
+      scopeType: task.scopeType,
+      scopeId: task.scopeId,
+      kind: "summary_merge",
+      status: "applied",
+      summary: finalSummary,
+      payload: {
+        reason: mergedResult.data.reason,
+        acceptedObservationCount,
+        resolvedModel: mergedResult.resolvedModel,
+      },
+    });
+    memoryStateService.updateJob(jobId, {
+      status: "completed",
+      attemptCount: attempt,
+      metadata: {
+        runId: task.runContext.runId,
+        acceptedObservationCount,
+        resolvedModel: mergedResult.resolvedModel,
+      },
+    });
+    logger.log(
+      "Memory",
+      "Complete",
+      `${scopeLabel} 維護完成（accepted=${acceptedObservationCount}，model=${mergedResult.resolvedModel}）`,
+    );
+  }
+
+  private async executeAttempt(
+    task: MemoryScopeTask,
+    jobId: string,
+    attempt: number,
+    scopeLabel: string,
+  ): Promise<void> {
+    if (!this.isScopeEnabled(task)) {
+      this.skipDisabledTask(task, scopeLabel);
+      return;
+    }
+
+    const evidencePack = this.buildEvidencePack(task);
+    if (!evidencePack) {
+      this.completeTaskWithoutEvidence(task, jobId, attempt, scopeLabel);
+      return;
+    }
+
+    logger.log(
+      "Memory",
+      "Init",
+      `${scopeLabel} 開始候選記憶建構（attempt=${attempt}）`,
+    );
+    const candidateResult = await this.runCandidateBuilder(task, evidencePack);
+    if (!candidateResult.success) throw new Error(candidateResult.error);
+
+    const observations = this.normalizeCandidateObservations(
+      task,
+      candidateResult.data.observations,
+    );
+    this.recordCandidateObservations(task, jobId, observations);
+    const acceptedObservations = observations.filter(
+      (observation) => observation.accepted,
+    );
+
+    logger.log(
+      "Memory",
+      "Init",
+      `${scopeLabel} 開始正式記憶合併（accepted=${acceptedObservations.length}）`,
+    );
+    const mergedResult = await this.runValidatedSummaryMerger(
+      task,
+      evidencePack.existingSummary,
+      acceptedObservations,
+    );
+    if (!mergedResult.success) throw new Error(mergedResult.error);
+
+    this.completeTask(
+      task,
+      jobId,
+      attempt,
+      acceptedObservations.length,
+      mergedResult,
+      scopeLabel,
+    );
+  }
+
+  private handleAttemptFailure(
+    task: MemoryScopeTask,
+    jobId: string,
+    attempt: number,
+    scopeLabel: string,
+    error: unknown,
+  ): boolean {
+    const errorMessage = error instanceof Error ? error.message : "Memory 維護失敗";
+    logger.warn(
+      "Memory",
+      "Warn",
+      `${scopeLabel} 維護失敗，準備重試（attempt=${attempt}）：${errorMessage}`,
+    );
+
+    if (attempt < MAX_MEMORY_RETRY_COUNT) {
+      memoryStateService.updateJob(jobId, {
+        status: "retrying",
+        attemptCount: attempt,
+        errorMessage,
+        metadata: {
+          runId: task.runContext.runId,
+          nextAttempt: attempt + 1,
+        },
+      });
+      return false;
+    }
+
+    memoryStateService.updateJob(jobId, {
+      status: "abandoned",
+      attemptCount: attempt,
+      errorMessage,
+      metadata: {
+        runId: task.runContext.runId,
+        abandoned: true,
+      },
+    });
+    memoryStateService.clearScopeMaintenanceRecords(task.scopeType, task.scopeId);
+    logger.warn(
+      "Memory",
+      "Warn",
+      `${scopeLabel} 已放棄本輪維護，正式記憶保持不變`,
+    );
+    return true;
+  }
+
   private async executeTask(task: MemoryScopeTask): Promise<void> {
     const scopeLockKey = `${task.scopeType}:${task.scopeId}`;
     await this.withScopeLock(scopeLockKey, async () => {
@@ -657,178 +872,14 @@ class MemoryMaintainerService {
       );
 
       for (let attempt = 1; attempt <= MAX_MEMORY_RETRY_COUNT; attempt += 1) {
-        memoryStateService.updateJob(job.id, {
-          status: "running",
-          attemptCount: attempt,
-          errorMessage: null,
-          metadata: {
-            runId: task.runContext.runId,
-            scopeType: task.scopeType,
-          },
-        });
-
+        this.startAttempt(task, job.id, attempt);
         try {
-          const currentPodState = memoryStateService.getPodState(task.pod.id);
-          const currentRepoState =
-            task.scopeType === "repository"
-              ? memoryStateService.getRepoState(task.scopeId)
-              : null;
-          const isScopeEnabled =
-            task.scopeType === "pod"
-              ? currentPodState?.memoryEnabled
-              : currentRepoState?.memoryEnabled;
-          if (!isScopeEnabled) {
-            logger.log(
-              "Memory",
-              "Update",
-              `${scopeLabel} 已略過：memory 已停用`,
-            );
-            memoryStateService.clearScopeMaintenanceRecords(
-              task.scopeType,
-              task.scopeId,
-            );
-            return;
-          }
-
-          const evidencePack = this.buildEvidencePack(task);
-          if (!evidencePack) {
-            logger.log(
-              "Memory",
-              "Update",
-              `${scopeLabel} 已略過：沒有可用證據`,
-            );
-            memoryStateService.updateJob(job.id, {
-              status: "completed",
-              attemptCount: attempt,
-              metadata: {
-                runId: task.runContext.runId,
-                skippedReason: "no_evidence",
-              },
-            });
-            return;
-          }
-
-          logger.log(
-            "Memory",
-            "Init",
-            `${scopeLabel} 開始候選記憶建構（attempt=${attempt}）`,
-          );
-          const candidateResult = await this.runCandidateBuilder(task, evidencePack);
-          if (!candidateResult.success) {
-            throw new Error(candidateResult.error);
-          }
-
-          const normalizedObservations = this.normalizeCandidateObservations(
-            task,
-            candidateResult.data.observations,
-          );
-
-          for (const observation of normalizedObservations) {
-            memoryStateService.recordObservation({
-              jobId: job.id,
-              scopeType: task.scopeType,
-              scopeId: task.scopeId,
-              kind: "candidate",
-              status: observation.accepted ? "accepted" : "rejected",
-              summary: observation.summary,
-              payload: {
-                title: observation.title,
-                reason: observation.reason,
-              },
-            });
-          }
-
-          const acceptedObservations = normalizedObservations.filter(
-            (observation) => observation.accepted,
-          );
-
-          logger.log(
-            "Memory",
-            "Init",
-            `${scopeLabel} 開始正式記憶合併（accepted=${acceptedObservations.length}）`,
-          );
-          const mergedResult = await this.runValidatedSummaryMerger(
-            task,
-            evidencePack.existingSummary,
-            acceptedObservations,
-          );
-
-          if (!mergedResult.success) {
-            throw new Error(mergedResult.error);
-          }
-
-          const finalSummary = mergedResult.data.summary;
-          this.writeSummary(task.scopeType, task.scopeId, finalSummary);
-          memoryStateService.recordObservation({
-            jobId: job.id,
-            scopeType: task.scopeType,
-            scopeId: task.scopeId,
-            kind: "summary_merge",
-            status: "applied",
-            summary: finalSummary,
-            payload: {
-              reason: mergedResult.data.reason,
-              acceptedObservationCount: acceptedObservations.length,
-              resolvedModel: mergedResult.resolvedModel,
-            },
-          });
-
-          memoryStateService.updateJob(job.id, {
-            status: "completed",
-            attemptCount: attempt,
-            metadata: {
-              runId: task.runContext.runId,
-              acceptedObservationCount: acceptedObservations.length,
-              resolvedModel: mergedResult.resolvedModel,
-            },
-          });
-          logger.log(
-            "Memory",
-            "Complete",
-            `${scopeLabel} 維護完成（accepted=${acceptedObservations.length}，model=${mergedResult.resolvedModel}）`,
-          );
+          await this.executeAttempt(task, job.id, attempt, scopeLabel);
           return;
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Memory 維護失敗";
-
-          logger.warn(
-            "Memory",
-            "Warn",
-            `${scopeLabel} 維護失敗，準備重試（attempt=${attempt}）：${errorMessage}`,
-          );
-
-          if (attempt >= MAX_MEMORY_RETRY_COUNT) {
-            memoryStateService.updateJob(job.id, {
-              status: "abandoned",
-              attemptCount: attempt,
-              errorMessage,
-              metadata: {
-                runId: task.runContext.runId,
-                abandoned: true,
-              },
-            });
-            memoryStateService.clearScopeMaintenanceRecords(
-              task.scopeType,
-              task.scopeId,
-            );
-            logger.warn(
-              "Memory",
-              "Warn",
-              `${scopeLabel} 已放棄本輪維護，正式記憶保持不變`,
-            );
+          if (this.handleAttemptFailure(task, job.id, attempt, scopeLabel, error)) {
             return;
           }
-
-          memoryStateService.updateJob(job.id, {
-            status: "retrying",
-            attemptCount: attempt,
-            errorMessage,
-            metadata: {
-              runId: task.runContext.runId,
-              nextAttempt: attempt + 1,
-            },
-          });
         }
       }
     });
@@ -858,84 +909,86 @@ class MemoryMaintainerService {
     await Promise.all(tasks.map((task) => this.executeTask(task)));
   }
 
+  private collectRepositoryGroups(
+    runContext: RunContext,
+    snapshotPods?: readonly Pod[],
+  ): Map<string, RepositoryMemoryGroup> {
+    const groups = new Map<string, RepositoryMemoryGroup>();
+    const podsById = new Map((snapshotPods ?? []).map((pod) => [pod.id, pod]));
+
+    for (const instance of runStore.getPodInstancesByRunId(runContext.runId)) {
+      const pod =
+        podsById.get(instance.podId) ??
+        podStore.getByIdGlobal(instance.podId)?.pod;
+      const repositoryId = pod?.repositoryId ?? null;
+      if (!pod || !repositoryId || pod.repoMemoryEnabled !== true) continue;
+
+      const workspacePath = instance.runRepoPath ?? instance.workspacePath ?? null;
+      const existingGroup = groups.get(repositoryId);
+      if (!existingGroup) {
+        groups.set(repositoryId, {
+          representativePod: pod,
+          scopePods: [pod],
+          workspacePath,
+        });
+        continue;
+      }
+
+      existingGroup.scopePods.push(pod);
+      existingGroup.workspacePath ??= workspacePath;
+    }
+    return groups;
+  }
+
+  private async scheduleRepositoryGroup(
+    runContext: RunContext,
+    repositoryId: string,
+    group: RepositoryMemoryGroup,
+  ): Promise<void> {
+    await runRepoActivitySnapshotService.awaitCapture(
+      runContext.runId,
+      group.representativePod.id,
+    );
+
+    const snapshot = runRepoActivitySnapshotService.consumeSnapshot(
+      runContext.runId,
+      group.representativePod.id,
+    );
+    if (!snapshot) {
+      logger.warn(
+        "Memory",
+        "Warn",
+        `找不到 Repo Memory git status 快照（runId=${runContext.runId}, repositoryId=${repositoryId}）`,
+      );
+      return;
+    }
+    if (!snapshot.hasActivity) {
+      logger.log(
+        "Memory",
+        "Update",
+        `略過 Repo Memory（${repositoryId}）：本輪未偵測到檔案讀寫`,
+      );
+      return;
+    }
+
+    await this.executeTask({
+      scopeType: "repository",
+      scopeId: repositoryId,
+      pod: group.representativePod,
+      runContext,
+      scopePods: group.scopePods,
+      workspacePath: group.workspacePath,
+    });
+  }
+
   async scheduleRepositoriesForCompletedRun(
     runContext: RunContext,
     snapshotPods?: readonly Pod[],
   ): Promise<void> {
     try {
-      const repoGroups = new Map<
-        string,
-        { representativePod: Pod; scopePods: Pod[]; workspacePath: string | null }
-      >();
-
-      const podsById = new Map(
-        (snapshotPods ?? []).map((pod) => [pod.id, pod]),
-      );
-      for (const instance of runStore.getPodInstancesByRunId(runContext.runId)) {
-        const pod =
-          podsById.get(instance.podId) ?? podStore.getByIdGlobal(instance.podId)?.pod;
-        const repositoryId = pod?.repositoryId ?? null;
-        if (!pod || !repositoryId) {
-          continue;
-        }
-
-        if (pod.repoMemoryEnabled !== true) {
-          continue;
-        }
-
-        const existingGroup = repoGroups.get(repositoryId);
-        if (existingGroup) {
-          existingGroup.scopePods.push(pod);
-          if (!existingGroup.workspacePath) {
-            existingGroup.workspacePath =
-              instance.runRepoPath ?? instance.workspacePath ?? null;
-          }
-          continue;
-        }
-
-        repoGroups.set(repositoryId, {
-          representativePod: pod,
-          scopePods: [pod],
-          workspacePath: instance.runRepoPath ?? instance.workspacePath ?? null,
-        });
-      }
-
-      for (const [repositoryId, group] of repoGroups) {
-        await runRepoActivitySnapshotService.awaitCapture(
-          runContext.runId,
-          group.representativePod.id,
-        );
-
-        const snapshot = runRepoActivitySnapshotService.consumeSnapshot(
-          runContext.runId,
-          group.representativePod.id,
-        );
-        if (!snapshot) {
-          logger.warn(
-            "Memory",
-            "Warn",
-            `找不到 Repo Memory git status 快照（runId=${runContext.runId}, repositoryId=${repositoryId}）`,
-          );
-          continue;
-        }
-
-        if (!snapshot.hasActivity) {
-          logger.log(
-            "Memory",
-            "Update",
-            `略過 Repo Memory（${repositoryId}）：本輪未偵測到檔案讀寫`,
-          );
-          continue;
-        }
-
-        await this.executeTask({
-          scopeType: "repository",
-          scopeId: repositoryId,
-          pod: group.representativePod,
-          runContext,
-          scopePods: group.scopePods,
-          workspacePath: group.workspacePath,
-        });
+      const groups = this.collectRepositoryGroups(runContext, snapshotPods);
+      for (const [repositoryId, group] of groups) {
+        await this.scheduleRepositoryGroup(runContext, repositoryId, group);
       }
     } finally {
       runRepoActivitySnapshotService.clearRun(runContext.runId);

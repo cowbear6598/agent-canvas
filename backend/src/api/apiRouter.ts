@@ -75,59 +75,49 @@ function unauthorizedResponse(): Response {
   );
 }
 
-async function authorizeRoute(
+async function resolveRouteCanvasId(
+  req: Request,
+  route: Route,
+  params: Record<string, string>,
+): Promise<string | null> {
+  return (await route.resolveCanvasId?.(req, params)) ?? params.id ?? null;
+}
+
+async function authorizeAgentRoute(
   req: Request,
   route: Route,
   params: Record<string, string>,
 ): Promise<Response | null> {
-  if (route.scope === "public") {
-    return null;
+  const token = agentAccessTokenStore.resolveBearer(req);
+  if (!token) return unauthorizedResponse();
+  if (!route.requiredAgentScope || !token.hasScope(route.requiredAgentScope)) {
+    return forbiddenResponse("Token 缺少必要的 scope", "INSUFFICIENT_SCOPE");
   }
 
-  if (route.scope === "agent") {
-    const token = agentAccessTokenStore.resolveBearer(req);
-    if (!token) return unauthorizedResponse();
-    if (
-      !route.requiredAgentScope ||
-      !token.hasScope(route.requiredAgentScope)
-    ) {
-      return forbiddenResponse("Token 缺少必要的 scope", "INSUFFICIENT_SCOPE");
-    }
-
-    const rawCanvasId =
-      (await route.resolveCanvasId?.(req, params)) ?? params.id;
-    if (rawCanvasId) {
-      const canvas = resolveCanvas(rawCanvasId);
-      if (canvas && !token.canvasIds.includes(canvas.id)) {
-        return forbiddenResponse("Token 未授權此 Canvas", "CANVAS_NOT_GRANTED");
-      }
-    }
-    return null;
+  const rawCanvasId = await resolveRouteCanvasId(req, route, params);
+  const canvas = rawCanvasId ? resolveCanvas(rawCanvasId) : null;
+  if (canvas && !token.canvasIds.includes(canvas.id)) {
+    return forbiddenResponse("Token 未授權此 Canvas", "CANVAS_NOT_GRANTED");
   }
+  return null;
+}
 
+async function authorizeWorkspaceRoute(
+  req: Request,
+  route: Route,
+  params: Record<string, string>,
+): Promise<Response | null> {
   const sessionId = handshakeAuthService.resolveRequestSessionId(req);
-  // workspace 可存取性只呼叫一次，避免 canvas 檢查時重複查詢
   if (!authAccessService.isWorkspaceAccessible(sessionId)) {
     return forbiddenResponse(
       "Workspace password required",
       "WORKSPACE_PASSWORD_REQUIRED",
     );
   }
+  if (route.scope !== "canvas") return null;
 
-  if (route.scope !== "canvas") {
-    return null;
-  }
-
-  const rawCanvasId =
-    (await route.resolveCanvasId?.(req, params)) ?? params.id;
-
-  // 將 canvas name 或 UUID 解析成實際的 UUID，不存在時為 undefined
-  const resolvedCanvas = rawCanvasId ? resolveCanvas(rawCanvasId) : null;
-  const canvasId = resolvedCanvas?.id ?? null;
-
-  // workspace 已確認可存取，直接使用 AssumingWorkspace 版本避免重複呼叫。
-  // 只有在 canvas 存在且受密碼保護且尚未解鎖時才拒絕；
-  // canvas 不存在或未受保護時讓 handler 自行回傳 404 或正常回應。
+  const rawCanvasId = await resolveRouteCanvasId(req, route, params);
+  const canvasId = rawCanvasId ? resolveCanvas(rawCanvasId)?.id : null;
   if (
     canvasId &&
     authAccessService.requiresCanvasUnlockAssumingWorkspace(sessionId, canvasId)
@@ -137,8 +127,19 @@ async function authorizeRoute(
       "CANVAS_PASSWORD_REQUIRED",
     );
   }
-
   return null;
+}
+
+async function authorizeRoute(
+  req: Request,
+  route: Route,
+  params: Record<string, string>,
+): Promise<Response | null> {
+  if (route.scope === "public") return null;
+  if (route.scope === "agent") {
+    return authorizeAgentRoute(req, route, params);
+  }
+  return authorizeWorkspaceRoute(req, route, params);
 }
 
 export async function handleApiRequest(req: Request): Promise<Response | null> {

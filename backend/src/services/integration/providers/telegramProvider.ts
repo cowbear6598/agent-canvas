@@ -101,7 +101,7 @@ class TelegramProvider implements IntegrationProvider {
         const botToken = app.config["botToken"] as string | undefined;
         if (!botToken) return false;
 
-        const botUsername = await this.fetchBotUsername(app.id, botToken);
+        const botUsername = await this.fetchBotUsername(botToken);
         if (!botUsername) return false;
 
         integrationAppStore.updateExtraJson(app.id, { botUsername });
@@ -258,10 +258,7 @@ class TelegramProvider implements IntegrationProvider {
     }
   }
 
-  private async fetchBotUsername(
-    appId: string,
-    botToken: string,
-  ): Promise<string | null> {
+  private async fetchBotUsername(botToken: string): Promise<string | null> {
     try {
       const response = await fetch(`${TELEGRAM_API_BASE}${botToken}/getMe`);
       const data = (await response.json()) as TelegramApiResponse<{

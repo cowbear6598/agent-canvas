@@ -1,6 +1,5 @@
 import type { TriggerMode, Connection } from "../../types/index.js";
 import type {
-  PipelineContext,
   PipelineMethods,
   BranchTriggerMethods,
   AutoTriggerMethods,
@@ -199,39 +198,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
   }
 
-  private buildDirectPipelineContext(
-    canvasId: string,
-    sourcePodId: string,
-    connection: Connection,
-    runContext: RunContext,
-    delegate: WorkflowStatusDelegate,
-  ): PipelineContext {
-    return {
-      canvasId,
-      sourcePodId,
-      connection,
-      triggerMode: "direct",
-      decideResult: {
-        connectionId: connection.id,
-        approved: true,
-        reason: null,
-        isError: false,
-      },
-      runContext,
-      delegate,
-    };
-  }
-
-  private triggerDirectConnections(
-    _canvasId: string,
-    _sourcePodId: string,
-    _connections: Connection[],
-    _runContext: RunContext,
-  ): Promise<unknown>[] {
-    // direct 已收斂為 base strategy 的 no-wait toggle，不再獨立派送第三種 connection 類別。
-    return [];
-  }
-
   async checkAndTriggerWorkflows(
     canvasId: string,
     sourcePodId: string,
@@ -256,12 +222,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         runContext,
       ),
       this.triggerBranchConnections(
-        canvasId,
-        sourcePodId,
-        connections,
-        runContext,
-      ),
-      ...this.triggerDirectConnections(
         canvasId,
         sourcePodId,
         connections,

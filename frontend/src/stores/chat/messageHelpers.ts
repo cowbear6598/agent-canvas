@@ -155,6 +155,34 @@ export function applyToolResultToMessage(
  * @param knownIndex 已知的陣列 index 提示（串流期間由呼叫端維護 Map<messageId, index> 快取）；
  *   若提供且 messages[knownIndex].id === messageId 則跳過 findIndex，達成 O(1) 定位。
  */
+function updateExistingMessage(
+  messages: Message[],
+  existingIndex: number,
+  content: string,
+  isPartial: boolean,
+  delta: string | undefined,
+  metadata: SystemMessageMetadata | undefined,
+): void {
+  const existing = messages[existingIndex];
+  if (!existing) return;
+
+  const shouldUpdateSub =
+    existing.role === "assistant" &&
+    existing.subMessages &&
+    delta !== undefined;
+  const subMessageUpdates = shouldUpdateSub
+    ? updateAssistantSubMessages(existing, delta, isPartial)
+    : {};
+  messages[existingIndex] = {
+    ...existing,
+    // 有 subMessages 但 delta 不可用時，不更新 content，避免 content 與 subMessages 不同步
+    ...(existing.subMessages && !shouldUpdateSub ? {} : { content }),
+    ...(metadata !== undefined ? { metadata } : {}),
+    isPartial,
+    ...subMessageUpdates,
+  };
+}
+
 export function upsertMessage(
   messages: Message[],
   messageId: string,
@@ -165,30 +193,19 @@ export function upsertMessage(
   metadata?: SystemMessageMetadata,
   knownIndex?: number,
 ): void {
-  // 若呼叫端提供了快取 index 且仍有效，直接用來定位；否則回退 findIndex
   const existingIndex =
     knownIndex !== undefined && messages[knownIndex]?.id === messageId
       ? knownIndex
       : messages.findIndex((m) => m.id === messageId);
   if (existingIndex !== -1) {
-    const existing = messages[existingIndex];
-    if (existing) {
-      const shouldUpdateSub =
-        existing.role === "assistant" &&
-        existing.subMessages &&
-        delta !== undefined;
-      const subMessageUpdates = shouldUpdateSub
-        ? updateAssistantSubMessages(existing, delta, isPartial)
-        : {};
-      messages[existingIndex] = {
-        ...existing,
-        // 有 subMessages 但 delta 不可用時，不更新 content，避免 content 與 subMessages 不同步
-        ...(existing.subMessages && !shouldUpdateSub ? {} : { content }),
-        ...(metadata !== undefined ? { metadata } : {}),
-        isPartial,
-        ...subMessageUpdates,
-      };
-    }
+    updateExistingMessage(
+      messages,
+      existingIndex,
+      content,
+      isPartial,
+      delta,
+      metadata,
+    );
     return;
   }
 

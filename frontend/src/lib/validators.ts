@@ -6,6 +6,17 @@ export const RESOURCE_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 /** 分支名稱驗證模式：允許英數字、底線、連字號和斜線 */
 export const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9_\-/]+$/;
 
+const invalidBranchNameRules: Array<(name: string) => boolean> = [
+  (name): boolean => !BRANCH_NAME_PATTERN.test(name),
+  (name): boolean => !name || name.length > 200,
+  (name): boolean => name.startsWith("-"),
+  (name): boolean => name.includes("//"),
+  (name): boolean => name.includes("..") || name.includes("@{"),
+  (name): boolean =>
+    name === "." || name.endsWith(".") || name.endsWith(".lock"),
+  (name): boolean => name.startsWith("/") || name.endsWith("/"),
+];
+
 /**
  * 驗證資源名稱（Repository 等）
  * @param name 名稱字串
@@ -52,23 +63,5 @@ export const validateGitUrl = (url: string): string | null => {
  * @returns 是否合法
  */
 export const isValidBranchName = (name: string): boolean => {
-  if (!BRANCH_NAME_PATTERN.test(name)) {
-    return false;
-  }
-  if (!name || name.length > 200) {
-    return false;
-  }
-  if (name.startsWith("-")) {
-    return false;
-  }
-  if (name.includes("//")) {
-    return false;
-  }
-  if (name.includes("..") || name.includes("@{")) {
-    return false;
-  }
-  if (name === "." || name.endsWith(".") || name.endsWith(".lock")) {
-    return false;
-  }
-  return !(name.startsWith("/") || name.endsWith("/"));
+  return !invalidBranchNameRules.some((isInvalid) => isInvalid(name));
 };

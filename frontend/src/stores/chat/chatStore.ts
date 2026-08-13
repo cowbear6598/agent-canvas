@@ -56,6 +56,25 @@ function hasMessageContent(
   return !!contentBlocks?.length || content.trim().length > 0;
 }
 
+function validateContentBlocks(contentBlocks: ContentBlock[] | undefined): void {
+  if (!contentBlocks?.length) return;
+
+  let totalBytes = 0;
+  for (const block of contentBlocks) {
+    if (block.type !== "image") continue;
+
+    const blockBytes = Math.ceil((block.base64Data.length * 3) / 4);
+    if (blockBytes > MAX_CONTENT_BLOCK_SIZE_BYTES) {
+      throw new Error(t("composable.chat.imageTooLarge"));
+    }
+    totalBytes += blockBytes;
+  }
+
+  if (totalBytes > MAX_CONTENT_BLOCKS_TOTAL_BYTES) {
+    throw new Error(t("composable.chat.imageTooLarge"));
+  }
+}
+
 export type ChatStoreInstance = ReturnType<typeof useChatStore>;
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -208,23 +227,7 @@ export const useChatStore = defineStore("chat", {
 
       if (!hasMessageContent(content, contentBlocks)) return;
 
-      // contentBlocks 大小驗證：單 block < 5MB，總計 < 20MB（decoded bytes 估算）
-      if (contentBlocks && contentBlocks.length > 0) {
-        let totalBytes = 0;
-        for (const block of contentBlocks) {
-          if (block.type === "image") {
-            // base64 字串長度 * 3/4 ≈ decoded bytes
-            const blockBytes = Math.ceil((block.base64Data.length * 3) / 4);
-            if (blockBytes > MAX_CONTENT_BLOCK_SIZE_BYTES) {
-              throw new Error(t("composable.chat.imageTooLarge"));
-            }
-            totalBytes += blockBytes;
-          }
-        }
-        if (totalBytes > MAX_CONTENT_BLOCKS_TOTAL_BYTES) {
-          throw new Error(t("composable.chat.imageTooLarge"));
-        }
-      }
+      validateContentBlocks(contentBlocks);
 
       // Goal 與工具上下文由後端執行器組裝，前端直接送原文 / content blocks
       const messagePayload: string | ContentBlock[] =

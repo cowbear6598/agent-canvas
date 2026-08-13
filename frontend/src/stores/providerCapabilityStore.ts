@@ -85,6 +85,30 @@ interface ProviderListPayload {
   requestId: string;
 }
 
+interface ThinkingMeta {
+  levels: ReadonlyArray<string>;
+  labels: Readonly<Record<string, string>>;
+  defaultLevel: string;
+}
+
+function buildThinkingMap(
+  models: ReadonlyArray<ModelOption>,
+): Record<string, ThinkingMeta> {
+  const thinkingMap: Record<string, ThinkingMeta> = {};
+
+  for (const model of models) {
+    if (!model.thinkingLevels?.length || !model.defaultThinkingLevel) continue;
+
+    thinkingMap[model.value] = {
+      levels: Object.freeze([...model.thinkingLevels]),
+      labels: Object.freeze({ ...(model.thinkingLevelLabels ?? {}) }),
+      defaultLevel: model.defaultThinkingLevel,
+    };
+  }
+
+  return thinkingMap;
+}
+
 export const useProviderCapabilityStore = defineStore(
   "providerCapability",
   () => {
@@ -111,11 +135,7 @@ export const useProviderCapabilityStore = defineStore(
         string,
         Record<
           string,
-          {
-            levels: ReadonlyArray<string>;
-            labels: Readonly<Record<string, string>>;
-            defaultLevel: string;
-          }
+          ThinkingMeta
         >
       >
     >({});
@@ -299,28 +319,8 @@ export const useProviderCapabilityStore = defineStore(
             frozenModels.map((m) => m.value),
           );
         }
-        const thinkingMap: Record<
-          string,
-          {
-            levels: ReadonlyArray<string>;
-            labels: Readonly<Record<string, string>>;
-            defaultLevel: string;
-          }
-        > = {};
-        for (const model of frozenModels) {
-          if (
-            model.thinkingLevels &&
-            model.thinkingLevels.length > 0 &&
-            model.defaultThinkingLevel
-          ) {
-            thinkingMap[model.value] = {
-              levels: Object.freeze([...model.thinkingLevels]),
-              labels: Object.freeze({ ...(model.thinkingLevelLabels ?? {}) }),
-              defaultLevel: model.defaultThinkingLevel,
-            };
-          }
-        }
-        thinkingMetaByProviderModel.value[normalizedName] = thinkingMap;
+        thinkingMetaByProviderModel.value[normalizedName] =
+          buildThinkingMap(frozenModels);
       }
       // 觸發 Vue reactivity（Set add 不會自動觸發）
       knownProviders.value = new Set(knownProviders.value);

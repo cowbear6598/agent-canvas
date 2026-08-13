@@ -274,6 +274,63 @@ function applyBranchUpdates(
   validateBranchThinkingLevel(state);
 }
 
+function resolveSummaryCreateSettings(
+  sourcePod: Pod | undefined,
+  data: CreateConnectionData,
+): {
+  model: string;
+  thinkingLevel: string | null;
+} {
+  const provider = data.summaryProvider ?? sourcePod?.provider ?? "claude";
+  const defaultModel =
+    (getProvider(provider).metadata.defaultOptions as { model?: string }).model ??
+    "sonnet";
+  const model = data.summaryModel || defaultModel;
+  if (data.summaryModel) {
+    validateProviderModel(provider, data.summaryModel, "summaryModel");
+  }
+
+  const thinkingLevel =
+    data.summaryThinkingLevel !== undefined
+      ? data.summaryThinkingLevel
+      : resolveConnectionThinkingLevel(sourcePod, provider, model);
+  validateConnectionThinkingLevel(
+    provider,
+    model,
+    thinkingLevel,
+    "summaryThinkingLevel",
+  );
+  return { model, thinkingLevel };
+}
+
+function resolveBranchCreateSettings(
+  sourcePod: Pod | undefined,
+  data: CreateConnectionData,
+): {
+  model: string | null;
+  thinkingLevel: string | null;
+} {
+  const provider = data.branchProvider ?? sourcePod?.provider ?? "claude";
+  const model =
+    data.branchProvider !== undefined && data.branchModel === undefined
+      ? (resolveProviderDefaultModel(provider) ?? null)
+      : (data.branchModel ?? null);
+  if (model !== null) validateProviderModel(provider, model, "branchModel");
+
+  const thinkingModel = resolveBranchThinkingModel(sourcePod, provider, model);
+  const thinkingLevel =
+    data.branchThinkingLevel !== undefined
+      ? data.branchThinkingLevel
+      : resolveConnectionThinkingLevel(sourcePod, provider, thinkingModel);
+  validateConnectionThinkingLevel(
+    provider,
+    thinkingModel,
+    thinkingLevel,
+    "branchThinkingLevel",
+  );
+  return { model, thinkingLevel };
+}
+
 class ConnectionStore {
   private readonly repository = new ConnectionRepository();
 
@@ -302,81 +359,9 @@ class ConnectionStore {
   create(canvasId: string, data: CreateConnectionData): Connection {
     const id = uuidv4();
     const normalizedMode = normalizeDirectMode(data);
-
-    // 決定摘要用 provider：客戶端指定 > sourcePod.provider > defensive fallback "claude"
     const sourcePod = podStore.getById(canvasId, data.sourcePodId);
-    const resolvedSummaryProvider: ProviderName =
-      data.summaryProvider ?? sourcePod?.provider ?? "claude";
-
-    const providerMeta = getProvider(resolvedSummaryProvider).metadata;
-    const defaultModel =
-      (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
-
-    let resolvedSummaryModel: string;
-    if (!data.summaryModel) {
-      // 客戶端未帶 summaryModel：使用 resolvedSummaryProvider 的預設模型
-      resolvedSummaryModel = defaultModel;
-    } else {
-      validateProviderModel(
-        resolvedSummaryProvider,
-        data.summaryModel,
-        "summaryModel",
-      );
-      resolvedSummaryModel = data.summaryModel;
-    }
-
-    const resolvedBranchProvider =
-      data.branchProvider ?? sourcePod?.provider ?? "claude";
-    let resolvedBranchModel = data.branchModel ?? null;
-    if (data.branchProvider !== undefined && data.branchModel === undefined) {
-      resolvedBranchModel =
-        resolveProviderDefaultModel(resolvedBranchProvider) ?? null;
-    }
-    if (resolvedBranchModel !== null) {
-      validateProviderModel(
-        resolvedBranchProvider,
-        resolvedBranchModel,
-        "branchModel",
-      );
-    }
-
-    const resolvedSummaryThinkingLevel =
-      data.summaryThinkingLevel !== undefined
-        ? data.summaryThinkingLevel
-        : resolveConnectionThinkingLevel(
-            sourcePod,
-            resolvedSummaryProvider,
-            resolvedSummaryModel,
-          );
-    validateConnectionThinkingLevel(
-      resolvedSummaryProvider,
-      resolvedSummaryModel,
-      resolvedSummaryThinkingLevel,
-      "summaryThinkingLevel",
-    );
-
-    const resolvedBranchThinkingLevel =
-      data.branchThinkingLevel !== undefined
-        ? data.branchThinkingLevel
-        : resolveConnectionThinkingLevel(
-            sourcePod,
-            resolvedBranchProvider,
-            resolveBranchThinkingModel(
-              sourcePod,
-              resolvedBranchProvider,
-              resolvedBranchModel,
-            ),
-          );
-    validateConnectionThinkingLevel(
-      resolvedBranchProvider,
-      resolveBranchThinkingModel(
-        sourcePod,
-        resolvedBranchProvider,
-        resolvedBranchModel,
-      ),
-      resolvedBranchThinkingLevel,
-      "branchThinkingLevel",
-    );
+    const summary = resolveSummaryCreateSettings(sourcePod, data);
+    const branch = resolveBranchCreateSettings(sourcePod, data);
 
     // branch 模式下驗證 label
     if (normalizedMode.triggerMode === "branch") {
@@ -395,14 +380,14 @@ class ConnectionStore {
       targetAnchor: data.targetAnchor,
       triggerMode: normalizedMode.triggerMode,
       direct: normalizedMode.direct,
-      summaryModel: resolvedSummaryModel,
+      summaryModel: summary.model,
       summaryProvider: data.summaryProvider ?? null,
-      summaryThinkingLevel: resolvedSummaryThinkingLevel,
+      summaryThinkingLevel: summary.thinkingLevel,
       label: data.label ?? "",
       description: data.description ?? null,
       branchProvider: data.branchProvider ?? null,
-      branchModel: resolvedBranchModel,
-      branchThinkingLevel: resolvedBranchThinkingLevel,
+      branchModel: branch.model,
+      branchThinkingLevel: branch.thinkingLevel,
     });
 
     const createdConnection = this.getById(canvasId, id);

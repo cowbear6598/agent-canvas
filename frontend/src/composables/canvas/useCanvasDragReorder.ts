@@ -55,7 +55,7 @@ export function useCanvasDragReorder(sidebarRef: Ref<HTMLElement | undefined>): 
     dragOverIndex.value = index
   }
 
-  const handleDragEnter = (event: Event, index: number): void => {
+  const handleDragEnter = (_event: Event, index: number): void => {
     dragOverIndex.value = index
   }
 

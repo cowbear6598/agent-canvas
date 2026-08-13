@@ -25,6 +25,139 @@ import { handshakeAuthService } from "../services/auth/handshakeAuthService.js";
 import { authAccessService } from "../services/auth/authAccessService.js";
 import { canvasStore } from "../services/canvasStore.js";
 
+type UploadFormData = Awaited<ReturnType<Request["formData"]>>;
+
+function uploadError(
+  errorCode: string,
+  message: string,
+  status: number,
+): Response {
+  return jsonResponse({ errorCode, message }, status);
+}
+
+function requireStringField(
+  formData: UploadFormData,
+  fieldName: string,
+  missingMessage: string,
+  invalidMessage: string,
+): string | Response {
+  const value = formData.get(fieldName);
+  if (value === null || value === "") {
+    return uploadError(
+      ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+      missingMessage,
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  if (typeof value !== "string") {
+    return uploadError(
+      ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+      invalidMessage,
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  return value;
+}
+
+function validateCanvasAccess(req: Request, canvasId: string): Response | null {
+  if (!canvasStore.getById(canvasId)) {
+    return uploadError(
+      ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+      "canvasId 不存在",
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  const sessionId = handshakeAuthService.resolveRequestSessionId(req);
+  if (!authAccessService.isCanvasAccessible(sessionId, canvasId)) {
+    return uploadError(
+      ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+      "Canvas password required",
+      HTTP_STATUS.FORBIDDEN,
+    );
+  }
+  return null;
+}
+
+function requireUploadFile(formData: UploadFormData): File | Response {
+  const file = formData.get("file");
+  if (file === null) {
+    return uploadError(
+      ERROR_CODE_UPLOAD_NO_FILE,
+      "缺少 file 欄位",
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  if (!(file instanceof File)) {
+    return uploadError(
+      ERROR_CODE_UPLOAD_NO_FILE,
+      "file 欄位必須為檔案類型",
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  return file;
+}
+
+function rawJsonError(errorCode: string, message: string, status: number): Response {
+  return new Response(JSON.stringify({ errorCode, message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function attachmentErrorResponse(error: unknown): Response {
+  if (error instanceof AttachmentArchiveTooLargeError) {
+    return rawJsonError(
+      ERROR_CODE_ATTACHMENT_ARCHIVE_TOO_LARGE,
+      "ZIP 解壓後總大小超過允許的最大大小（100 MB）",
+      413,
+    );
+  }
+  if (error instanceof AttachmentTooLargeError) {
+    return rawJsonError(
+      ERROR_CODE_ATTACHMENT_TOO_LARGE,
+      "檔案超過允許的最大大小（100 MB）",
+      413,
+    );
+  }
+  if (error instanceof AttachmentInvalidArchiveError) {
+    return uploadError(
+      ERROR_CODE_ATTACHMENT_INVALID_ARCHIVE,
+      "ZIP 檔案格式無效、已損毀或含有不安全內容",
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  if (error instanceof AttachmentInvalidNameError) {
+    return uploadError(
+      ERROR_CODE_ATTACHMENT_INVALID_NAME,
+      "檔案名稱包含不合法字元或格式",
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  if (error instanceof AttachmentDiskFullError) {
+    return rawJsonError(
+      ERROR_CODE_ATTACHMENT_DISK_FULL,
+      "磁碟空間不足，無法儲存檔案",
+      507,
+    );
+  }
+  if (error instanceof AttachmentWriteError) {
+    logger.error("Upload", "Error", "附件寫入失敗", error);
+    return uploadError(
+      ERROR_CODE_ATTACHMENT_WRITE_FAILED,
+      "檔案寫入失敗，請稍後再試",
+      HTTP_STATUS.INTERNAL_ERROR,
+    );
+  }
+
+  logger.error("Upload", "Error", "上傳時發生未預期的錯誤", error);
+  return uploadError(
+    ERROR_CODE_ATTACHMENT_WRITE_FAILED,
+    "上傳時發生未預期的錯誤，請稍後再試",
+    HTTP_STATUS.INTERNAL_ERROR,
+  );
+}
+
 /**
  * POST /api/upload
  *
@@ -38,107 +171,45 @@ import { canvasStore } from "../services/canvasStore.js";
  * 注意：此階段不檢查 Pod 忙碌狀態，race window 故意留給 WS 階段處理。
  */
 export async function handleUpload(req: Request): Promise<Response> {
-  // 解析 multipart/form-data（使用 unknown 避免 Bun undici-types 與 lib.dom FormData 型別衝突）
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let formData: any;
+  let formData: UploadFormData;
   try {
     formData = await req.formData();
   } catch {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_NO_FILE,
-        message: "無法解析上傳表單，請確認請求格式為 multipart/form-data",
-      },
+    return uploadError(
+      ERROR_CODE_UPLOAD_NO_FILE,
+      "無法解析上傳表單，請確認請求格式為 multipart/form-data",
       HTTP_STATUS.BAD_REQUEST,
     );
   }
 
-  const canvasId = formData.get("canvasId");
-  if (canvasId === null || canvasId === "") {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "缺少 canvasId 欄位",
-      },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
-  if (typeof canvasId !== "string") {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "canvasId 格式無效",
-      },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
-  if (!canvasStore.getById(canvasId)) {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "canvasId 不存在",
-      },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
+  const canvasId = requireStringField(
+    formData,
+    "canvasId",
+    "缺少 canvasId 欄位",
+    "canvasId 格式無效",
+  );
+  if (canvasId instanceof Response) return canvasId;
+  const canvasAccessError = validateCanvasAccess(req, canvasId);
+  if (canvasAccessError) return canvasAccessError;
 
-  const sessionId = handshakeAuthService.resolveRequestSessionId(req);
-  if (!authAccessService.isCanvasAccessible(sessionId, canvasId)) {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "Canvas password required",
-      },
-      HTTP_STATUS.FORBIDDEN,
-    );
-  }
-
-  const uploadSessionId = formData.get("uploadSessionId");
-  if (uploadSessionId === null || uploadSessionId === "") {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "缺少 uploadSessionId 欄位",
-      },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
-  if (typeof uploadSessionId !== "string") {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "uploadSessionId 格式無效",
-      },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
+  const uploadSessionId = requireStringField(
+    formData,
+    "uploadSessionId",
+    "缺少 uploadSessionId 欄位",
+    "uploadSessionId 格式無效",
+  );
+  if (uploadSessionId instanceof Response) return uploadSessionId;
 
   if (!UPLOAD_SESSION_ID_REGEX.test(uploadSessionId)) {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
-        message: "uploadSessionId 格式無效，必須為 UUID v4",
-      },
+    return uploadError(
+      ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+      "uploadSessionId 格式無效，必須為 UUID v4",
       HTTP_STATUS.BAD_REQUEST,
     );
   }
 
-  const file = formData.get("file");
-  if (file === null) {
-    return jsonResponse(
-      { errorCode: ERROR_CODE_UPLOAD_NO_FILE, message: "缺少 file 欄位" },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
-  if (!(file instanceof File)) {
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_UPLOAD_NO_FILE,
-        message: "file 欄位必須為檔案類型",
-      },
-      HTTP_STATUS.BAD_REQUEST,
-    );
-  }
+  const file = requireUploadFile(formData);
+  if (file instanceof Response) return file;
 
   try {
     const result = await writeAttachmentToStaging(
@@ -155,69 +226,7 @@ export async function handleUpload(req: Request): Promise<Response> {
       },
       HTTP_STATUS.OK,
     );
-  } catch (err) {
-    if (err instanceof AttachmentArchiveTooLargeError) {
-      return new Response(
-        JSON.stringify({
-          errorCode: ERROR_CODE_ATTACHMENT_ARCHIVE_TOO_LARGE,
-          message: "ZIP 解壓後總大小超過允許的最大大小（100 MB）",
-        }),
-        { status: 413, headers: { "Content-Type": "application/json" } },
-      );
-    }
-    if (err instanceof AttachmentTooLargeError) {
-      return new Response(
-        JSON.stringify({
-          errorCode: ERROR_CODE_ATTACHMENT_TOO_LARGE,
-          message: "檔案超過允許的最大大小（100 MB）",
-        }),
-        { status: 413, headers: { "Content-Type": "application/json" } },
-      );
-    }
-    if (err instanceof AttachmentInvalidArchiveError) {
-      return jsonResponse(
-        {
-          errorCode: ERROR_CODE_ATTACHMENT_INVALID_ARCHIVE,
-          message: "ZIP 檔案格式無效、已損毀或含有不安全內容",
-        },
-        HTTP_STATUS.BAD_REQUEST,
-      );
-    }
-    if (err instanceof AttachmentInvalidNameError) {
-      return jsonResponse(
-        {
-          errorCode: ERROR_CODE_ATTACHMENT_INVALID_NAME,
-          message: "檔案名稱包含不合法字元或格式",
-        },
-        HTTP_STATUS.BAD_REQUEST,
-      );
-    }
-    if (err instanceof AttachmentDiskFullError) {
-      return new Response(
-        JSON.stringify({
-          errorCode: ERROR_CODE_ATTACHMENT_DISK_FULL,
-          message: "磁碟空間不足，無法儲存檔案",
-        }),
-        { status: 507, headers: { "Content-Type": "application/json" } },
-      );
-    }
-    if (err instanceof AttachmentWriteError) {
-      logger.error("Upload", "Error", "附件寫入失敗", err);
-      return jsonResponse(
-        {
-          errorCode: ERROR_CODE_ATTACHMENT_WRITE_FAILED,
-          message: "檔案寫入失敗，請稍後再試",
-        },
-        HTTP_STATUS.INTERNAL_ERROR,
-      );
-    }
-    logger.error("Upload", "Error", "上傳時發生未預期的錯誤", err);
-    return jsonResponse(
-      {
-        errorCode: ERROR_CODE_ATTACHMENT_WRITE_FAILED,
-        message: "上傳時發生未預期的錯誤，請稍後再試",
-      },
-      HTTP_STATUS.INTERNAL_ERROR,
-    );
+  } catch (error) {
+    return attachmentErrorResponse(error);
   }
 }
