@@ -1,0 +1,18 @@
+description: >
+  Pod handoff summaries currently repeat the next pod's Goal instructions even
+  though the receiving pod reads its own Goal, creating redundant context and
+  obscuring the previous pod's actual handoff facts. The summary should retain
+  only the completed pod's relevant context so the next pod receives a concise,
+  unambiguous handoff.
+goal:
+  - Summary generation continues using the next pod's Goal to select relevant context from the previous pod.
+  - The next pod receives a source summary containing only the previous pod's relevant handoff facts, without restating or duplicating the receiving pod's Goal instructions.
+related:
+  - backend/src/services/summaryPromptBuilder.ts
+  - backend/src/services/summaryService.ts
+  - backend/src/services/workflow/workflowExecutionService.ts
+  - backend/src/services/workflow/workflowHelpers.ts
+  - backend/tests/business-logic/summaryPromptBuilder.test.ts
+  - backend/tests/business-logic/summaryService.test.ts
+verify:
+  - cd backend && bun run test -- tests/business-logic/summaryPromptBuilder.test.ts tests/business-logic/summaryService.test.ts

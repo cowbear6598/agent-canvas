@@ -54,7 +54,7 @@ ${SECURITY_NOTICE}`;
         `下一個處理者「<user_data>${sanitizeForPrompt(targetPodName)}</user_data>」的 Goal 內容如下：\n\n---\n<user_data>\n${sanitizeForPrompt(targetPodGoal)}\n</user_data>\n---`,
       );
       parts.push(
-        "請根據此 Goal 內容，從對話記錄中擷取下一個處理者真正需要的資訊，整理成精簡摘要。\n只輸出摘要內容，不要加上任何解釋或前綴。",
+        "請根據此 Goal 內容，從對話記錄中擷取下一個處理者真正需要的資訊，整理成精簡摘要。\nGoal 僅作為判斷資訊相關性的參考；下一個處理者會自行讀取 Goal，因此摘要不得包含、改寫、重述或列出 Goal 的任務內容，也不得替下一個處理者下達 Goal 中的指令。\n只輸出上一個處理者已產生的事實、結果與狀態，不要加上任何解釋或前綴。",
       );
     } else {
       parts.push(

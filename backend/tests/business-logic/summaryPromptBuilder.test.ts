@@ -42,6 +42,9 @@ describe("SummaryPromptBuilder", () => {
       expect(result).toContain("Target Pod");
       expect(result).toContain("Review the code for bugs.");
       expect(result).toContain("Goal 內容");
+      expect(result).toContain("下一個處理者會自行讀取 Goal");
+      expect(result).toContain("不得包含、改寫、重述或列出 Goal");
+      expect(result).toContain("只輸出上一個處理者已產生的事實、結果與狀態");
     });
 
     it("沒有 targetPodGoal 時，使用預設完整摘要", () => {
