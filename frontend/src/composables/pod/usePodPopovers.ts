@@ -20,7 +20,7 @@ interface UsePodPopoversReturn {
  * 管理 CanvasPod 的 Plugin / MCP / Thinking popover 開關狀態與點擊處理。
  * 抽出此 composable 以降低 CanvasPod.vue script setup 的職責數量。
  */
-export function usePodPopovers(): UsePodPopoversReturn {
+export function usePodPopovers(onOpen?: () => void): UsePodPopoversReturn {
   const showPluginPopover = ref(false);
   const pluginAnchorRect = ref<DOMRect | null>(null);
 
@@ -38,6 +38,7 @@ export function usePodPopovers(): UsePodPopoversReturn {
       event.currentTarget as HTMLElement
     ).getBoundingClientRect();
     showPluginPopover.value = true;
+    onOpen?.();
   };
 
   const showMcpPopover = ref(false);
@@ -57,6 +58,7 @@ export function usePodPopovers(): UsePodPopoversReturn {
       event.currentTarget as HTMLElement
     ).getBoundingClientRect();
     showMcpPopover.value = true;
+    onOpen?.();
   };
 
   const showThinkingPopover = ref(false);
@@ -76,6 +78,7 @@ export function usePodPopovers(): UsePodPopoversReturn {
       event.currentTarget as HTMLElement
     ).getBoundingClientRect();
     showThinkingPopover.value = true;
+    onOpen?.();
   };
 
   const closeAllPopovers = (): void => {

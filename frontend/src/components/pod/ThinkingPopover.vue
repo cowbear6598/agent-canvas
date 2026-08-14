@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useEscapeClose } from "@/composables/useEscapeClose";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import type { PodProvider } from "@/types/pod";
+import { shouldPreservePodResourceMenu } from "@/lib/podResourceMenu";
 
 const props = defineProps<{
   podId: string;
@@ -55,14 +56,9 @@ const levelLabel = (level: string): string =>
 
 const rootRef = ref<HTMLElement | null>(null);
 
-/** 點擊外部關閉（capture 階段攔截，避免內部 click 誤觸）
- *  排除 thinking 觸發按鈕（.pod-thinking-notch-area）：
- *  點觸發按鈕時讓 click 事件走到 toggle 邏輯，
- *  避免「mousedown 先關、click 再開」的競態導致 popover 無法關閉。
- */
 const handleMousedown = (event: MouseEvent): void => {
   if (!rootRef.value) return;
-  if ((event.target as Element).closest(".pod-thinking-notch-area")) return;
+  if (shouldPreservePodResourceMenu(event, props.podId)) return;
   if (!rootRef.value.contains(event.target as Node)) {
     emit("close");
   }
@@ -88,6 +84,7 @@ useEscapeClose(() => emit("close"));
   <Teleport to="body">
     <div
       ref="rootRef"
+      :data-resource-menu-pod-id="podId"
       class="fixed z-50 min-w-32 rounded-md border border-doodle-ink bg-card p-2 shadow-md pod-slot-menu-base"
       :style="{
         left: `${anchorRect.left}px`,

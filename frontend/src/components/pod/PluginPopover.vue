@@ -10,6 +10,7 @@ import { usePodStore } from "@/stores/pod";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
 import { type InstalledPlugin } from "@/types/plugin";
+import { shouldPreservePodResourceMenu } from "@/lib/podResourceMenu";
 
 const POPOVER_ANCHOR_GAP_PX = 8;
 
@@ -61,7 +62,7 @@ const rootRef = ref<HTMLElement | null>(null);
 
 const handleMousedown = (event: MouseEvent): void => {
   if (!rootRef.value) return;
-  if ((event.target as Element).closest(".pod-plugin-notch-area")) return;
+  if (shouldPreservePodResourceMenu(event, props.podId)) return;
   if (!rootRef.value.contains(event.target as Node)) {
     emit("close");
   }
@@ -135,6 +136,7 @@ const handleToggle = async (
   <Teleport to="body">
     <div
       ref="rootRef"
+      :data-resource-menu-pod-id="podId"
       class="fixed z-50 min-w-72 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
       :style="{
         left: `${anchorRect.left - POPOVER_ANCHOR_GAP_PX}px`,

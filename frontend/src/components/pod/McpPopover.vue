@@ -12,6 +12,7 @@ import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
 import type { PodMcpAvailabilityItem } from "@/types/mcp";
 import type { PodProvider } from "@/types/pod";
+import { shouldPreservePodResourceMenu } from "@/lib/podResourceMenu";
 
 const props = defineProps<{
   podId: string;
@@ -126,16 +127,9 @@ const mcpServerNamesSet = computed(() => new Set(podMcpServerNames.value));
 
 const rootRef = ref<HTMLElement | null>(null);
 
-/** 點擊外部關閉（capture 階段攔截，避免內部 click 誤觸）
- *  排除 MCP 觸發按鈕（.pod-mcp-notch-area）：
- *  點觸發按鈕時讓 click 事件走到 handleMcpClick 的 toggle 邏輯，
- *  避免「mousedown 先關、click 再開」的競態導致 popover 無法關閉。
- */
-// 以 className 比對觸發區是一種 trade-off，攻擊者需注入相同 class 才能繞過，目前接受此風險
 const handleMousedown = (event: MouseEvent): void => {
   if (!rootRef.value) return;
-  // 若點擊落在 MCP 觸發區，略過此次關閉，交由 toggle handler 處理
-  if ((event.target as Element).closest(".pod-mcp-notch-area")) return;
+  if (shouldPreservePodResourceMenu(event, props.podId)) return;
   if (!rootRef.value.contains(event.target as Node)) {
     emit("close");
   }
@@ -255,6 +249,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
   <Teleport to="body">
     <div
       ref="rootRef"
+      :data-resource-menu-pod-id="podId"
       class="fixed z-50 min-w-60 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
       :style="{
         left: `${anchorRect.left - 8}px`,

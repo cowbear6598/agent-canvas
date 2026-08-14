@@ -44,6 +44,7 @@ import { createPodDividerPath } from "@/lib/podDividerPath";
 
 const props = defineProps<{
   pod: Pod;
+  activeResourceMenuPodId?: string | null;
 }>();
 
 const {
@@ -90,6 +91,7 @@ const emit = defineEmits<{
   "drag-end": [data: { id: string; x: number; y: number }];
   "drag-complete": [data: { id: string }];
   contextmenu: [data: { podId: string; event: MouseEvent }];
+  "resource-menu-opened": [podId: string];
 }>();
 
 const isEditing = ref(false);
@@ -178,7 +180,7 @@ const {
   handleThinkingClick,
   closeThinkingPopover,
   closeAllPopovers,
-} = usePodPopovers();
+} = usePodPopovers(() => emit("resource-menu-opened", props.pod.id));
 
 const hasOpenPopover = computed(
   () =>
@@ -187,11 +189,27 @@ const hasOpenPopover = computed(
     showThinkingPopover.value,
 );
 
-watch([isDragging, isBatchDragging], ([isSingleDragging, isBatchDragging]) => {
-  if (isSingleDragging || isBatchDragging) {
-    closeAllPopovers();
-  }
-});
+watch(
+  [isDragging, isBatchDragging, isSelected],
+  ([isSingleDragging, isBatchDragging, isSelected]) => {
+    if (isSingleDragging || (isBatchDragging && isSelected)) {
+      closeAllPopovers();
+    }
+  },
+);
+
+watch(
+  () => props.activeResourceMenuPodId,
+  (activeResourceMenuPodId) => {
+    if (
+      activeResourceMenuPodId !== null &&
+      activeResourceMenuPodId !== undefined &&
+      activeResourceMenuPodId !== props.pod.id
+    ) {
+      closeAllPopovers();
+    }
+  },
+);
 
 watch(
   () =>

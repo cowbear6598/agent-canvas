@@ -1,7 +1,7 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick } from "vue";
+import { defineComponent, nextTick, ref } from "vue";
 import CanvasPod from "@/components/pod/CanvasPod.vue";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -81,46 +81,78 @@ function createDropEvent(): DragEvent {
   return new Event("drop", { bubbles: true, cancelable: true }) as DragEvent;
 }
 
+function createCanvasPodStubs() {
+  return {
+    PodModelSelector: { template: "<div />" },
+    PodHeader: { template: "<div />" },
+    PodUploadOverlay: {
+      template: '<div data-testid="upload-overlay" />',
+    },
+    PodAnchors: { template: '<div data-testid="pod-anchors" />' },
+    PodActions: { template: '<div data-testid="pod-actions" />' },
+    IntegrationStatusIcon: { template: "<div />" },
+    ScheduleModal: { template: "<div />" },
+    PluginPopover: {
+      props: ["podId", "anchorRect"],
+      template:
+        '<div data-testid="plugin-popover" :data-resource-menu-pod-id="podId" />',
+    },
+    McpPopover: {
+      props: ["podId", "anchorRect"],
+      template:
+        '<div data-testid="mcp-popover" :data-resource-menu-pod-id="podId" />',
+    },
+    ThinkingPopover: {
+      props: ["podId", "anchorRect"],
+      template:
+        '<div data-testid="thinking-popover" :data-resource-menu-pod-id="podId" />',
+    },
+    PodSlots: {
+      props: ["mcpActiveCount"],
+      emits: ["plugin-clicked", "mcp-clicked", "thinking-clicked"],
+      template: `
+        <div :data-mcp-active-count="mcpActiveCount">
+          <button class="plugin-slot" @click="$emit('plugin-clicked', $event)">plugins</button>
+          <button class="mcp-slot" @click="$emit('mcp-clicked', $event)">mcp</button>
+          <button class="thinking-slot" @click="$emit('thinking-clicked', $event)">thinking</button>
+        </div>
+      `,
+    },
+  };
+}
+
 function mountPod(pod: Pod) {
   return mount(CanvasPod, {
     props: { pod },
     attachTo: document.body,
     global: {
-      stubs: {
-        PodModelSelector: { template: "<div />" },
-        PodHeader: { template: "<div />" },
-        PodUploadOverlay: {
-          template: '<div data-testid="upload-overlay" />',
-        },
-        PodAnchors: { template: '<div data-testid="pod-anchors" />' },
-        PodActions: { template: '<div data-testid="pod-actions" />' },
-        IntegrationStatusIcon: { template: "<div />" },
-        ScheduleModal: { template: "<div />" },
-        PluginPopover: {
-          props: ["podId", "anchorRect"],
-          template: '<div data-testid="plugin-popover" />',
-        },
-        McpPopover: {
-          props: ["podId", "anchorRect"],
-          template: '<div data-testid="mcp-popover" />',
-        },
-        ThinkingPopover: {
-          props: ["podId", "anchorRect"],
-          template: '<div data-testid="thinking-popover" />',
-        },
-        PodSlots: {
-          props: ["mcpActiveCount"],
-          emits: ["plugin-clicked", "mcp-clicked", "thinking-clicked"],
-          template: `
-            <div :data-mcp-active-count="mcpActiveCount">
-              <button class="plugin-slot" @click="$emit('plugin-clicked', $event)">plugins</button>
-              <button class="mcp-slot" @click="$emit('mcp-clicked', $event)">mcp</button>
-              <button class="thinking-slot" @click="$emit('thinking-clicked', $event)">thinking</button>
-            </div>
-          `,
-        },
-      },
+      stubs: createCanvasPodStubs(),
     },
+  });
+}
+
+function mountPodGroup() {
+  const TestHost = defineComponent({
+    components: { CanvasPod },
+    setup() {
+      const activeResourceMenuPodId = ref<string | null>(null);
+      const pods = [makePod({ id: "pod-1" }), makePod({ id: "pod-2" })];
+      return { activeResourceMenuPodId, pods };
+    },
+    template: `
+      <CanvasPod
+        v-for="pod in pods"
+        :key="pod.id"
+        :pod="pod"
+        :active-resource-menu-pod-id="activeResourceMenuPodId"
+        @resource-menu-opened="activeResourceMenuPodId = $event"
+      />
+    `,
+  });
+
+  return mount(TestHost, {
+    attachTo: document.body,
+    global: { stubs: createCanvasPodStubs() },
   });
 }
 
@@ -184,6 +216,58 @@ describe("CanvasPod user interactions", () => {
     expect(wrapper.find('[data-testid="mcp-popover"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="thinking-popover"]').exists()).toBe(
       false,
+    );
+  });
+
+  it("另一個 pod 開啟資源選單時，會關閉先前 pod 的所有資源選單", async () => {
+    const wrapper = mountPodGroup();
+    const [firstPod, secondPod] = wrapper.findAllComponents(CanvasPod);
+    if (!firstPod || !secondPod) throw new Error("測試 Pod 未完整建立");
+
+    await firstPod.find(".plugin-slot").trigger("click");
+    await firstPod.find(".mcp-slot").trigger("click");
+    await firstPod.find(".thinking-slot").trigger("click");
+    await flushPromises();
+
+    expect(firstPod.find('[data-testid="plugin-popover"]').exists()).toBe(true);
+    expect(firstPod.find('[data-testid="mcp-popover"]').exists()).toBe(true);
+    expect(firstPod.find('[data-testid="thinking-popover"]').exists()).toBe(
+      true,
+    );
+
+    await secondPod.find(".mcp-slot").trigger("click");
+    await flushPromises();
+
+    expect(firstPod.find('[data-testid="plugin-popover"]').exists()).toBe(
+      false,
+    );
+    expect(firstPod.find('[data-testid="mcp-popover"]').exists()).toBe(false);
+    expect(firstPod.find('[data-testid="thinking-popover"]').exists()).toBe(
+      false,
+    );
+    expect(secondPod.find('[data-testid="mcp-popover"]').exists()).toBe(true);
+  });
+
+  it("選取或拖曳另一個 pod 時，不會關閉目前 pod 的資源選單", async () => {
+    const wrapper = mountPodGroup();
+    const [firstPod, secondPod] = wrapper.findAllComponents(CanvasPod);
+    if (!firstPod || !secondPod) throw new Error("測試 Pod 未完整建立");
+
+    await firstPod.find(".plugin-slot").trigger("click");
+    await firstPod.find(".mcp-slot").trigger("click");
+    await firstPod.find(".thinking-slot").trigger("click");
+    await secondPod.find(".pod-doodle").trigger("dblclick");
+    await secondPod.find(".pod-doodle").trigger("mousedown", {
+      clientX: 20,
+      clientY: 20,
+    });
+    document.dispatchEvent(new MouseEvent("mouseup"));
+    await flushPromises();
+
+    expect(firstPod.find('[data-testid="plugin-popover"]').exists()).toBe(true);
+    expect(firstPod.find('[data-testid="mcp-popover"]').exists()).toBe(true);
+    expect(firstPod.find('[data-testid="thinking-popover"]').exists()).toBe(
+      true,
     );
   });
 

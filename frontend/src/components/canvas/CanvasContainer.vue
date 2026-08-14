@@ -71,6 +71,7 @@ const trashZoneRef = ref<InstanceType<typeof TrashZone> | null>(null);
 
 const showCreateRepositoryModal = ref(false);
 const showCloneRepositoryModal = ref(false);
+const activeResourceMenuPodId = ref<string | null>(null);
 
 const {
   showDeleteModal,
@@ -268,12 +269,14 @@ const visibleRepositoryNotes = computed(() =>
       v-for="pod in visiblePods"
       :key="pod.id"
       :pod="pod"
+      :active-resource-menu-pod-id="activeResourceMenuPodId"
       @select="handleSelectPod"
       @update="handleUpdatePod"
       @delete="handleDeletePod"
       @drag-end="handleDragEnd"
       @drag-complete="handlePodDragComplete"
       @contextmenu="handlePodContextMenu"
+      @resource-menu-opened="activeResourceMenuPodId = $event"
     />
 
     <GenericNote
