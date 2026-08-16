@@ -492,7 +492,7 @@ const handleCopyToken = (appId: string, token: string): void => {
   >
     <DialogContent
       v-if="config"
-      class="max-w-2xl"
+      class="doodle-modal-surface max-w-2xl"
     >
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
@@ -512,7 +512,7 @@ const handleCopyToken = (appId: string, token: string): void => {
       <div class="space-y-3">
         <div
           v-if="apps.length === 0 && !showAddForm"
-          class="py-6 text-center text-sm text-muted-foreground"
+          class="py-7 text-center text-sm text-muted-foreground"
         >
           {{ config.emptyAppHint }}
         </div>
@@ -645,6 +645,7 @@ const handleCopyToken = (appId: string, token: string): void => {
           >
             <Input
               v-model="formValues[field.key]"
+              class="flat-field"
               :type="field.type"
               :placeholder="field.placeholder"
               :disabled="isResettingCredentials && field.key === 'name'"
@@ -660,12 +661,13 @@ const handleCopyToken = (appId: string, token: string): void => {
           <div class="flex justify-end gap-2">
             <Button
               variant="outline"
+              class="flat-button"
               @click="handleCancelAddForm"
             >
               {{ $t("common.cancel") }}
             </Button>
             <Button
-              variant="default"
+              class="flat-button flat-button--primary"
               :disabled="isSubmitting || !isFormValid"
               @click="handleConfirmAdd"
             >
@@ -680,15 +682,19 @@ const handleCopyToken = (appId: string, token: string): void => {
           </div>
         </div>
 
-        <Button
+        <div
           v-if="!showAddForm"
-          variant="outline"
-          class="w-full"
-          @click="handleOpenAddForm"
+          class="flex justify-center pt-1"
         >
-          <Plus class="size-4" />
-          {{ $t("integration.apps.addApp") }}
-        </Button>
+          <Button
+            variant="outline"
+            class="doodle-action doodle-action--primary"
+            @click="handleOpenAddForm"
+          >
+            <Plus class="size-4" />
+            {{ $t("integration.apps.addApp") }}
+          </Button>
+        </div>
       </div>
 
       <DialogFooter />

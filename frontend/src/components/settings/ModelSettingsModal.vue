@@ -447,7 +447,10 @@ watch(
               :variant="
                 activeCategory === category.value ? 'default' : 'outline'
               "
-              class="h-auto min-h-12 justify-start whitespace-normal px-3 py-3 text-left"
+              class="flat-button h-auto min-h-12 justify-start whitespace-normal px-3 py-3 text-left"
+              :class="
+                activeCategory === category.value && 'flat-button--primary'
+              "
               role="tab"
               :aria-selected="activeCategory === category.value"
               @click="activeCategory = category.value"
@@ -477,7 +480,7 @@ watch(
                   :model-value="providerSelectValue"
                   @update:model-value="handleProviderChange"
                 >
-                  <SelectTrigger>
+                  <SelectTrigger class="flat-field">
                     <SelectValue
                       :placeholder="
                         t('modelSettings.form.providerPlaceholder')
@@ -503,7 +506,7 @@ watch(
                   :disabled="isModelDisabled"
                   @update:model-value="handleModelChange"
                 >
-                  <SelectTrigger>
+                  <SelectTrigger class="flat-field">
                     <SelectValue :placeholder="modelPlaceholder" />
                   </SelectTrigger>
                   <SelectContent position="popper">
@@ -527,7 +530,7 @@ watch(
                   :disabled="isThinkingLevelDisabled"
                   @update:model-value="handleThinkingLevelChange"
                 >
-                  <SelectTrigger>
+                  <SelectTrigger class="flat-field">
                     <SelectValue
                       :placeholder="
                         isThinkingLevelDisabled
@@ -556,12 +559,14 @@ watch(
         <Button
           type="button"
           variant="outline"
+          class="flat-button"
           @click="handleClose"
         >
           {{ t("modelSettings.form.cancel") }}
         </Button>
         <Button
           type="button"
+          class="flat-button flat-button--primary"
           :disabled="isSaveDisabled"
           @click="handleSave"
         >

@@ -39,7 +39,7 @@ const handleClose = (): void => {
     :open="open"
     @update:open="handleClose"
   >
-    <DialogContent class="max-w-md">
+    <DialogContent class="doodle-modal-surface max-w-md">
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
@@ -53,15 +53,15 @@ const handleClose = (): void => {
         </DialogDescription>
       </DialogHeader>
 
-      <div class="space-y-2 py-2">
+      <div class="space-y-3 py-2">
         <button
           v-for="category in categories"
           :key="category.name"
-          class="flex w-full cursor-pointer items-center gap-4 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-accent"
+          class="doodle-action doodle-action--row flex w-full cursor-pointer items-center gap-4"
           @click="handleSelect(category.name)"
         >
           <span
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted"
+            class="doodle-icon-tile"
           >
             <component
               :is="category.icon"

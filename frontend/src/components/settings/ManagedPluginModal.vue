@@ -257,7 +257,7 @@ watch(
     :open="open"
     @update:open="handleClose"
   >
-    <DialogContent class="max-w-3xl">
+    <DialogContent class="doodle-modal-surface max-w-3xl">
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
@@ -272,7 +272,7 @@ watch(
       </DialogHeader>
 
       <div class="grid gap-4 lg:grid-cols-2">
-        <section class="rounded-lg border border-border bg-muted/30 p-4">
+        <section class="rounded-md border border-border bg-card p-4">
           <div class="mb-3">
             <h3 class="text-sm font-semibold">
               {{ t("pluginManager.github.title") }}
@@ -282,12 +282,12 @@ watch(
             <input
               v-model="githubRepoInput"
               :placeholder="t('pluginManager.github.placeholder')"
-              class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              class="flat-field min-w-0 flex-1 rounded-md border px-3 py-2 text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="isListMutationDisabled"
               @keydown.enter="handleGithubImport"
             >
             <button
-              class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              class="flat-button flat-button--primary inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm disabled:pointer-events-none disabled:opacity-50"
               :disabled="isListMutationDisabled || !githubRepoInput.trim()"
               @click="handleGithubImport"
             >
@@ -306,7 +306,7 @@ watch(
           </p>
         </section>
 
-        <section class="rounded-lg border border-border bg-muted/30 p-4">
+        <section class="rounded-md border border-border bg-card p-4">
           <div class="mb-3">
             <h3 class="text-sm font-semibold">
               {{ t("pluginManager.localUpload.title") }}
@@ -323,12 +323,8 @@ watch(
           <div class="flex gap-2">
             <button
               type="button"
-              class="flex min-h-10 flex-1 items-center gap-2 rounded-md border border-dashed px-3 py-2 text-left text-sm transition-colors"
-              :class="
-                isBundleDragOver
-                  ? 'border-primary bg-primary/5'
-                  : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
-              "
+              class="flat-field flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-dashed px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              :data-active="isBundleDragOver"
               :disabled="isListMutationDisabled"
               @click="openBundleFilePicker"
               @dragover="handleBundleDragOver"
@@ -347,7 +343,7 @@ watch(
               </span>
             </button>
             <button
-              class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              class="flat-button flat-button--primary inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm disabled:pointer-events-none disabled:opacity-50"
               :disabled="isListMutationDisabled || !selectedBundleFile"
               @click="handleBundleUpload"
             >
@@ -397,12 +393,12 @@ watch(
             <div
               v-for="plugin in draggablePlugins"
               :key="plugin.id"
-              class="flex items-center justify-between rounded-md border border-border p-3"
+              class="flex items-center justify-between rounded-md border border-border bg-card p-3"
             >
               <div class="flex min-w-0 items-center gap-3">
                 <button
                   type="button"
-                  class="managed-plugin-card__handle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                  class="flat-button managed-plugin-card__handle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md disabled:pointer-events-none disabled:opacity-50"
                   :title="t('pluginManager.list.dragHandle')"
                   :disabled="isListMutationDisabled"
                   @click.stop
@@ -431,7 +427,7 @@ watch(
               <div class="ml-4 flex shrink-0 gap-2">
                 <button
                   v-if="canRefreshPlugin(plugin)"
-                  class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  class="flat-button inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-50"
                   :disabled="isListMutationDisabled"
                   @click="handleUpdate(plugin)"
                 >
@@ -442,7 +438,7 @@ watch(
                   }}
                 </button>
                 <button
-                  class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive ring-offset-background transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  class="flat-button flat-button--danger inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-50"
                   :disabled="isListMutationDisabled"
                   @click="openDeleteConfirm(plugin)"
                 >
@@ -467,7 +463,7 @@ watch(
     :open="showConfirmDialog"
     @update:open="cancelDelete"
   >
-    <DialogContent class="max-w-sm">
+    <DialogContent class="doodle-modal-surface max-w-sm">
       <DialogHeader>
         <DialogTitle>{{ t("pluginManager.deleteDialog.title") }}</DialogTitle>
         <DialogDescription>
@@ -480,14 +476,14 @@ watch(
       </DialogHeader>
       <DialogFooter>
         <button
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          class="flat-button inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm disabled:pointer-events-none disabled:opacity-50"
           :disabled="reordering || store.loading"
           @click="cancelDelete"
         >
           {{ t("common.cancel") }}
         </button>
         <button
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground ring-offset-background transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          class="flat-button flat-button--danger inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm disabled:pointer-events-none disabled:opacity-50"
           :disabled="isListMutationDisabled"
           @click="confirmDelete"
         >

@@ -270,11 +270,13 @@ watch(
             <div class="flex gap-2">
               <Input
                 :model-value="info.apiBaseUrl"
+                class="flat-field"
                 readonly
               />
               <Button
                 data-testid="agent-access-copy-base-url"
                 variant="outline"
+                class="flat-button"
                 @click="copy(info.apiBaseUrl, 'baseUrl')"
               >
                 {{ copiedTarget === "baseUrl" ? t("common.success.copy") : t("common.copy") }}
@@ -283,10 +285,11 @@ watch(
             <div class="flex gap-2">
               <Input
                 v-model="advertisedUrl"
+                class="flat-field"
                 :placeholder="t('agentAccess.connection.advertisedPlaceholder')"
               />
               <Button
-                variant="outline"
+                class="flat-button flat-button--primary"
                 :disabled="saving"
                 @click="saveAdvertisedUrl"
               >
@@ -295,6 +298,7 @@ watch(
             </div>
             <Button
               variant="outline"
+              class="flat-button"
               @click="downloadAgentCanvasSkill"
             >
               {{ t("agentAccess.connection.downloadSkill") }}
@@ -312,13 +316,14 @@ watch(
               <Input
                 v-model="name"
                 data-testid="agent-access-token-name"
+                class="flat-field"
               />
             </div>
             <div class="space-y-2">
               <Label>{{ t("agentAccess.create.expiration") }}</Label>
               <select
                 v-model="expiration"
-                class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                class="flat-field h-10 w-full rounded-md border px-3 text-sm"
               >
                 <option value="7d">
                   {{ t("agentAccess.expirations.7d") }}
@@ -342,6 +347,7 @@ watch(
                 class="flex items-center gap-2 text-sm"
               >
                 <input
+                  class="flat-checkbox"
                   type="checkbox"
                   :checked="scopes.includes(scope)"
                   @change="scopes = toggleSelection(scopes, scope)"
@@ -370,6 +376,7 @@ watch(
                 :class="!isCanvasSelectable(canvas) && 'opacity-50'"
               >
                 <input
+                  class="flat-checkbox"
                   type="checkbox"
                   :disabled="!isCanvasSelectable(canvas)"
                   :checked="canvasIds.includes(canvas.id)"
@@ -389,6 +396,7 @@ watch(
             </div>
             <Button
               data-testid="agent-access-create-token"
+              class="flat-button flat-button--primary"
               :disabled="saving || !canCreateToken"
               @click="createToken"
             >
@@ -409,10 +417,12 @@ watch(
             <div class="flex gap-2">
               <Input
                 :model-value="revealedToken"
+                class="flat-field"
                 readonly
               />
               <Button
                 data-testid="agent-access-copy-token"
+                class="flat-button"
                 @click="copy(revealedToken, 'token')"
               >
                 {{ copiedTarget === "token" ? t("common.success.copy") : t("common.copy") }}
@@ -421,6 +431,7 @@ watch(
             <Button
               data-testid="agent-access-copy-connection"
               variant="outline"
+              class="flat-button"
               @click="copy(connectionConfig, 'connection')"
             >
               {{ copiedTarget === "connection" ? t("common.success.copy") : t("agentAccess.reveal.copyConnection") }}
@@ -463,6 +474,7 @@ watch(
                 :data-testid="`agent-access-revoke-${token.id}`"
                 variant="outline"
                 size="sm"
+                class="flat-button flat-button--danger"
                 @click="requestRevokeToken(token)"
               >
                 {{ t("agentAccess.tokens.revoke") }}

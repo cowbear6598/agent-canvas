@@ -1,4 +1,5 @@
 @import './base.css';
+@import './controls.css';
 @import './scrollbar.css';
 @import './pod.css';
 @import './slots.css';

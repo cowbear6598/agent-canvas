@@ -163,7 +163,7 @@ watch(
           <div class="space-y-2">
             <Label>{{ $t("settings.timezone") }}</Label>
             <Select v-model="timezoneOffset">
-              <SelectTrigger>
+              <SelectTrigger class="flat-field">
                 <SelectValue
                   :placeholder="$t('settings.timezonePlaceholder')"
                 />
@@ -185,7 +185,7 @@ watch(
           <div class="space-y-2">
             <Label>{{ $t("settings.language.title") }}</Label>
             <Select v-model="currentLocale">
-              <SelectTrigger>
+              <SelectTrigger class="flat-field">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper">
@@ -208,7 +208,10 @@ watch(
               <div>
                 <Label>{{ $t("settings.backup.title") }}</Label>
               </div>
-              <Switch v-model="backupEnabled" />
+              <Switch
+                v-model="backupEnabled"
+                class="flat-switch"
+              />
             </div>
 
             <div class="relative">
@@ -217,8 +220,11 @@ watch(
                 :placeholder="$t('settings.backup.gitRemoteUrlPlaceholder')"
                 :disabled="!backupEnabled || isBackingUp"
                 :class="[
-                  backupUrlError ? 'border-destructive' : '',
-                  isBackingUp ? 'pr-8' : '',
+                  'flat-field',
+                  {
+                    'border-destructive': backupUrlError,
+                    'pr-8': isBackingUp,
+                  },
                 ]"
                 @input="handleBackupRemoteInput"
               />
@@ -249,7 +255,7 @@ watch(
                   v-model="backupHour"
                   :disabled="!backupEnabled"
                 >
-                  <SelectTrigger class="w-20">
+                  <SelectTrigger class="flat-field w-20">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
@@ -267,7 +273,7 @@ watch(
                   v-model="backupMinute"
                   :disabled="!backupEnabled"
                 >
-                  <SelectTrigger class="w-20">
+                  <SelectTrigger class="flat-field w-20">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
@@ -284,6 +290,7 @@ watch(
               <Button
                 variant="outline"
                 size="sm"
+                class="flat-button"
                 :disabled="isBackupActionsDisabled || isBackingUp"
                 @click="handleTriggerBackup"
               >
@@ -330,6 +337,7 @@ watch(
             <Input
               v-if="securityStore.workspacePasswordEnabled"
               v-model="workspaceCurrentPassword"
+              class="flat-field"
               type="password"
               :placeholder="t('security.workspace.currentPassword')"
               :disabled="
@@ -339,6 +347,7 @@ watch(
             />
             <Input
               v-model="workspaceNewPassword"
+              class="flat-field"
               type="password"
               :placeholder="
                 securityStore.workspacePasswordEnabled
@@ -362,6 +371,7 @@ watch(
               <Button
                 v-if="!securityStore.workspacePasswordEnabled"
                 type="button"
+                class="flat-button flat-button--primary"
                 :disabled="!canSetWorkspacePassword"
                 @click="handleSetWorkspacePassword"
               >
@@ -371,6 +381,7 @@ watch(
                 v-if="securityStore.workspacePasswordEnabled"
                 type="button"
                 variant="outline"
+                class="flat-button flat-button--danger"
                 :disabled="!canRemoveWorkspacePassword"
                 @click="handleRemoveWorkspacePassword"
               >
@@ -379,6 +390,7 @@ watch(
               <Button
                 v-if="securityStore.workspacePasswordEnabled"
                 type="button"
+                class="flat-button flat-button--primary"
                 :disabled="!canChangeWorkspacePassword"
                 @click="handleChangeWorkspacePassword"
               >
@@ -391,6 +403,7 @@ watch(
 
       <DialogFooter>
         <Button
+          class="flat-button flat-button--primary"
           :disabled="isLoading || isSaving || loadFailed"
           @click="handleSave"
         >

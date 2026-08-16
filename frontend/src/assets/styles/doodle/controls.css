@@ -1,0 +1,197 @@
+.doodle-modal-surface {
+  border: 1px solid oklch(0.4 0.02 50 / 0.72);
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.doodle-action {
+  border: 1px solid oklch(0.4 0.02 50 / 0.68);
+  border-radius: 4px;
+  background: var(--card);
+}
+
+.doodle-action,
+.flat-button {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.doodle-action:hover {
+  border-color: oklch(0.4 0.02 50 / 0.85);
+  background: var(--secondary);
+}
+
+.doodle-action:active {
+  background: color-mix(in oklch, var(--primary) 14%, var(--card));
+  color: var(--foreground);
+}
+
+.doodle-action:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.doodle-action--card {
+  min-height: 4.25rem;
+  padding: 0.875rem 1rem;
+  text-align: left;
+}
+
+.doodle-action--row {
+  min-height: 3.75rem;
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+}
+
+.doodle-action--primary {
+  min-width: 8.5rem;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 700;
+}
+
+.doodle-action--primary:hover {
+  border-color: color-mix(in oklch, var(--primary) 88%, var(--doodle-ink));
+  background: color-mix(in oklch, var(--primary) 88%, var(--card));
+  color: var(--primary-foreground);
+}
+
+.doodle-action--primary:active {
+  background: color-mix(in oklch, var(--primary) 82%, var(--doodle-ink));
+  color: var(--primary-foreground);
+}
+
+.doodle-icon-tile {
+  display: flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid oklch(0.4 0.02 50 / 0.32);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--doodle-ink);
+}
+
+.doodle-divider {
+  height: 1px;
+  border: 0;
+  background: oklch(0.4 0.02 50 / 0.3);
+}
+
+.flat-field {
+  border-color: oklch(0.4 0.02 50 / 0.5);
+  background: color-mix(in oklch, var(--secondary) 55%, var(--card));
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    outline-color 150ms ease;
+}
+
+.flat-field:hover:not(:disabled):not([readonly]) {
+  border-color: oklch(0.4 0.02 50 / 0.72);
+}
+
+.flat-field:focus-visible {
+  border-color: var(--primary);
+  outline: 2px solid color-mix(in oklch, var(--primary) 24%, transparent);
+  outline-offset: 1px;
+}
+
+.flat-field[readonly] {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.flat-field.border-destructive {
+  border-color: var(--destructive);
+}
+
+.flat-field[data-active="true"] {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 8%, var(--card));
+}
+
+.flat-button {
+  border: 1px solid oklch(0.4 0.02 50 / 0.5);
+  background: var(--secondary);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.flat-button:hover:not(:disabled) {
+  border-color: color-mix(in oklch, var(--primary) 55%, var(--doodle-ink));
+  background: color-mix(in oklch, var(--primary) 10%, var(--secondary));
+  color: var(--foreground);
+}
+
+.flat-button:active:not(:disabled) {
+  background: color-mix(in oklch, var(--primary) 16%, var(--secondary));
+}
+
+.flat-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.flat-button--primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.flat-button--primary:hover:not(:disabled) {
+  border-color: color-mix(in oklch, var(--primary) 82%, var(--doodle-ink));
+  background: color-mix(in oklch, var(--primary) 88%, var(--card));
+  color: var(--primary-foreground);
+}
+
+.flat-button--danger {
+  border-color: color-mix(in oklch, var(--destructive) 55%, var(--border));
+  background: color-mix(in oklch, var(--destructive) 9%, var(--card));
+  color: var(--destructive);
+}
+
+.flat-button--danger:hover:not(:disabled) {
+  border-color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 15%, var(--card));
+  color: var(--destructive);
+}
+
+.flat-checkbox {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.flat-checkbox:disabled {
+  cursor: not-allowed;
+}
+
+.flat-switch {
+  border: 1px solid oklch(0.4 0.02 50 / 0.4);
+  background: var(--secondary);
+}
+
+.flat-switch[data-state="checked"] {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.flat-switch > span {
+  border: 1px solid oklch(0.4 0.02 50 / 0.18);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doodle-action,
+  .flat-button,
+  .flat-field {
+    transition: none;
+  }
+}

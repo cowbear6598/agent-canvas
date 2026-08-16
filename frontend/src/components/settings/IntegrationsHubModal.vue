@@ -155,7 +155,7 @@ const handleSelect = (action: HubAction): void => {
     :open="open"
     @update:open="handleClose"
   >
-    <DialogContent class="max-w-lg">
+    <DialogContent class="doodle-modal-surface max-w-lg">
       <DialogHeader>
         <DialogTitle>{{ t("integrationsHub.title") }}</DialogTitle>
         <DialogDescription class="sr-only">
@@ -171,23 +171,22 @@ const handleSelect = (action: HubAction): void => {
         >
           <div
             v-if="index > 0"
-            class="border-t border-border"
+            class="doodle-divider"
           />
 
           <div class="pt-1">
             <div
-              class="grid gap-3 sm:grid-cols-2"
-              :class="section.cards.length === 1 ? 'grid-cols-1' : 'grid-cols-2'"
+              class="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2"
             >
               <button
                 v-for="card in section.cards"
                 :key="card.id"
                 :data-testid="`integrations-hub-card-${card.id}`"
-                class="flex items-center gap-3 rounded-lg border border-doodle-ink/20 bg-card px-4 py-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="doodle-action doodle-action--card flex w-full items-center gap-3"
                 @click="handleSelect(card.action)"
               >
                 <span
-                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted"
+                  class="doodle-icon-tile"
                 >
                   <component
                     :is="card.icon"
