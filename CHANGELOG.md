@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.6] - 2026-08-20
+
+### 修正
+- 修正系統暫存目錄與 AgentCanvas 資料目錄位於不同檔案系統時，匯入 bundle 及更新 GitHub plugin 失敗的問題
+- 修正 source repository 與 run repository 位於不同檔案系統時，local clone 無法建立 hard link 的問題
+
 ## [2.3.5] - 2026-08-20
 
 ### 修正
