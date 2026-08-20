@@ -249,7 +249,7 @@ class GitService {
 
     try {
       const git = simpleGit();
-      await git.clone(sourceRepoPath, runDir, ["--local"]);
+      await git.clone(sourceRepoPath, runDir, ["--local", "--no-hardlinks"]);
 
       // 取得主 repo 的真實 origin URL，設定給 runDir 的 origin
       const sourceGit = simpleGit(sourceRepoPath);

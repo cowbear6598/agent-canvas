@@ -117,6 +117,15 @@ function createBundleError(code: string, message: string): string {
   return `${code}:${message}`;
 }
 
+async function createInstallSiblingTempDirectory(
+  installPath: string,
+  prefix: string,
+): Promise<string> {
+  const installRoot = path.dirname(installPath);
+  await fs.promises.mkdir(installRoot, { recursive: true });
+  return fs.promises.mkdtemp(path.join(installRoot, prefix));
+}
+
 function validateZipEntryPath(
   destinationPath: string,
   normalizedName: string,
@@ -767,8 +776,12 @@ export async function importBundleArchive(
     return err(parsedEntriesResult.error);
   }
 
-  const extractRoot = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), "agent-canvas-bundle-extract-"),
+  const sourceRef = createUploadSourceRef(archiveBytes);
+  const source = createUploadSource(sourceRef);
+  const installPath = resolveUploadInstallPath(sourceRef);
+  const extractRoot = await createInstallSiblingTempDirectory(
+    installPath,
+    ".agent-canvas-bundle-extract-",
   );
 
   try {
@@ -790,15 +803,11 @@ export async function importBundleArchive(
       return err(metadataResult.error);
     }
 
-    const sourceRef = createUploadSourceRef(archiveBytes);
-    const source = createUploadSource(sourceRef);
     if (managedPluginStore.getBySource(source)) {
       return err("PLUGIN_ALREADY_INSTALLED");
     }
 
-    const installPath = resolveUploadInstallPath(sourceRef);
     await removeDirectoryIfExists(installPath);
-    await fs.promises.mkdir(path.dirname(installPath), { recursive: true });
     await fs.promises.rename(extractRoot, installPath);
 
     const record = await createRecord(
@@ -842,8 +851,8 @@ async function backupPluginInstall(
   installPath: string,
 ): Promise<Result<PluginInstallBackup>> {
   const backupPath = path.join(
-    os.tmpdir(),
-    `agent-canvas-bundle-backup-${randomUUID()}`,
+    path.dirname(installPath),
+    `.agent-canvas-bundle-backup-${randomUUID()}`,
   );
   const installPathExisted = await pathExists(installPath);
   if (!installPathExisted) {
@@ -933,8 +942,9 @@ export async function updatePlugin(
   }
 
   const { owner, repo } = parsed;
-  const stagingPath = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), "agent-canvas-bundle-update-"),
+  const stagingPath = await createInstallSiblingTempDirectory(
+    record.installPath,
+    ".agent-canvas-bundle-update-",
   );
   try {
     const httpsUrl = `${GITHUB_HTTPS_PREFIX}${owner}/${repo}.git`;

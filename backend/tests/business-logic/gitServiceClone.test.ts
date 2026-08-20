@@ -107,6 +107,10 @@ describe("GitService — createLocalClone（成功流程）", () => {
 // ─── 安全檢查：runDir 不在 runRepositoriesRoot 內 ─────────────────────────
 
 describe("GitService — createLocalClone（安全檢查）", () => {
+  afterEach(() => {
+    simpleGitOverride.impl = null;
+  });
+
   it("runDir 位於 config.runRepositoriesRoot 之外時應回傳 err", async () => {
     const outsideRunDir = path.join(os.tmpdir(), `outside-run-${Date.now()}`);
 
@@ -117,6 +121,26 @@ describe("GitService — createLocalClone（安全檢查）", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("runDir 路徑不在允許的範圍內");
+  });
+
+  it("禁用 hard link，避免 source 與 run repo 跨檔案系統時 clone 失敗", async () => {
+    const mockClone = vi.fn().mockResolvedValue(undefined);
+    simpleGitOverride.impl = () =>
+      ({
+        clone: mockClone,
+        getRemotes: vi.fn().mockResolvedValue([]),
+      }) as unknown as ReturnType<typeof import("simple-git").simpleGit>;
+
+    const sourceRepoPath = path.join(config.repositoriesRoot, "source-repo");
+    const runDir = path.join(config.runRepositoriesRoot, "run-repo");
+
+    const result = await gitService.createLocalClone(sourceRepoPath, runDir);
+
+    expect(result.success).toBe(true);
+    expect(mockClone).toHaveBeenCalledWith(sourceRepoPath, runDir, [
+      "--local",
+      "--no-hardlinks",
+    ]);
   });
 });
 

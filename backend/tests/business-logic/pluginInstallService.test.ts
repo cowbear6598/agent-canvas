@@ -145,6 +145,7 @@ vi.mock("fs", async (importOriginal) => {
 // ─── Imports（必須在所有 mock 之後）─────────────────────────────────────────
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createHash } from "crypto";
+import path from "path";
 import { zipSync } from "fflate";
 import { ok, err } from "../../src/types/result.js";
 import {
@@ -183,6 +184,18 @@ function makeRecord(
 
 function makeEnoentError(): NodeJS.ErrnoException {
   return Object.assign(new Error("missing"), { code: "ENOENT" });
+}
+
+function expectSiblingBackupRestore(installPath: string): void {
+  const [backupPath, restoredInstallPath] = mockRename.mock.calls[0] as [
+    string,
+    string,
+  ];
+  expect(path.dirname(backupPath)).toBe(path.dirname(installPath));
+  expect(path.basename(backupPath)).toMatch(
+    /^\.agent-canvas-bundle-backup-[0-9a-f-]+$/,
+  );
+  expect(restoredInstallPath).toBe(installPath);
 }
 
 // ─── 輔助：模擬 plugin.json 讀取成功 ─────────────────────────────────────────
@@ -416,7 +429,7 @@ describe("importBundleArchive", () => {
     }));
     mockReadFile.mockRejectedValue(makeEnoentError());
     mockAccess.mockRejectedValue(makeEnoentError());
-    mockMkdtemp.mockResolvedValue("/tmp/agent-canvas-test-bundle");
+    mockMkdtemp.mockImplementation(async (prefix: string) => `${prefix}test`);
     mockMkdir.mockResolvedValue(undefined);
     mockWriteFile.mockResolvedValue(undefined);
     mockRename.mockResolvedValue(undefined);
@@ -452,6 +465,17 @@ describe("importBundleArchive", () => {
     });
     expect(insertArg.displayName).toBe("Plan Bundle");
     expect(insertArg.installPath).toContain(`upload__${expectedSourceRef}`);
+    expect(mockMkdtemp).toHaveBeenCalledWith(
+      path.join(
+        path.dirname(insertArg.installPath),
+        ".agent-canvas-bundle-extract-",
+      ),
+    );
+    const [extractRoot, installPath] = mockRename.mock.calls[0] as [
+      string,
+      string,
+    ];
+    expect(path.dirname(extractRoot)).toBe(path.dirname(installPath));
   });
 
   it("超過 archive 大小上限時直接回 BUNDLE_FILE_TOO_LARGE", async () => {
@@ -558,7 +582,7 @@ describe("updatePlugin", () => {
     // 預設：readFile fallback（ENOENT）
     mockReadFile.mockRejectedValue(new Error("ENOENT"));
     mockAccess.mockRejectedValue(makeEnoentError());
-    mockMkdtemp.mockResolvedValue("/tmp/agent-canvas-test-update");
+    mockMkdtemp.mockImplementation(async (prefix: string) => `${prefix}test`);
     mockMkdir.mockResolvedValue(undefined);
     mockWriteFile.mockResolvedValue(undefined);
     mockRename.mockResolvedValue(undefined);
@@ -576,7 +600,18 @@ describe("updatePlugin", () => {
     expect(mockClone).toHaveBeenCalledTimes(1);
     const [, clonePath] = mockClone.mock.calls[0] as [string, string];
     expect(clonePath).not.toBe(originalRecord.installPath);
-    expect(clonePath).toBe("/tmp/agent-canvas-test-update");
+    expect(clonePath).toBe(
+      path.join(
+        path.dirname(originalRecord.installPath),
+        ".agent-canvas-bundle-update-test",
+      ),
+    );
+    expect(mockMkdtemp).toHaveBeenCalledWith(
+      path.join(
+        path.dirname(originalRecord.installPath),
+        ".agent-canvas-bundle-update-",
+      ),
+    );
 
     // 驗證 activate 階段透過 fsOperation 執行
     expect(fsOperation).toHaveBeenCalledTimes(1);
@@ -646,10 +681,7 @@ describe("updatePlugin", () => {
 
     expect(result.success).toBe(false);
     expect(managedPluginStore.update).not.toHaveBeenCalled();
-    expect(mockRename).toHaveBeenCalledWith(
-      expect.stringContaining("agent-canvas-bundle-backup-"),
-      originalRecord.installPath,
-    );
+    expectSiblingBackupRestore(originalRecord.installPath);
   });
 
   it("舊安裝目錄存在且 backup 失敗時不覆蓋既有 plugin", async () => {
@@ -687,10 +719,7 @@ describe("updatePlugin", () => {
       recursive: true,
       force: true,
     });
-    expect(mockRename).toHaveBeenCalledWith(
-      expect.stringContaining("agent-canvas-bundle-backup-"),
-      originalRecord.installPath,
-    );
+    expectSiblingBackupRestore(originalRecord.installPath);
   });
 });
 
