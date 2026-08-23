@@ -18,25 +18,25 @@
   - [如何切換模型？](#如何切換模型)
   - [Slot 說明](#slot-說明)
   - [Connection Line](#connection-line)
-  - [一般模式與 Multi-Instance 模式](#一般模式與-multi-instance-模式)
+  - [Run 與平行執行](#run-與平行執行)
   - [Plugin](#plugin)
   - [Workflow 實戰案例](#workflow-實戰案例)
   - [Schedule 排程](#schedule-排程)
-  - [Header 按鈕](#header-按鈕)
+  - [Header 與管理中心](#header-與管理中心)
 
 ## 注意事項
 
 - 目前在 **macOS / Linux** 上使用過，其他作業系統可能會有未知問題
-- 建議在 **Local 環境** 使用，不建議部署到雲端（本工具目前沒有使用者認證機制）
-- 只支援訂閱制的方式，不支援 API Key
+- 建議優先在 **Local 環境** 使用。系統雖提供 Workspace Password，但目前沒有完整的多使用者帳號與角色權限；若要對外開放，請另外設定 HTTPS、防火牆或反向代理等保護
+- Provider 的驗證方式各自不同，可使用支援的訂閱登入或 API Key 設定
 
 ## 安裝
 
-**前提條件：** 已安裝並登入至少一個支援的 AI Provider
+**前提條件：** 至少完成一個支援的 AI Provider 驗證
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [Codex CLI](https://developers.openai.com/codex/cli)
-- [Gemini CLI](https://geminicli.com/docs/get-started/installation/)
+- [OpenCode](https://opencode.ai/docs/cli/)
 
 **一鍵安裝（推薦）**
 
@@ -103,139 +103,126 @@ Pod 的 MCP 選單另有預設關閉的內建 Agent Canvas MCP。啟用後，後
 ### 什麼是 POD？
 
 - 一個 Pod = 一個 AI Agent
-- 右鍵畫布 → Pod → 選擇一個 AI Provider 即可建立
+- 右鍵畫布 → Pod → 選擇 AI Provider 即可建立
+- 右鍵 Pod 可切換 Provider、連接 Integration，或調整其他 Pod 設定
 
 ### 如何切換模型？
 
-- 移動到 Pod 上方的模型標籤，就可以選擇支援的模型
-- 大腦可以選擇 effort（有些模型不支援）
+- 移動到 Pod 上方的模型標籤，即可選擇該 Provider 支援的模型
+- Brain 選單可調整 Thinking / effort 等級；實際選項依模型能力而定
 
 ### Slot 說明
 
-- Plugins / MCPs 採用 Toggle 的方式決定要開哪幾個做使用
-- Command 會自動在你訊息前加入 `<command> content </command>` 指令
-- Repo 會更改你的工作目錄，沒有放入則是 Pod 自己的目錄
+- **Plugin**：選擇這個 Pod 要啟用的 Plugin / Skill bundle
+- **MCP**：切換要提供給 Pod 使用的 MCP Server
+- **Thinking**：調整模型的思考強度
+- **Fast**：切換 Provider 支援的快速模式
+- **Goal**：加入這個 Pod 執行時要遵循的目標內容
+- **Repo**：綁定 Repository。執行 Run 時使用隔離的工作空間；未綁定時使用 Pod 自己的工作目錄
 
 ### Connection Line
 
-- Auto：不管怎樣都會往下一個 Pod 執行
-- AI：會交由 AI 判斷有沒有需要往下一個 Pod 執行
-- Direct：不理會其他 Connection Line 直接執行
+右鍵 Connection Line 可設定基本模式，也可獨立開關 Direct：
+
+- **Auto**：來源 Pod 完成後，自動把摘要傳給目標 Pod
+- **Branch**：同一來源的多條 Branch 連線會由 AI 根據連線名稱與說明選出一條；判斷失敗時不觸發任何 Branch
+- **Direct**：可與 Auto 或 Branch 同時存在。來源完成時直接觸發目標，不參與一般的多輸入等待
 
 #### 多條觸發規則
 
 當 Pod 被多條 Connection Line 接入：
 
-- Auto + Auto = 當兩條都準備好時，則會觸發 Pod
-- Auto + AI = 當 AI 拒絕時，則不會觸發，同意時，則會觸發 Pod
-- Direct + Direct = 每條 Direct 完成後會各自觸發 Pod
-- Auto + Auto + Direct + Direct = Auto 連線維持原本群組規則；每條 Direct 連線完成後各自觸發，目標忙碌時進入 queue 等待觸發
+- Auto + Auto：等待同一群組的來源都完成後，再合併摘要並觸發一次
+- Auto + Branch：Branch 被選中時才算準備完成；被拒絕時，該群組不會觸發目標 Pod
+- Direct + Direct：每條 Direct 完成後各自觸發，**目前不會等待 10 秒合併**
+- Auto + Auto + Direct + Direct：Auto 群組依聚合規則觸發；每條 Direct 則獨立觸發，因此目標 Pod 可能執行多次
+- 同一個 Run 內若目標 Pod 正忙碌，後續觸發會進入 queue，等目前執行完成後依序處理
 
 #### 模型設定
 
-右鍵 Connection Line 可以切換以下模型：
+前往 **管理中心 → Model 設定 → Connection Line** 選擇模型。此設定同時用於產生下游摘要，以及進行 Branch 判斷。
 
-- **Summary Model**：用於產生摘要傳遞給下游 Pod 的模型
-- **AI Model**：用於 AI 判斷是否觸發下游 Pod 的模型（僅在 AI 模式下可用）
+### Run 與平行執行
 
-### 一般模式與 Multi-Instance 模式
-
-Pod 預設為一般模式，可透過**長按橡皮擦按鈕**切換為 Multi-Instance 模式，啟用後按鈕會顯示 **M** 圖示。
-
-#### 一般模式
-
-- 一次只能處理一則訊息，忙碌時新訊息需排隊等待
-- Integration 事件在 Pod 忙碌時會被跳過
-
-#### Multi-Instance 模式
-
-- 每次送出訊息都會建立新的 Run，可同時平行執行多個
-- Integration 事件不受忙碌狀態影響，永遠會執行
-- 對話紀錄需從 Run 歷程中查看
-- 綁定 Git Repo 時，每個 Run 會建立獨立的 Worktree，執行完畢後自動清理
+- 每次手動送出訊息、Schedule 或 Integration 事件都會建立一個 Run；同一個 Pod 的不同 Run 可平行執行
+- 手動、排程與 Integration 建立的 Run，以及其中的下游 Workflow 執行，都可從 Run 歷程查看
+- 綁定 Git Repo 時，不同 Run 使用隔離的工作空間；同一 Run 內使用相同 Repo 的 Pod 會共用該 Run 的工作空間，Run 結束後自動清理
+- 同一 Run 內重複觸發同一個忙碌中的 Pod 時，會透過 queue 依序執行
 
 ### Plugin
 
-Plugin 是透過 Claude CLI 安裝的擴充功能，可以為 Pod 增加額外的能力。
+Plugin Manager 用來管理可提供給 Pod 的 Plugin / Skill bundle，不需要先透過 Claude CLI 安裝。
 
-- Plugin 需先透過 `claude` CLI 安裝到系統中（`~/.claude/plugins/`）
-- **右鍵 Pod** → Plugin → 透過開關切換啟用 / 停用
-- 啟用後，Pod 對話時會載入該 Plugin
-- 與 Skills、MCP、SubAgents 是不同的系統，可同時搭配使用
+- 從 **管理中心 → Plugin** 匯入 GitHub Repository 或上傳本機 bundle，再於 Plugin Manager 更新、刪除或調整順序
+- 在 Pod 的 **Plugin Slot** 切換要啟用的項目
+- 啟用後，Plugin 內的能力會在該 Pod 執行時提供給 Agent
+- Plugin 與 MCP 是分開設定的能力，可以同時使用
 
 ### Workflow 實戰案例
 
 #### 案例一：程式碼審查（Auto 串接）
 
-```
+```text
 [Code Reviewer] --Auto--> [Report Generator]
 ```
 
-- Pod A 設定 Output Style 執行 Code Review
-- Pod B 接收摘要後整理成完整報告
-- **Auto = 前一個 Pod 完成後自動觸發下一個**，下游收到的是摘要內容
+- 在 Code Reviewer 的 Goal 設定審查準則
+- Report Generator 會收到上游摘要並整理成完整報告
 
-#### 案例二：智慧分流（AI 條件分支）
+#### 案例二：智慧分流（Branch）
 
+```text
+                 /--Branch: Bug----> [Bug Handler]
+[Issue Analyzer]
+                 \--Branch: Feature-> [Feature Advisor]
 ```
-                     /-Auto-> [Bug Handler]
-[Issue Analyzer] --AI
-                     \-Auto-> [Feature Advisor]
-```
 
-- AI 根據 Issue 內容決定要觸發哪個 Pod
-- **AI 可能同時觸發多個，也可能都不觸發**
+- 為每條 Branch 填寫清楚的名稱與說明
+- 決策成功時只會選一條 Branch；判斷失敗時不觸發任何分支
 
 #### 案例三：平行蒐集 + 合併（多輸入聚合）
 
-```
-[Security Analyst]    --Auto-\
+```text
+[Security Analyst]    --Auto--\
                                --> [Final Report]
-[Performance Analyst] --Auto-/
+[Performance Analyst] --Auto--/
 ```
 
-- 兩個 Analyst Pod 平行執行，結果都送進 Final Report
-- **多條 Auto 接入同一 Pod 時，會等所有來源都完成才觸發**
+- 兩個 Analyst Pod 可平行執行
+- Final Report 會等待同一 Auto 群組的所有來源完成，再接收合併後的摘要
+
+#### 案例四：獨立通知（Direct）
+
+```text
+[Build] --Direct--> [Notifier]
+[Test]  --Direct--> [Notifier]
+```
+
+- Build 與 Test 完成時會各自觸發 Notifier
+- 兩條 Direct 不會等待固定時間合併；Notifier 忙碌時，後到的觸發會排隊
 
 ### Schedule 排程
 
-讓 Pod 按照設定的時間自動執行。
+- **設定**：點擊 Pod 上的時鐘按鈕 → 選擇頻率 → 啟用
+- **頻率**：每 x 秒、每 x 分鐘、每 x 小時、每天或每週
+- **修改 / 停用**：點擊時鐘 → 調整設定後更新，或直接停用
 
-**設定排程**
+- 每次排程觸發都會建立新的 Run，完成後依 Connection Line 規則繼續下游 Workflow
+- 排程不會因為同一 Pod 已有其他 Run 正在執行而跳過
+- 「每天」與「每週」依照 **管理中心 → Global Settings → Timezone** 計算
 
-- **點擊 Pod 上的時鐘按鈕** → 選擇頻率 → **啟用**
+### Header 與管理中心
 
-**支援頻率**
+Header 提供以下主要入口：
 
-- 每x秒
-- 每x分
-- 每x小時
-- 每天
-- 每週
-
-**修改 / 停用**
-
-- 修改：點擊時鐘 → 調整設定 → **更新**
-- 停用：點擊時鐘 → **停用**
-
-**行為說明**
-
-- 排程觸發時，Pod 狀態變為 chatting，完成後會依照 Connection Line 觸發下游 Workflow
-- 排程依賴時區設定（**Settings → Timezone**），請確認時區正確
-- Pod 正在執行時跳過本次排程，不會堆疊觸發
-
-### Header 按鈕
-
-由左至右四個圖示：
-
-- **地球圖示**：切換介面語言
-- **齒輪圖示**：全域設定（時區、備份）
-- **鑰匙圖示**：整合服務管理（Slack、Telegram、Jira、Sentry、Webhook）
-- **時鐘圖示**：查看 Run 歷程
+- **連線狀態**：顯示前端與後端的連線狀態
+- **管理中心**：集中管理 Global Settings、Integration、AI 存取、MCP、Plugin、Model 設定與 OpenCode
+- **Run 歷程**：查看各次 Run 與 Pod 對話
+- **Canvas 選擇器**：切換或管理 Canvas
 
 #### 切換語系
 
-點擊 **地球圖示**，可切換介面語言：
+前往 **管理中心 → Global Settings → Language**，可切換：
 
 - 繁體中文
 - English
@@ -243,30 +230,27 @@ Plugin 是透過 Claude CLI 安裝的擴充功能，可以為 Pod 增加額外�
 
 #### 全域設定
 
-點擊 **齒輪圖示** 開啟全域設定。
+前往 **管理中心 → Global Settings**：
 
-**時區**
+- **Timezone**：影響每日 / 每週 Schedule 與每日備份的觸發時間
+- **Backup**：設定 Git Remote URL 與每日備份時間、立即備份，並將 Canvas 資料推送到遠端 Git Repository
+- **Workspace Password**：保護目前工作區的存取；對外部署時仍應搭配 HTTPS 與網路層防護
 
-在 **Timezone** 中設定，會影響以下功能：
-
-- **Schedule 排程**：「每天」和「每週」的觸發時間依據此時區計算
-- **備份排程**：每日自動備份的觸發時間依據此時區計算
-
-**備份**
-
-- **Backup** → 開啟 → 輸入 Git Remote URL → 選擇每日備份時間 → **儲存**
-- 備份機制：透過 Git 推送到遠端 Repository
-
-> ⚠️ `encryption.key` 不會被備份，還原後需重新設定加密金鑰相關資料。
+> ⚠️ `encryption.key` 不會被備份，還原後需重新設定與加密金鑰相關的資料。
 
 #### Integration 串接
 
-點擊 **鑰匙圖示** 開啟整合服務管理，讓外部平台事件自動觸發 Pod 執行。
+前往 **管理中心 → Integration**，讓外部平台事件自動建立 Run 並觸發 Pod。
 
 **通用設定流程**
 
-1. 選擇 Provider → **Add App** → 填寫 Token / Secret → 確認
-2. **右鍵 Pod** → Connect Integration → 選擇已註冊的 App → 確認
+1. 選擇 Provider → Add App → 填寫 Token / Secret → 確認
+2. 右鍵 Pod → Connect Integration → 選擇已註冊的 App 與 Resource → 確認
+
+**Discord**
+
+- 所需資訊：Bot Token
+- 選擇 Server 與 Channel 綁定；在該頻道提及 Bot 時觸發
 
 **Slack**
 
@@ -276,7 +260,7 @@ Plugin 是透過 Claude CLI 安裝的擴充功能，可以為 Pod 增加額外�
 **Telegram**
 
 - 所需資訊：Bot Token（從 BotFather 取得）
-- 只支援私訊，Resource 需手動輸入 User ID
+- 支援私訊，Resource 需填入 User ID
 
 **Jira**
 
@@ -292,18 +276,16 @@ Plugin 是透過 Claude CLI 安裝的擴充功能，可以為 Pod 增加額外�
 
 **Webhook**
 
-提供 Webhook URL 給外部程式呼叫，自動觸發 Pod 執行。
-
-- 只需填名稱，系統自動產生 Bearer Token
-- 外部程式透過 POST 請求觸發 Pod：
+- 輸入名稱後，系統會產生 Bearer Token
+- 外部程式透過 POST 請求觸發綁定的 Pod：
 
 ```bash
-curl -X POST https://your-host/webhook/events/{appName} \
+curl -X POST https://your-host/webhook/{appName} \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
   -d '{"message": "trigger"}'
 ```
 
-#### 歷程
+#### Run 歷程
 
-點擊 **時鐘圖示** 開啟 Run 歷程面板，僅記錄 Multi-Instance 模式的執行紀錄。
+從 Header 開啟 Run 歷程，可查看上述 Run、下游 Workflow 與各 Pod 的對話內容。

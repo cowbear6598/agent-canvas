@@ -4,7 +4,7 @@
 
 AI Agent ワークフローを視覚的にデザインして実行するためのキャンバスツールです。チームでの共同作業もサポートします。
 
-<video src="https://github.com/user-attachments/assets/67cceb64-1b02-41a0-8f31-7d41b05a9add" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/58a82eb0-e629-46cc-a944-5ba891692b52" controls width="100%"></video>
 
 ## 目次
 
@@ -18,25 +18,25 @@ AI Agent ワークフローを視覚的にデザインして実行するため�
   - [モデルの切り替え方法](#モデルの切り替え方法)
   - [Slot の説明](#slot-の説明)
   - [Connection Line](#connection-line)
-  - [通常モードと Multi-Instance モード](#通常モードと-multi-instance-モード)
+  - [Run と並列実行](#run-と並列実行)
   - [Plugin](#plugin)
   - [Workflow 実践例](#workflow-実践例)
   - [Schedule スケジュール](#schedule-スケジュール)
-  - [Header ボタン](#header-ボタン)
+  - [Header と管理センター](#header-と管理センター)
 
 ## 注意事項
 
 - **macOS / Linux** でテスト済みです。他のオペレーティングシステムでは未知の問題が発生する可能性があります
-- **ローカル環境**での使用を推奨します。クラウドへのデプロイは推奨しません（このツールには現在ユーザー認証機能がありません）
-- サブスクリプション方式のみ対応しており、API Key には対応していません
+- **ローカル環境**での利用を推奨します。Workspace Password は利用できますが、完全なマルチユーザーアカウント・ロール管理機能はありません。外部公開する場合は、HTTPS、ファイアウォール、保護されたリバースプロキシなども設定してください
+- 認証方式は Provider によって異なり、対応するサブスクリプションログインまたは API Key 設定を利用できます
 
 ## インストール
 
-**前提条件：** 対応する AI Provider のうち少なくとも1つがインストールされてログイン済みであること
+**前提条件：** 対応する AI Provider のうち、少なくとも1つで認証を完了していること
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [Codex CLI](https://developers.openai.com/codex/cli)
-- [Gemini CLI](https://geminicli.com/docs/get-started/installation/)
+- [OpenCode](https://opencode.ai/docs/cli/)
 
 **ワンクリックインストール（推奨）**
 
@@ -102,136 +102,127 @@ Pod の MCP メニューには、既定で無効な内蔵 Agent Canvas MCP も�
 
 ### POD とは何ですか？
 
-- 1つの Pod = 1つの AI Agent
-- キャンバスを右クリック → Pod → AI Provider を選択して作成できます
+- 1つの Pod は1つの AI Agent を表します
+- キャンバスを右クリック → Pod → AI Provider を選択して作成します
+- Pod を右クリックすると、Provider の切り替え、Integration の接続、その他の Pod 設定を変更できます
 
 ### モデルの切り替え方法
 
-- Pod 上部のモデルラベルにカーソルを合わせると、対応モデルを選択できます
-- Brain で effort を選択できます（一部のモデルは非対応）
+- Pod 上部のモデルラベルにカーソルを合わせ、Provider が対応するモデルを選択します
+- Brain メニューで Thinking / effort レベルを調整できます。選択肢はモデルの機能によって異なります
 
 ### Slot の説明
 
-- Plugins / MCPs は Toggle で有効にするものを選択します
-- Command はメッセージの先頭に `<command> content </command>` を自動的に追加します
-- Repo は作業ディレクトリを変更します。入れない場合は Pod 自身のディレクトリが使われます
+- **Plugin**：この Pod で有効にする Plugin / Skill bundle を選択します
+- **MCP**：Pod で利用可能にする MCP Server を切り替えます
+- **Thinking**：モデルの思考強度を調整します
+- **Fast**：Provider が対応する高速モードを切り替えます
+- **Goal**：Pod の実行時に従う目標を追加します
+- **Repo**：Repository をバインドします。Run では隔離されたワークスペースを使用し、未設定の場合は Pod 自身の作業ディレクトリを使用します
 
 ### Connection Line
 
-- Auto：どんな場合でも次の Pod を実行します
-- AI：AI が次の Pod を実行するかどうかを判断します
-- Direct：他の Connection Line を無視して直接実行します
+Connection Line を右クリックすると基本モードを選択でき、Direct も個別に切り替えられます：
+
+- **Auto**：ソース Pod の完了後、その要約を自動的にターゲット Pod へ渡します
+- **Branch**：同じソースから伸びる Branch の名前と説明を使い、AI が1本を選択します。判定に失敗した場合、どの Branch もトリガーされません
+- **Direct**：Auto または Branch と併用できます。ソースの完了時にターゲットを直接トリガーし、通常の複数入力待機には参加しません
 
 #### 複数接続時のトリガールール
 
 Pod に複数の Connection Line が接続されている場合：
 
-- Auto + Auto = 両方の準備ができた時に Pod がトリガーされます
-- Auto + AI = AI が拒否した場合はトリガーされず、承認した場合は Pod がトリガーされます
-- Direct + Direct = 一方が完了すると、10秒間他の Direct が完了するか待ちます。完了した場合は一緒にまとめて Pod をトリガーし、待ち時間内に完了しない場合はそれぞれ個別にまとめます
-- Auto + Auto + Direct + Direct = 2つのグループ（Auto グループと Direct グループ）に分けてまとめを行い、先に完了したグループが先にトリガーされ、もう一方のグループはキューに入って待機します
+- Auto + Auto：同じグループの全ソースを待ち、要約を結合して1回トリガーします
+- Auto + Branch：選択された Branch は準備完了として扱われます。拒否された場合、そのグループはターゲット Pod をトリガーしません
+- Direct + Direct：各 Direct は完了時に個別でトリガーされ、**現在は10秒間待って結合する動作はありません**
+- Auto + Auto + Direct + Direct：Auto グループは集約ルールに従い、各 Direct は個別にトリガーするため、ターゲット Pod が複数回実行される場合があります
+- 同じ Run 内でターゲット Pod がビジーの場合、後続のトリガーは queue に入り、順番に実行されます
 
 #### モデル設定
 
-Connection Line を右クリックして、以下のモデルを切り替えることができます：
+**管理センター → Model 設定 → Connection Line** でモデルを選択します。同じ設定が下流向け要約の生成と Branch 判定の両方に使用されます。
 
-- **Summary Model**：下流の Pod に渡す要約を生成するモデル
-- **AI Model**：下流の Pod をトリガーするかどうかを判断するモデル（AI モードでのみ利用可能）
+### Run と並列実行
 
-### 通常モードと Multi-Instance モード
-
-Pod はデフォルトで通常モードです。**消しゴムボタンを長押し**すると Multi-Instance モードに切り替わり、ボタンに **M** アイコンが表示されます。
-
-#### 通常モード
-
-- 一度に1つのメッセージのみ処理し、ビジー時は新しいメッセージがキューに入ります
-- Pod がビジー時、Integration イベントはスキップされます
-
-#### Multi-Instance モード
-
-- メッセージを送信するたびに新しい Run が作成され、並列実行が可能です
-- ビジー状態に関係なく Integration イベントは常に実行されます
-- チャット履歴は Run 履歴から確認してください
-- Git Repo がバインドされている場合、各 Run は独立した Worktree を作成し、実行完了後に自動的にクリーンアップされます
+- 手動メッセージ、Schedule、Integration イベントのたびに Run が作成され、同じ Pod の異なる Run は並列実行できます
+- 手動、Schedule、Integration で作成された Run と、その中の下流 Workflow 実行はすべて Run 履歴で確認できます
+- Git Repository をバインドすると、Run ごとに隔離されたワークスペースを使用します。同じ Run 内で同じ Repository を使う Pod はそのワークスペースを共有し、Run の終了後に自動的にクリーンアップされます
+- 同じ Run 内でビジー状態の Pod が繰り返しトリガーされた場合、queue の順番で実行されます
 
 ### Plugin
 
-Plugin は Claude CLI でインストールする拡張機能で、Pod に追加の機能を提供します。
+Plugin Manager では、Pod で利用できる Plugin / Skill bundle を管理します。Claude CLI で事前にインストールする必要はありません。
 
-- Plugin は事前に `claude` CLI でシステムにインストールする必要があります（`~/.claude/plugins/`）
-- Pod を**右クリック** → Plugin → トグルスイッチで有効化 / 無効化
-- 有効化すると、Pod の会話処理時に Plugin が読み込まれます
-- Skills、MCP、SubAgents とは異なるシステムで、すべて同時に使用できます
+- **管理センター → Plugin** から GitHub Repository をインポートするかローカル bundle をアップロードし、Plugin Manager で更新、削除、並び替えができます
+- Pod の **Plugin Slot** で利用する項目を切り替えます
+- 有効な Plugin の機能は、その Pod の実行中に Agent へ提供されます
+- Plugin と MCP は個別に設定され、同時に利用できます
 
 ### Workflow 実践例
 
-**例1：コードレビュー（Auto チェーン）**
+#### 例1：コードレビュー（Auto チェーン）
 
-```
+```text
 [Code Reviewer] --Auto--> [Report Generator]
 ```
 
-- Pod A に Output Style でレビュー設定を行い、Pod B がレポートを生成します
-- ポイント：Auto = 前の Pod が完了すると自動的に次をトリガーし、下流は前の Pod の出力を受信します
+- Code Reviewer の Goal にレビュー基準を設定します
+- Report Generator は上流の要約を受け取り、完全なレポートにまとめます
 
-**例2：スマートルーティング（AI 条件分岐）**
+#### 例2：スマートルーティング（Branch）
 
-```
-[Issue Analyzer] --AI--> [Bug Handler]
-[Issue Analyzer] --AI--> [Feature Advisor]
-```
-
-- AI がコンテンツに基づいてどの Pod をトリガーするか決定します
-- ポイント：AI は複数、1つ、またはゼロの Pod をトリガーする可能性があります
-
-**例3：並列収集 + マージ（マルチ入力集約）**
-
-```
-[Security Analyst]    --Auto--> [Final Report]
-[Performance Analyst] --Auto--> [Final Report]
+```text
+                 /--Branch: Bug----> [Bug Handler]
+[Issue Analyzer]
+                 \--Branch: Feature-> [Feature Advisor]
 ```
 
-- 両方の Pod が完了した時のみ Final Report がトリガーされます
-- ポイント：マルチ入力 Auto はすべてのソースの完了を待機します
+- 各 Branch に明確な名前と説明を設定します
+- 判定に成功すると1本の Branch だけが選択され、失敗するとどの Branch もトリガーされません
+
+#### 例3：並列収集と結合
+
+```text
+[Security Analyst]    --Auto--\
+                               --> [Final Report]
+[Performance Analyst] --Auto--/
+```
+
+- 2つの Analyst Pod は並列実行できます
+- Final Report は同じ Auto グループの全ソースを待ち、結合された要約を受け取ります
+
+#### 例4：独立した通知（Direct）
+
+```text
+[Build] --Direct--> [Notifier]
+[Test]  --Direct--> [Notifier]
+```
+
+- Build と Test は完了時にそれぞれ Notifier をトリガーします
+- Direct は固定時間の結合待ちを行いません。Notifier がビジーの場合、後のトリガーは queue に入ります
 
 ### Schedule スケジュール
 
-- Pod を設定した時間に自動実行する機能です
-- 設定：Pod のタイマーボタンをクリック → 頻度を選択 → 有効化
+- **設定**：Pod のタイマーボタンをクリック → 頻度を選択 → 有効化
+- **頻度**：x 秒ごと、x 分ごと、x 時間ごと、毎日、毎週
+- **編集 / 無効化**：タイマーボタンをクリック → 設定を更新または無効化
 
-<!-- screenshot: schedule-setup.png -->
+- トリガーごとに新しい Run が作成され、完了後は Connection Line のルールに従って下流 Workflow が続行されます
+- 同じ Pod の別の Run が実行中でも、Schedule はスキップされません
+- 「毎日」と「毎週」の時刻は **管理センター → Global Settings → Timezone** に基づきます
 
-**頻度タイプ（5種類）**
+### Header と管理センター
 
-- x 秒ごと
-- x 分ごと
-- x 時間ごと
-- 毎日
-- 毎週
+Header には以下の主要な入口があります：
 
-**編集・無効化**
-
-- 編集：タイマーボタンをクリック → 内容を変更 → 更新
-- 無効化：タイマーボタンをクリック → 無効化
-
-**動作**
-
-- トリガー時：Pod のステータスが chatting に変更されます
-- 完了後：下流の Workflow が自動的にトリガーされます
-- 注意：スケジュールはタイムゾーン設定（Settings）に依存します。Pod がビジー状態の場合はスキップされます
-
-### Header ボタン
-
-左から右へ4つのアイコン：
-
-- **地球アイコン**：UI の言語を切り替え
-- **歯車アイコン**：グローバル設定（タイムゾーン、バックアップ）
-- **鍵アイコン**：インテグレーション管理（Slack、Telegram、Jira、Sentry、Webhook）
-- **時計アイコン**：Run 実行履歴を表示
+- **接続状態**：フロントエンドとバックエンドの接続状態を表示します
+- **管理センター**：Global Settings、Integration、AI アクセス、MCP、Plugin、Model 設定、OpenCode を管理します
+- **Run 履歴**：Run と Pod の会話を確認します
+- **Canvas セレクター**：Canvas を切り替え、管理します
 
 #### 言語切り替え
 
-**地球アイコン**をクリックして、UI の言語を切り替えることができます：
+**管理センター → Global Settings → Language** で次の言語を選択できます：
 
 - 繁體中文（繁体字中国語）
 - English（英語）
@@ -239,68 +230,62 @@ Plugin は Claude CLI でインストールする拡張機能で、Pod に追加
 
 #### グローバル設定
 
-**歯車アイコン**をクリックしてグローバル設定を開きます。
+**管理センター → Global Settings** を開きます：
 
-**タイムゾーン**
+- **Timezone**：毎日 / 毎週の Schedule と毎日のバックアップ時刻に影響します
+- **Backup**：Git Remote URL と毎日のバックアップ時刻を設定し、即時バックアップを実行して Canvas データをリモート Git Repository にプッシュします
+- **Workspace Password**：現在のワークスペースへのアクセスを保護します。外部公開時は HTTPS とネットワーク層の保護も使用してください
 
-**Timezone** で設定します。以下の機能に影響します：
-
-- **Schedule スケジュール**：「毎日」と「毎週」のトリガー時刻はこのタイムゾーンに基づいて計算されます
-- **バックアップスケジュール**：毎日の自動バックアップのトリガー時刻はこのタイムゾーンに基づいて計算されます
-
-**バックアップ**
-
-- **Backup** → 有効化 → Git Remote URL を入力 → 毎日のバックアップ時間を選択 → 保存
-- Canvas データをリモート Git リポジトリにプッシュします
-
-> ⚠️ `encryption.key` はバックアップに含まれません。別途保管してください。
+> ⚠️ `encryption.key` はバックアップに含まれません。復元後は暗号化キーに関連する設定を再度行う必要があります。
 
 #### Integration 連携
 
-**鍵アイコン**をクリックしてインテグレーション管理を開きます。外部プラットフォームのイベントが自動的に Pod の実行をトリガーします。
+**管理センター → Integration** を開くと、外部プラットフォームのイベントから Run を作成して Pod をトリガーできます。
 
 **共通セットアップフロー**
 
-1. Provider 選択 → **Add App** → Token / Secret を入力 → 確認
-2. Pod を**右クリック** → Connect Integration → 登録済み App を選択 → 確認
+1. Provider を選択 → Add App → Token / Secret を入力 → 確認
+2. Pod を右クリック → Connect Integration → 登録済み App と Resource を選択 → 確認
+
+**Discord**
+
+- Bot Token が必要です
+- Server と Channel をバインドし、そのチャンネルで Bot にメンションするとトリガーされます
 
 **Slack**
 
-- 必要な情報：Bot Token（`xoxb-` プレフィックス）+ Signing Secret（32文字）
+- Bot Token（`xoxb-` プレフィックス）と32文字の Signing Secret が必要です
 - Webhook URL：`/slack/events`
 
 **Telegram**
 
-- 必要な情報：Bot Token（BotFather から取得）
-- プライベートメッセージのみ対応
-- Resource は手動で User ID を入力してください
+- BotFather から取得した Bot Token が必要です
+- プライベートメッセージに対応し、Resource に User ID を入力します
 
 **Jira**
 
-- 必要な情報：Site URL + Webhook Secret（最低16文字）
+- Site URL と16文字以上の Webhook Secret が必要です
 - Webhook URL：`/jira/events/{appName}`
-- イベントフィルター：All / Status Changed から選択できます
+- イベントフィルター：All / Status Changed
 
 **Sentry**
 
-- 必要な情報：Client Secret（最低32文字）
+- 32文字以上の Client Secret が必要です
 - Webhook URL：`/sentry/events/{appName}`
-- created と unresolved イベントに対応しています
+- created と unresolved イベントに対応します
 
 **Webhook**
 
-外部プログラムに Webhook URL を提供し、Pod の実行を自動的にトリガーする仕組みです。
-
-- 名前のみ入力すると、システムが Bearer Token を自動生成します
-- 外部プログラムが POST リクエストで Pod をトリガーします：
+- 名前を入力すると、システムが Bearer Token を生成します
+- 外部プログラムは POST リクエストでバインドされた Pod をトリガーできます：
 
 ```bash
-curl -X POST https://your-host/webhook/events/{appName} \
+curl -X POST https://your-host/webhook/{appName} \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
   -d '{"message": "trigger"}'
 ```
 
-#### 実行履歴
+#### Run 履歴
 
-**時計アイコン**をクリックして Run 実行履歴パネルを開きます。Multi-Instance モードの実行記録のみが記録されます。
+Header から Run 履歴を開くと、上記の Run、下流 Workflow、各 Pod の会話を確認できます。
