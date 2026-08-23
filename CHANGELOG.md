@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.3.7] - 2026-08-23
+
+### 新增
+- Pod Pack v2 支援攜帶 Repository 快照、Git metadata、Repository note 與 Plugin 來源資訊，並保留 v1 匯入相容性
+- Pod Pack 匯出與匯入改用磁碟暫存、串流 ZIP64、進度顯示與取消操作，支援大型封裝並降低記憶體占用
+
+### 修正
+- 修正 Goal Editor 只有少量項目時提前出現 scrollbar，以及 textarea 捲動後透出文字筆畫的問題
+
 ## [2.3.6] - 2026-08-20
 
 ### 修正
