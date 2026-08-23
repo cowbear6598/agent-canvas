@@ -19,7 +19,7 @@ const delegatedProps = reactiveOmit(props, "class")
     :class="
       cn('flex touch-none select-none transition-colors',
          orientation === 'vertical'
-           && 'h-full w-3 border-l border-l-transparent p-px doodle-scrollbar-track',
+           && 'z-10 h-full w-3 overflow-hidden border-l p-px doodle-scrollbar-track',
          orientation === 'horizontal'
            && 'h-2.5 flex-col border-t border-t-transparent p-px',
          props.class)"

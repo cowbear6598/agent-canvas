@@ -4,6 +4,8 @@ import { handleDownloadPodDirectory } from "./podDownloadApi.js";
 import { handleRedeemReconnectGrant } from "./reconnectGrantApi.js";
 import { handleUpload } from "./uploadApi.js";
 import {
+  handleCancelPodPackTransfer,
+  handleDownloadPodPack,
   handleExportPodPack,
   handleImportPodPack,
   handlePreviewPodPack,
@@ -298,8 +300,8 @@ export const REST_ROUTE_DEFINITIONS: readonly RestRouteDefinition[] = [
     handlerName: "handlePreviewPodPack",
     handler: handlePreviewPodPack,
     scope: "workspace",
-    requestSchema: "multipart/form-data(podpack=File)",
-    responseSchema: "{ preview }",
+    requestSchema: "application/vnd.agent-canvas.podpack+zip",
+    responseSchema: "{ transferId, filename, size, preview }",
   },
   {
     method: "POST",
@@ -307,9 +309,30 @@ export const REST_ROUTE_DEFINITIONS: readonly RestRouteDefinition[] = [
     handlerName: "handleImportPodPack",
     handler: handleImportPodPack,
     scope: "canvas",
-    requestSchema: "multipart/form-data(podpack=File); query(canvasId,targetX,targetY)",
+    requestSchema: "{ transferId, canvasId, targetX, targetY }",
     responseSchema: "PodPackImportResult",
-    resolveCanvasId: (req) => new URL(req.url).searchParams.get("canvasId"),
+    resolveCanvasId: async (req): Promise<string | null> => {
+      const body = await req.clone().json().catch(() => null) as { canvasId?: string } | null;
+      return body?.canvasId ?? null;
+    },
+  },
+  {
+    method: "GET",
+    path: "/api/pod-packs/transfers/:transferId/download",
+    handlerName: "handleDownloadPodPack",
+    handler: handleDownloadPodPack,
+    scope: "workspace",
+    requestSchema: null,
+    responseSchema: "application/vnd.agent-canvas.podpack+zip",
+  },
+  {
+    method: "DELETE",
+    path: "/api/pod-packs/transfers/:transferId",
+    handlerName: "handleCancelPodPackTransfer",
+    handler: handleCancelPodPackTransfer,
+    scope: "workspace",
+    requestSchema: null,
+    responseSchema: "{ success }",
   },
   {
     method: "GET",

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  collectAttachedRepositoryNotes,
   collectSelectedNotes,
   collectSelectedPods,
   collectRelatedConnections,
@@ -113,6 +114,39 @@ describe("collectCopyData", () => {
       }),
       expect.objectContaining({
         repositoryId: "repo-free",
+        boundToOriginalPodId: null,
+      }),
+    ]);
+  });
+
+  it("collects an unbound canvas note for a Repository attached to a selected Pod", () => {
+    const result = collectAttachedRepositoryNotes(
+      [{ id: "pod-1", repositoryId: "repo-1" }],
+      [
+        {
+          id: "note-1",
+          repositoryId: "repo-1",
+          name: "Repository note",
+          x: 20,
+          y: 30,
+          boundToPodId: null,
+          originalPosition: null,
+        },
+        {
+          id: "note-2",
+          repositoryId: "repo-2",
+          name: "Unrelated",
+          x: 0,
+          y: 0,
+          boundToPodId: null,
+          originalPosition: null,
+        },
+      ],
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        repositoryId: "repo-1",
         boundToOriginalPodId: null,
       }),
     ]);

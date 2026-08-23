@@ -1273,6 +1273,7 @@
       "action": "Import .podpack",
       "title": "Import Pod pack",
       "summary": "This pack will create {pods} Pods and {connections} connections.",
+      "repositories": "Repositories",
       "plugins": "Plugin Skills",
       "managedMcps": "Managed MCP servers",
       "skills": "Skills",
@@ -1285,6 +1286,19 @@
       "failed": "The Pod pack was not imported",
       "previewFailed": "Could not inspect this Pod pack"
     },
+    "progress": {
+      "preparing": "Creating a disk-backed snapshot...",
+      "uploading": "Uploading and validating the Pod pack...",
+      "importing": "Restoring the staged Pod pack...",
+      "downloading": "The download is ready"
+    },
+    "repositorySource": { "git": "Git repository", "directory": "Local directory" },
+    "omitted": {
+      "chats": "Pod chat history",
+      "runtimeWorkspaces": "Pod runtime workspaces",
+      "secrets": "API keys and MCP environment variable values",
+      "repositoryMemory": "Repository memory"
+    },
     "action": { "reuse": "Reuse existing", "install": "Install", "rename": "Install with new name" },
     "errors": {
       "tooLarge": "This Pod pack exceeds the allowed size.",
@@ -1292,6 +1306,7 @@
       "invalidArchive": "The Pod pack ZIP is damaged or contains an unsafe path.",
       "missingDependency": "The Pod pack is missing a required dependency.",
       "atomicFailed": "Import failed and all newly created items were rolled back.",
+      "diskFull": "There is not enough free disk space for this Pod pack.",
       "failed": "The Pod pack operation failed."
     }
   },

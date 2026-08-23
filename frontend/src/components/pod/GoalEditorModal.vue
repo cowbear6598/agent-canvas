@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { GripVertical, Plus, Target, Trash2 } from "lucide-vue-next";
 import { VueDraggable } from "vue-draggable-plus";
 import type { Pod, PodGoal } from "@/types";
@@ -50,6 +51,18 @@ const subModalOpen = ref(false);
 const subModalMode = ref<"add" | "edit">("add");
 const subModalInitialText = ref("");
 const editingTodoId = ref<string | null>(null);
+
+const GOAL_CARD_HEIGHT_REM = 3.5;
+const GOAL_CARD_GAP_REM = 0.5;
+
+const goalListHeight = computed(() => {
+  const itemCount = Math.max(todos.value.length, 1);
+  const contentHeight =
+    itemCount * GOAL_CARD_HEIGHT_REM +
+    (itemCount - 1) * GOAL_CARD_GAP_REM;
+
+  return `min(60vh, ${contentHeight}rem)`;
+});
 
 const handleClose = (): void => {
   reset();
@@ -116,42 +129,47 @@ defineExpose({ todos, appendTodo, updateTodo, removeTodo });
       </DialogHeader>
 
       <div class="space-y-3">
-        <VueDraggable
-          v-model="todos"
-          handle=".goal-card__handle"
-          :animation="180"
-          ghost-class="sortable-ghost"
-          chosen-class="sortable-chosen"
-          class="goal-editor-list"
+        <ScrollArea
+          class="goal-editor-scroll-area"
+          :style="{ height: goalListHeight }"
         >
-          <div
-            v-for="todo in todos"
-            :key="todo.id"
-            class="goal-card"
-            data-testid="goal-card-preview"
-            @click="handleOpenEdit(todo)"
+          <VueDraggable
+            v-model="todos"
+            handle=".goal-card__handle"
+            :animation="180"
+            ghost-class="sortable-ghost"
+            chosen-class="sortable-chosen"
+            class="goal-editor-list"
           >
-            <button
-              type="button"
-              class="goal-card__handle"
-              :title="t('pod.goal.editor.dragHandle')"
-              @click.stop
+            <div
+              v-for="todo in todos"
+              :key="todo.id"
+              class="goal-card"
+              data-testid="goal-card-preview"
+              @click="handleOpenEdit(todo)"
             >
-              <GripVertical :size="16" />
-            </button>
-            <span class="goal-card__preview">
-              {{ previewLine(todo.text) }}
-            </span>
-            <button
-              type="button"
-              class="goal-card__delete"
-              :title="t('pod.goal.editor.removeTodo')"
-              @click.stop="removeTodo(todo.id)"
-            >
-              <Trash2 :size="14" />
-            </button>
-          </div>
-        </VueDraggable>
+              <button
+                type="button"
+                class="goal-card__handle"
+                :title="t('pod.goal.editor.dragHandle')"
+                @click.stop
+              >
+                <GripVertical :size="16" />
+              </button>
+              <span class="goal-card__preview">
+                {{ previewLine(todo.text) }}
+              </span>
+              <button
+                type="button"
+                class="goal-card__delete"
+                :title="t('pod.goal.editor.removeTodo')"
+                @click.stop="removeTodo(todo.id)"
+              >
+                <Trash2 :size="14" />
+              </button>
+            </div>
+          </VueDraggable>
+        </ScrollArea>
 
         <p
           v-if="validationMessage"
@@ -224,9 +242,7 @@ defineExpose({ todos, appendTodo, updateTodo, removeTodo });
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding-right: 0.25rem;
+  padding-right: 0.75rem;
 }
 
 .goal-card {

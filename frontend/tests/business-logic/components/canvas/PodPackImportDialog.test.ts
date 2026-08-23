@@ -10,6 +10,7 @@ function createPreview(): PodPackPreview {
     version: 1,
     podCount: 1,
     connectionCount: 0,
+    repositories: [],
     plugins: [
       {
         originalKey: "plugin-1",
@@ -28,6 +29,7 @@ function createPreview(): PodPackPreview {
       },
     ],
     managedMcps: [],
+    omitted: [],
   };
 }
 

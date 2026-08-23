@@ -88,7 +88,7 @@ class TmpCleanupService {
           const entryPath = path.join(tmpRoot, entry);
 
           // staging 父目錄：進入子目錄掃 uploadSessionId 層，父目錄本身永遠不刪
-          if (entry === "staging") {
+          if (entry === "staging" || entry === "pod-packs") {
             const cleaned = await this.cleanStagingDir(entryPath, now);
             cleanedCount += cleaned;
             return;

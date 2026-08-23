@@ -1273,6 +1273,7 @@
       "action": ".podpack をインポート",
       "title": "Pod パックをインポート",
       "summary": "このパックから {pods} 個の Pod と {connections} 本の接続を作成します。",
+      "repositories": "リポジトリ",
       "plugins": "Plugin Skill",
       "managedMcps": "Managed MCP サーバー",
       "skills": "Skill",
@@ -1285,6 +1286,19 @@
       "failed": "Pod パックをインポートできませんでした",
       "previewFailed": "この Pod パックを確認できませんでした"
     },
+    "progress": {
+      "preparing": "ディスク上にスナップショットを作成しています...",
+      "uploading": "Pod パックをアップロードして検証しています...",
+      "importing": "一時保存した Pod パックを復元しています...",
+      "downloading": "ダウンロードの準備ができました"
+    },
+    "repositorySource": { "git": "Git リポジトリ", "directory": "ローカルディレクトリ" },
+    "omitted": {
+      "chats": "Pod のチャット履歴",
+      "runtimeWorkspaces": "Pod の実行中ワークスペース",
+      "secrets": "API キーと MCP 環境変数の値",
+      "repositoryMemory": "Repository memory"
+    },
     "action": { "reuse": "既存を再利用", "install": "インストール", "rename": "新しい名前でインストール" },
     "errors": {
       "tooLarge": "Pod パックが許可されたサイズを超えています。",
@@ -1292,6 +1306,7 @@
       "invalidArchive": "Pod パックの ZIP が壊れているか、安全でないパスを含んでいます。",
       "missingDependency": "Pod パックに必要な依存項目がありません。",
       "atomicFailed": "インポートに失敗し、新しく作成した項目をすべてロールバックしました。",
+      "diskFull": "この Pod パックを保存するための空き容量が不足しています。",
       "failed": "Pod パックの処理に失敗しました。"
     }
   },

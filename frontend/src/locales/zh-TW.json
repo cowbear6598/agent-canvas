@@ -1273,6 +1273,7 @@
       "action": "匯入 .podpack",
       "title": "匯入 Pod 封裝",
       "summary": "此封裝將建立 {pods} 個 Pod 與 {connections} 條連線。",
+      "repositories": "Repository",
       "plugins": "Plugin Skill",
       "managedMcps": "Managed MCP 伺服器",
       "skills": "Skill",
@@ -1285,6 +1286,19 @@
       "failed": "Pod 封裝未匯入",
       "previewFailed": "無法檢查此 Pod 封裝"
     },
+    "progress": {
+      "preparing": "正在建立磁碟快照...",
+      "uploading": "正在上傳並驗證 Pod 封裝...",
+      "importing": "正在還原已暫存的 Pod 封裝...",
+      "downloading": "下載已準備完成"
+    },
+    "repositorySource": { "git": "Git Repository", "directory": "本機目錄" },
+    "omitted": {
+      "chats": "Pod 對話紀錄",
+      "runtimeWorkspaces": "Pod 執行中工作目錄",
+      "secrets": "API 金鑰與 MCP 環境變數值",
+      "repositoryMemory": "Repository memory"
+    },
     "action": { "reuse": "重用既有項目", "install": "安裝", "rename": "以新名稱安裝" },
     "errors": {
       "tooLarge": "Pod 封裝超過允許大小。",
@@ -1292,6 +1306,7 @@
       "invalidArchive": "Pod 封裝 ZIP 已損毀或包含不安全路徑。",
       "missingDependency": "Pod 封裝缺少必要相依項目。",
       "atomicFailed": "匯入失敗，本次新增的項目已全部回滾。",
+      "diskFull": "磁碟可用空間不足，無法處理此 Pod 封裝。",
       "failed": "Pod 封裝操作失敗。"
     }
   },

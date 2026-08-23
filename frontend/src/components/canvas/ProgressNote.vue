@@ -7,6 +7,8 @@ export interface ProgressTask {
   progress: number
   message: string
   status: 'processing' | 'completed' | 'failed'
+  cancelLabel?: string
+  onCancel?: () => void
 }
 
 interface Props {
@@ -52,6 +54,14 @@ const getProgressBarColor = (task: ProgressTask): string => {
       <p class="progress-note-message">
         {{ task.message }}
       </p>
+      <button
+        v-if="task.onCancel"
+        type="button"
+        class="progress-note-cancel"
+        @click="task.onCancel"
+      >
+        {{ task.cancelLabel }}
+      </button>
     </div>
   </div>
 </template>
@@ -75,6 +85,14 @@ const getProgressBarColor = (task: ProgressTask): string => {
   padding: 12px;
   min-width: 240px;
   box-shadow: 3px 3px 0 var(--doodle-ink);
+  pointer-events: auto;
+}
+
+.progress-note-cancel {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--destructive);
+  text-decoration: underline;
 }
 
 .progress-note-title {

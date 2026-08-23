@@ -54,6 +54,7 @@ const {
   isExporting,
   isImporting,
   pendingImport,
+  transferTask,
   exportSelection,
   chooseImportFile,
   confirmImport,
@@ -114,8 +115,13 @@ const connectionContextMenuDirectEnabled = computed(
     connectionContextMenu.value.data.direct,
 );
 
-const { allProgressTasks, handleCloneStarted, handlePullStarted } =
+const { allProgressTasks: canvasProgressTasks, handleCloneStarted, handlePullStarted } =
   useCanvasProgressTasks();
+const allProgressTasks = computed(() => {
+  const tasks = new Map(canvasProgressTasks.value);
+  if (transferTask.value) tasks.set(transferTask.value.requestId, transferTask.value);
+  return tasks;
+});
 
 const {
   repositoryContextMenu,
@@ -317,7 +323,7 @@ const visibleRepositoryNotes = computed(() =>
 
   <CanvasContextActionToolbar
     :visible="canExport"
-    :busy="isExporting"
+    :busy="isExporting || !!transferTask"
     @export="exportSelection"
   />
 

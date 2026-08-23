@@ -215,6 +215,23 @@ describe("tmpCleanupService.runOnce — staging 子目錄清理（案例 B）", 
   });
 });
 
+describe("tmpCleanupService.runOnce — Pod pack transfer 清理", () => {
+  it("只刪除過期 transfer，並保留 pod-packs 父目錄", async () => {
+    const parent = path.join(sandboxDir, "pod-packs");
+    const expired = path.join(parent, "expired-transfer");
+    const fresh = path.join(parent, "fresh-transfer");
+    await fs.mkdir(expired, { recursive: true });
+    await fs.mkdir(fresh);
+    await setMtime(expired, Date.now() - TTL_MS - 60 * 60 * 1000);
+
+    await tmpCleanupService.runOnce();
+
+    await expect(fs.stat(expired)).rejects.toThrow();
+    await expect(fs.stat(fresh)).resolves.toBeDefined();
+    await expect(fs.stat(parent)).resolves.toBeDefined();
+  });
+});
+
 // ================================================================
 // 測試案例 17 — tmp/ 不存在靜默
 // ================================================================

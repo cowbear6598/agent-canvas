@@ -1,7 +1,10 @@
 /* Doodle scrollbar styles */
 .doodle-scrollbar-track {
-  background: transparent;
+  /* Track 必須不透明，否則重疊在 viewport 上時會透出清單項目的邊緣。 */
+  background: var(--background);
+  border-color: color-mix(in oklch, var(--doodle-ink) 18%, transparent);
   border-radius: 2px 4px 3px 5px;
+  isolation: isolate;
 }
 
 .doodle-scrollbar-thumb {
@@ -9,12 +12,13 @@
   border: 2px solid oklch(0.4 0.02 50);
   border-radius: 4px 6px 5px 7px;
   box-shadow: 1px 1px 0 oklch(0.4 0.02 50);
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .doodle-scrollbar-thumb:hover {
   background: oklch(0.85 0.12 90);
-  transform: scale(1.05);
   box-shadow: 2px 2px 0 oklch(0.4 0.02 50);
 }
 
@@ -24,7 +28,7 @@
 }
 
 .doodle-textarea::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--card);
   border-radius: 2px 4px 3px 5px;
 }
 
@@ -37,4 +41,8 @@
 
 .doodle-textarea::-webkit-scrollbar-thumb:hover {
   background: oklch(0.85 0.12 90);
+}
+
+.doodle-textarea::-webkit-scrollbar-corner {
+  background: var(--card);
 }

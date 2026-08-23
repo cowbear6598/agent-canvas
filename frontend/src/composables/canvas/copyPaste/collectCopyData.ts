@@ -265,6 +265,25 @@ export function collectSelectedNotes(
   };
 }
 
+/**
+ * Pod pack 只由 Pod 選取觸發，但 Repository note 可能沒有綁在 Pod 上。
+ * 因此依選取 Pod 的 repositoryId 收集 note，而不是依 note 本身的選取狀態。
+ */
+export function collectAttachedRepositoryNotes(
+  selectedPods: Array<Pick<Pod, "id" | "repositoryId">>,
+  notes: Array<NoteWithIndexSignature & { repositoryId?: unknown }>,
+): CopiedRepositoryNote[] {
+  const repositoryIds = new Set(
+    selectedPods.flatMap((pod) => pod.repositoryId ? [pod.repositoryId] : []),
+  );
+  return notes
+    .filter((note) =>
+      typeof note.repositoryId === "string" &&
+      repositoryIds.has(note.repositoryId),
+    )
+    .map(mapToRepositoryNote);
+}
+
 export function collectRelatedConnections(
   selectedPodIds: Set<string>,
   connections: {

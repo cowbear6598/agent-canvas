@@ -1,14 +1,25 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 import { useCanvasContext } from "./useCanvasContext";
-import { collectRelatedConnections, collectSelectedPods } from "./copyPaste/collectCopyData";
-import { exportPodPack, importPodPack, previewPodPack } from "@/services/podPackApi";
+import {
+  collectAttachedRepositoryNotes,
+  collectRelatedConnections,
+  collectSelectedPods,
+} from "./copyPaste/collectCopyData";
+import {
+  cancelPodPackTransfer,
+  downloadPodPack,
+  exportPodPack,
+  importPodPack,
+  previewPodPack,
+} from "@/services/podPackApi";
 import { requireActiveCanvas } from "@/utils/canvasGuard";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
 import type { PasteConnectionItem, PastePodItem, PodPackPreview } from "@/types";
+import type { ProgressTask } from "@/components/canvas/ProgressNote.vue";
 
 interface PendingPodPackImport {
-  file: File;
+  transferId: string;
   target: { x: number; y: number };
   preview: PodPackPreview;
 }
@@ -18,19 +29,12 @@ export interface UsePodPackResult {
   isExporting: Ref<boolean>;
   isImporting: Ref<boolean>;
   pendingImport: Ref<PendingPodPackImport | null>;
+  transferTask: Ref<ProgressTask | null>;
   exportSelection: () => Promise<void>;
   chooseImportFile: (screenPosition: { x: number; y: number }) => Promise<void>;
   confirmImport: () => Promise<void>;
   cancelImport: () => void;
-}
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  cancelActiveTransfer: () => void;
 }
 
 function choosePodPack(): Promise<File | null> {
@@ -44,22 +48,76 @@ function choosePodPack(): Promise<File | null> {
   });
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function errorMessage(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined;
+}
+
+function cancelTransferSilently(transferId: string | null | undefined): void {
+  if (transferId) {
+    void cancelPodPackTransfer(transferId).catch(() => undefined);
+  }
+}
+
 export function usePodPack(): UsePodPackResult {
-  const { podStore, viewportStore, selectionStore, connectionStore } = useCanvasContext();
+  const { podStore, viewportStore, selectionStore, repositoryStore, connectionStore } = useCanvasContext();
   const isExporting = ref(false);
   const isImporting = ref(false);
   const pendingImport = ref<PendingPodPackImport | null>(null);
+  const transferTask = ref<ProgressTask | null>(null);
   const canExport = computed(() => selectionStore.selectedPodIds.length > 0);
   const { showErrorToast, showSuccessToast } = useToast();
+  let activeController: AbortController | null = null;
+  let activeTransferId: string | null = null;
+
+  const setTask = (id: string, title: string, message: string, progress: number): void => {
+    transferTask.value = {
+      requestId: id,
+      title,
+      message,
+      progress,
+      status: "processing",
+      cancelLabel: t("common.cancel"),
+      onCancel: cancelActiveTransfer,
+    };
+  };
+
+  const finishTask = (): void => {
+    transferTask.value = null;
+    activeController = null;
+    activeTransferId = null;
+  };
+
+  const showTransferError = (error: unknown, title: string): void => {
+    if (!isAbortError(error)) {
+      showErrorToast("Canvas", title, errorMessage(error));
+    }
+  };
+
+  const cancelActiveTransfer = (): void => {
+    activeController?.abort();
+    cancelTransferSilently(activeTransferId);
+    pendingImport.value = null;
+    isExporting.value = false;
+    isImporting.value = false;
+    finishTask();
+  };
 
   const exportSelection = async (): Promise<void> => {
-    if (!canExport.value || isExporting.value) return;
+    if (!canExport.value || isExporting.value || activeController) return;
     isExporting.value = true;
+    activeController = new AbortController();
+    activeTransferId = crypto.randomUUID();
+    setTask(activeTransferId, t("podPack.export.title"), t("podPack.progress.preparing"), 15);
     try {
       const selectedPodIds = new Set(selectionStore.selectedPodIds);
       const copiedPods = collectSelectedPods(selectionStore.selectedElements, podStore.pods);
       const connections = collectRelatedConnections(selectedPodIds, connectionStore.connections);
-      const pods: PastePodItem[] = copiedPods.map(({ id, ...pod }) => ({ ...pod, originalId: id, repositoryId: null }));
+      const pods: PastePodItem[] = copiedPods.map(({ id, ...pod }) => ({ ...pod, originalId: id }));
+      const repositoryNotes = collectAttachedRepositoryNotes(copiedPods, repositoryStore.notes);
       const pasteConnections: PasteConnectionItem[] = connections.map((connection) => ({
         originalSourcePodId: connection.sourcePodId,
         sourceAnchor: connection.sourceAnchor,
@@ -76,22 +134,42 @@ export function usePodPack(): UsePodPackResult {
         branchModel: connection.branchModel,
         branchThinkingLevel: connection.branchThinkingLevel,
       }));
-      const result = await exportPodPack({ pods, connections: pasteConnections });
-      downloadBlob(result.blob, result.filename);
+      const transfer = await exportPodPack(
+        { pods, connections: pasteConnections, repositoryNotes },
+        { transferId: activeTransferId, signal: activeController.signal },
+      );
+      setTask(transfer.id, t("podPack.export.title"), t("podPack.progress.downloading"), 100);
+      downloadPodPack(transfer);
       showSuccessToast("Canvas", t("podPack.export.success", { count: pods.length }));
     } catch (error) {
-      showErrorToast("Canvas", t("podPack.export.failed"), error instanceof Error ? error.message : undefined);
-    } finally { isExporting.value = false; }
+      showTransferError(error, t("podPack.export.failed"));
+    } finally {
+      isExporting.value = false;
+      finishTask();
+    }
   };
 
   const chooseImportFile = async (screenPosition: { x: number; y: number }): Promise<void> => {
+    if (activeController) return;
     try {
       const file = await choosePodPack();
       if (!file) return;
+      activeController = new AbortController();
+      activeTransferId = crypto.randomUUID();
+      setTask(activeTransferId, t("podPack.import.title"), t("podPack.progress.uploading"), 10);
       const target = viewportStore.screenToCanvas(screenPosition.x, screenPosition.y);
-      pendingImport.value = { file, target, preview: await previewPodPack(file) };
+      const staged = await previewPodPack(file, {
+        transferId: activeTransferId,
+        signal: activeController.signal,
+        onProgress: (value) => {
+          if (transferTask.value) transferTask.value.progress = value ?? 60;
+        },
+      });
+      pendingImport.value = { transferId: staged.transferId, target, preview: staged.preview };
+      finishTask();
     } catch (error) {
-      showErrorToast("Canvas", t("podPack.import.previewFailed"), error instanceof Error ? error.message : undefined);
+      finishTask();
+      showTransferError(error, t("podPack.import.previewFailed"));
     }
   };
 
@@ -99,13 +177,22 @@ export function usePodPack(): UsePodPackResult {
     const pending = pendingImport.value;
     if (!pending || isImporting.value) return;
     isImporting.value = true;
+    activeController = new AbortController();
+    activeTransferId = pending.transferId;
+    setTask(pending.transferId, t("podPack.import.title"), t("podPack.progress.importing"), 70);
     try {
-      const result = await importPodPack(pending.file, requireActiveCanvas(), pending.target);
+      const result = await importPodPack(
+        pending.transferId,
+        requireActiveCanvas(),
+        pending.target,
+        { signal: activeController.signal },
+      );
       for (const pod of result.createdPods) podStore.addPodFromEvent(pod);
+      for (const note of result.createdRepositoryNotes) repositoryStore.addNoteFromEvent(note);
       for (const connection of result.createdConnections) connectionStore.addConnectionFromEvent(connection);
       selectionStore.setSelectedElements(result.createdPods.map((pod) => ({ type: "pod" as const, id: pod.id })));
       pendingImport.value = null;
-      const dependencies = [...result.preview.plugins, ...result.preview.managedMcps];
+      const dependencies = [...result.preview.repositories, ...result.preview.plugins, ...result.preview.managedMcps];
       showSuccessToast(
         "Canvas",
         t("podPack.import.success", { pods: result.createdPods.length, connections: result.createdConnections.length }),
@@ -116,22 +203,21 @@ export function usePodPack(): UsePodPackResult {
         }),
       );
     } catch (error) {
-      showErrorToast("Canvas", t("podPack.import.failed"), error instanceof Error ? error.message : undefined);
-    } finally { isImporting.value = false; }
+      showTransferError(error, t("podPack.import.failed"));
+    } finally {
+      isImporting.value = false;
+      finishTask();
+    }
   };
 
   const cancelImport = (): void => {
+    const id = pendingImport.value?.transferId;
     pendingImport.value = null;
+    cancelTransferSilently(id);
   };
 
   return {
-    canExport,
-    isExporting,
-    isImporting,
-    pendingImport,
-    exportSelection,
-    chooseImportFile,
-    confirmImport,
-    cancelImport,
+    canExport, isExporting, isImporting, pendingImport, transferTask,
+    exportSelection, chooseImportFile, confirmImport, cancelImport, cancelActiveTransfer,
   };
 }

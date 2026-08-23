@@ -1,10 +1,23 @@
 import { z } from "zod";
-import { pasteConnectionItemSchema, pastePodItemSchema } from "./pasteSchemas.js";
+import {
+  pasteConnectionItemSchema,
+  pastePodItemSchema,
+  pasteRepositoryNoteItemSchema,
+} from "./pasteSchemas.js";
 
 export const POD_PACK_FORMAT = "agent-canvas-pod-pack";
-export const POD_PACK_VERSION = 1;
+export const POD_PACK_VERSION = 2;
 
 const fingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const podPackRepositoryIdSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9_\-.]+$/)
+  .refine((id) => !id.startsWith(".."), "Repository ID 不可用 .. 開頭");
+const podPackRepositoryNoteSchema = pasteRepositoryNoteItemSchema.extend({
+  repositoryId: podPackRepositoryIdSchema,
+});
 
 export const podPackPluginSchema = z
   .object({
@@ -60,22 +73,53 @@ export const podPackMcpSchema = z
   })
   .strict();
 
-export const podPackManifestSchema = z
+export const podPackRepositorySchema = z
   .object({
-    format: z.literal(POD_PACK_FORMAT),
-    version: z.literal(POD_PACK_VERSION),
-    exportedAt: z.iso.datetime(),
-    pods: z.array(pastePodItemSchema).min(1).max(50),
-    connections: z.array(pasteConnectionItemSchema).max(100),
-    plugins: z.array(podPackPluginSchema).max(100),
-    managedMcps: z.array(podPackMcpSchema).max(100),
+    originalId: podPackRepositoryIdSchema,
+    displayName: z.string().min(1).max(100),
+    source: z.enum(["git", "directory"]),
+    currentBranch: z.string().min(1).max(500).nullable(),
+    fingerprint: fingerprintSchema,
+    bundlePath: z.string().regex(/^repositories\/[a-f0-9]{64}\.zip$/),
+    note: podPackRepositoryNoteSchema.nullable(),
   })
   .strict();
+
+const podPackManifestBase = {
+  format: z.literal(POD_PACK_FORMAT),
+  exportedAt: z.iso.datetime(),
+  pods: z.array(pastePodItemSchema).min(1).max(50),
+  connections: z.array(pasteConnectionItemSchema).max(100),
+  plugins: z.array(podPackPluginSchema).max(100),
+  managedMcps: z.array(podPackMcpSchema).max(100),
+};
+
+/** 舊版格式只供匯入；新匯出一律使用 v2。 */
+export const podPackManifestV1Schema = z
+  .object({
+    ...podPackManifestBase,
+    version: z.literal(1),
+  })
+  .strict();
+
+export const podPackManifestV2Schema = z
+  .object({
+    ...podPackManifestBase,
+    version: z.literal(POD_PACK_VERSION),
+    repositories: z.array(podPackRepositorySchema).max(50),
+  })
+  .strict();
+
+export const podPackManifestSchema = z.discriminatedUnion("version", [
+  podPackManifestV1Schema,
+  podPackManifestV2Schema,
+]);
 
 export const podPackExportRequestSchema = z
   .object({
     pods: z.array(pastePodItemSchema).min(1).max(50),
     connections: z.array(pasteConnectionItemSchema).max(100),
+    repositoryNotes: z.array(podPackRepositoryNoteSchema).max(50).default([]),
   })
   .strict();
 
