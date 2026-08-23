@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.8] - 2026-08-23
+
+### 修正
+- 修正區網 HTTP 環境缺少 `crypto.randomUUID` 時，Pod Pack 匯出與匯入卡在處理中狀態的問題
+- 升級 GitHub Actions 至 Node.js 24 版本，移除 Node.js 20 deprecated 警告
+
 ## [2.3.7] - 2026-08-23
 
 ### 新增

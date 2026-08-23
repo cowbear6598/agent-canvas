@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout 原始碼
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 安裝 Bun
         uses: oven-sh/setup-bun@v2
@@ -59,7 +59,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: 發布到 GitHub Releases
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: ${{ steps.changelog.outputs.body }}
           files: |

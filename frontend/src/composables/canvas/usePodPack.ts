@@ -15,6 +15,7 @@ import {
 import { requireActiveCanvas } from "@/utils/canvasGuard";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
+import { generateUUID } from "@/services/utils";
 import type { PasteConnectionItem, PastePodItem, PodPackPreview } from "@/types";
 import type { ProgressTask } from "@/components/canvas/ProgressNote.vue";
 
@@ -109,10 +110,10 @@ export function usePodPack(): UsePodPackResult {
   const exportSelection = async (): Promise<void> => {
     if (!canExport.value || isExporting.value || activeController) return;
     isExporting.value = true;
-    activeController = new AbortController();
-    activeTransferId = crypto.randomUUID();
-    setTask(activeTransferId, t("podPack.export.title"), t("podPack.progress.preparing"), 15);
     try {
+      activeController = new AbortController();
+      activeTransferId = generateUUID();
+      setTask(activeTransferId, t("podPack.export.title"), t("podPack.progress.preparing"), 15);
       const selectedPodIds = new Set(selectionStore.selectedPodIds);
       const copiedPods = collectSelectedPods(selectionStore.selectedElements, podStore.pods);
       const connections = collectRelatedConnections(selectedPodIds, connectionStore.connections);
@@ -155,7 +156,7 @@ export function usePodPack(): UsePodPackResult {
       const file = await choosePodPack();
       if (!file) return;
       activeController = new AbortController();
-      activeTransferId = crypto.randomUUID();
+      activeTransferId = generateUUID();
       setTask(activeTransferId, t("podPack.import.title"), t("podPack.progress.uploading"), 10);
       const target = viewportStore.screenToCanvas(screenPosition.x, screenPosition.y);
       const staged = await previewPodPack(file, {
