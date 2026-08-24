@@ -428,6 +428,20 @@ export interface PodSetPluginsPayload {
   pluginIds: string[];
 }
 
+export interface PodCodexSkillsListPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  forceReload?: boolean;
+}
+
+export interface PodSetCodexSkillsPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  skillKeys: string[];
+}
+
 export interface PluginListPayload {
   requestId: string;
 }

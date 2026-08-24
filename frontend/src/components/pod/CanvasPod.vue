@@ -41,6 +41,7 @@ import PluginPopover from "@/components/pod/PluginPopover.vue";
 import McpPopover from "@/components/pod/McpPopover.vue";
 import ThinkingPopover from "@/components/pod/ThinkingPopover.vue";
 import { createPodDividerPath } from "@/lib/podDividerPath";
+import { countSelectedCodexSkillResources } from "@/lib/codexSkillResource";
 
 const props = defineProps<{
   pod: Pod;
@@ -141,7 +142,14 @@ const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
 });
 
 // Plugin notch 相關狀態
-const pluginActiveCount = computed(() => props.pod.pluginIds?.length ?? 0);
+const pluginActiveCount = computed(() => {
+  const pluginCount = props.pod.pluginIds?.length ?? 0;
+  const skillCount =
+    props.pod.provider === "codex"
+      ? countSelectedCodexSkillResources(props.pod.codexSkillKeys ?? [])
+      : 0;
+  return pluginCount + skillCount;
+});
 
 const {
   isDragOver,
@@ -571,6 +579,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         v-if="showPluginPopover && pluginAnchorRect"
         :pod-id="pod.id"
         :anchor-rect="pluginAnchorRect"
+        :provider="pod.provider"
         @close="closePluginPopover"
       />
 

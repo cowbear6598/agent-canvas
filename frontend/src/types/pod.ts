@@ -117,6 +117,8 @@ export interface Pod {
   mcpServerNames?: string[];
   agentCanvasMcpEnabled?: boolean;
   pluginIds?: string[];
+  /** Pod 明確啟用的 Codex Skill key（格式為 scope:name）。 */
+  codexSkillKeys?: string[];
   repositoryId?: string | null;
   goal?: PodGoal | null;
   schedule?: Schedule | null;

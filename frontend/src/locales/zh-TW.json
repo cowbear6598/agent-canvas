@@ -319,7 +319,17 @@
       "pluginsEmpty": "尚未匯入任何 skill",
       "pluginsLoadFailed": "載入 skills 清單失敗，請稍後再試",
       "pluginsToggleFailed": "變更失敗，已回滾",
-      "pluginsCodexHint": "Codex skills 由 codex 全域管理",
+      "pluginsCodexHint": "Codex Skills 依 Pod 個別管理",
+      "canvasInstalledPlugins": "由 Canvas 安裝",
+      "resourcesLoading": "載入 Plugins 與 Codex Skills 中…",
+      "resourcesEmpty": "尚無可用的 Plugin 或 Codex Skill",
+      "skillsLoadFailed": "載入 Codex Skills 失敗，請稍後再試",
+      "skillsToggleFailed": "Codex Skill 變更失敗，已回滾",
+      "skillGloballyDisabled": "此 Skill 已由 Codex 全域設定停用",
+      "skillOrigin": {
+        "official": "Codex 官方 Skills",
+        "custom": "使用者安裝 Plugins / Skills"
+      },
       "mcpLabel": "MCPs",
       "agentCanvasMcpLabel": "Agent Canvas",
       "mcpLoading": "載入中…",

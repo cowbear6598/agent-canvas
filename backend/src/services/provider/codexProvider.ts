@@ -43,6 +43,8 @@ import {
 } from "../mcp/managedMcpSurfaceService.js";
 import { collectStderr } from "../codex/codexHelpers.js";
 import { isEnoentError } from "./utils.js";
+import { codexSkillService } from "../codex/codexSkillService.js";
+import { podStore } from "../podStore.js";
 
 /**
  * Codex provider 的執行時選項（執行時型別，由 buildOptions 輸出）。
@@ -70,6 +72,10 @@ export interface CodexOptions {
    * Fresh session 首輪會與 Goal Runtime bootstrap 一起注入 user prompt。
    */
   pluginCatalogText: string;
+  /** Pod 明確選取的 Codex Skill key。 */
+  codexSkillKeys: string[];
+  /** 是否已完成舊 Pod 的首次 Skill 白名單初始化。 */
+  codexSkillsInitialized: boolean;
 }
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
@@ -338,6 +344,7 @@ function buildNewSessionArgs(
   repoPath: string,
   mcpAutoApproveArgs: string[],
   goalMcpConfigArgs: string[],
+  skillConfigArgs: string[],
   thinkingLevel?: string,
   fastModeEnabled = false,
 ): string[] {
@@ -353,6 +360,7 @@ function buildNewSessionArgs(
     ...(thinkingLevel ? ["-c", `model_reasoning_effort=${thinkingLevel}`] : []),
     ...buildFastModeArgs(fastModeEnabled),
     ...goalMcpConfigArgs,
+    ...skillConfigArgs,
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
     ...mcpAutoApproveArgs,
     "--model",
@@ -381,6 +389,7 @@ function buildCodexArgs(
   repoPath: string,
   options?: CodexOptions,
   thinkingLevel?: string,
+  skillConfigArgs: string[] = [],
 ): string[] {
   const entries = options?.mcpEntries ?? [];
 
@@ -408,6 +417,7 @@ function buildCodexArgs(
         repoPath,
         mcpAutoApproveArgs,
         runtimeMcpConfigArgs,
+        skillConfigArgs,
         thinkingLevel,
         fastModeEnabled,
       );
@@ -429,6 +439,7 @@ function buildCodexArgs(
         : []),
       ...buildFastModeArgs(fastModeEnabled),
       ...runtimeMcpConfigArgs,
+      ...skillConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
       "--model",
@@ -441,6 +452,7 @@ function buildCodexArgs(
     repoPath,
     mcpAutoApproveArgs,
     runtimeMcpConfigArgs,
+    skillConfigArgs,
     thinkingLevel,
     fastModeEnabled,
   );
@@ -724,6 +736,8 @@ const codexMetadata: ProviderMetadata<CodexOptions> = {
     mcpEntries: [],
     hasGoalRuntime: false,
     pluginCatalogText: "",
+    codexSkillKeys: [],
+    codexSkillsInitialized: true,
     fastModeEnabled: false,
   },
   availableModels: CODEX_AVAILABLE_MODELS,
@@ -732,6 +746,7 @@ const codexMetadata: ProviderMetadata<CodexOptions> = {
 
 function prepareCodexExecution(
   ctx: ChatRequestContext<CodexOptions>,
+  skillConfigArgs: string[],
 ): { codexArgs: string[]; promptText: string } | null {
   const {
     message,
@@ -752,6 +767,7 @@ function prepareCodexExecution(
     workspacePath,
     options,
     options?.thinkingLevel,
+    skillConfigArgs,
   );
   const goalRuntimeAvailable = Boolean(options?.hasGoalRuntime);
   const pluginCatalogText = options?.pluginCatalogText ?? "";
@@ -788,6 +804,8 @@ export const codexProvider: AgentProvider<CodexOptions> = {
       mcpEntries: entries,
       hasGoalRuntime,
       pluginCatalogText: formatPluginSkillCatalogPrompt(pluginCatalog),
+      codexSkillKeys: [...(pod.codexSkillKeys ?? [])],
+      codexSkillsInitialized: pod.codexSkillsInitialized ?? false,
       fastModeEnabled:
         pod.fastModeEnabled === true && isFastModeSupported("codex", model),
     };
@@ -805,7 +823,45 @@ export const codexProvider: AgentProvider<CodexOptions> = {
   ): AsyncIterable<NormalizedEvent> {
     const { podId, podName, workspacePath, abortSignal, options } = ctx;
 
-    const execution = prepareCodexExecution(ctx);
+    let skillConfigArgs: string[];
+    try {
+      const { runtimeEntries } = await codexSkillService.list(
+        workspacePath,
+        true,
+      );
+      const selectedKeys = codexSkillService.resolveSelectedKeys(
+        options?.codexSkillKeys ?? [],
+        options?.codexSkillsInitialized ?? false,
+        runtimeEntries,
+      );
+      if (
+        options?.codexSkillsInitialized !== undefined &&
+        (options.codexSkillsInitialized === false ||
+          JSON.stringify(selectedKeys) !==
+            JSON.stringify(options.codexSkillKeys ?? []))
+      ) {
+        podStore.setCodexSkillKeys(podId, selectedKeys);
+      }
+      skillConfigArgs = codexSkillService.buildRuntimeConfigArgs(
+        selectedKeys,
+        runtimeEntries,
+      );
+    } catch (error) {
+      logger.error(
+        "Chat",
+        "Error",
+        `[CodexProvider] 載入 Pod Skills 失敗（podId: ${podId}）：${error instanceof Error ? error.message : String(error)}`,
+      );
+      yield buildCodexSystemError({
+        content: "無法載入 Codex Skills 設定，請稍後再試",
+        fatal: true,
+        code: "CODEX_SKILLS_LOAD_FAILED",
+        recovery: "unrecoverable",
+      });
+      return;
+    }
+
+    const execution = prepareCodexExecution(ctx, skillConfigArgs);
     if (execution === null) {
       const model = options?.model ?? codexMetadata.defaultOptions.model;
       logger.warn(

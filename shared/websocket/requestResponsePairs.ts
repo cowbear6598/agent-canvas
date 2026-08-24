@@ -145,6 +145,10 @@ export const webSocketRequestResponsePairs = {
     WebSocketResponseEvents.PLUGIN_REORDERED,
   [WebSocketRequestEvents.POD_SET_PLUGINS]:
     WebSocketResponseEvents.POD_PLUGINS_SET,
+  [WebSocketRequestEvents.POD_CODEX_SKILLS_LIST]:
+    WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+  [WebSocketRequestEvents.POD_SET_CODEX_SKILLS]:
+    WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
   [WebSocketRequestEvents.BACKUP_TEST_CONNECTION]:
     WebSocketResponseEvents.BACKUP_TEST_CONNECTION_RESULT,
   [WebSocketRequestEvents.BACKUP_TRIGGER]:

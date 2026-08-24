@@ -14,6 +14,8 @@ function createBasePod(overrides: Partial<Pod> = {}): Pod {
     sessionId: "private-session-id",
     mcpServerNames: [],
     pluginIds: [],
+    codexSkillKeys: [],
+    codexSkillsInitialized: true,
     provider: "claude",
     providerConfig: { model: "sonnet" },
     repositoryId: null,
@@ -50,6 +52,7 @@ describe("toPodPublicView", () => {
     );
     expect(publicView).not.toHaveProperty("workspacePath");
     expect(publicView).not.toHaveProperty("sessionId");
+    expect(publicView).not.toHaveProperty("codexSkillsInitialized");
     expect(() =>
       parseServerEventPayload(WebSocketResponseEvents.POD_LIST_RESULT, {
         requestId: "request-public-view-test",

@@ -17,6 +17,8 @@ import {
   podClearMemorySchema,
   podDeleteSchema,
   podSetPluginsSchema,
+  podCodexSkillsListSchema,
+  podSetCodexSkillsSchema,
 } from "../../schemas";
 import {
   handlePodCreate,
@@ -35,6 +37,8 @@ import {
   handlePodClearMemory,
   handlePodDelete,
   handlePodSetPlugins,
+  handlePodCodexSkillsList,
+  handlePodSetCodexSkills,
 } from "../podHandlers.js";
 import { createHandlerGroup } from "./createHandlerGroup.js";
 
@@ -136,6 +140,18 @@ export const podHandlerGroup = createHandlerGroup({
       handler: handlePodSetPlugins,
       schema: podSetPluginsSchema,
       responseEvent: WebSocketResponseEvents.POD_PLUGINS_SET,
+    },
+    {
+      event: WebSocketRequestEvents.POD_CODEX_SKILLS_LIST,
+      handler: handlePodCodexSkillsList,
+      schema: podCodexSkillsListSchema,
+      responseEvent: WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+    },
+    {
+      event: WebSocketRequestEvents.POD_SET_CODEX_SKILLS,
+      handler: handlePodSetCodexSkills,
+      schema: podSetCodexSkillsSchema,
+      responseEvent: WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
     },
   ],
 });

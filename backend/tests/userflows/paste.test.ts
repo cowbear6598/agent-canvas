@@ -654,6 +654,7 @@ describe("貼上功能", () => {
           y: 0,
           rotation: 0,
           pluginIds: ["my-plugin", "another.plugin@1.0"],
+          codexSkillKeys: ["system:review", "repo:project-plan"],
         },
       ];
 
@@ -682,6 +683,10 @@ describe("貼上功能", () => {
       expect(pod?.pluginIds).toContain("my-plugin");
       expect(pod?.pluginIds).toContain("another.plugin@1.0");
       expect(pod?.pluginIds).toHaveLength(2);
+      expect(pod?.codexSkillKeys.toSorted()).toEqual([
+        "repo:project-plan",
+        "system:review",
+      ]);
     });
   });
 });

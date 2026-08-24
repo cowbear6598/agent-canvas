@@ -25,6 +25,7 @@ export interface PodHydrationMaps {
   relations: {
     mcpServerNames: Map<string, string[]>;
     pluginIds: Map<string, string[]>;
+    codexSkillKeys: Map<string, string[]>;
   };
   bindingsMap: Map<string, IntegrationBinding[]>;
 }
@@ -47,11 +48,13 @@ export class PodRepository {
   private static readonly ALLOWED_RELATION_TABLES = new Set([
     "pod_mcp_server_names",
     "pod_plugin_ids",
+    "pod_codex_skill_keys",
   ]);
 
   private static readonly ALLOWED_RELATION_COLUMNS = new Set([
     "mcp_server_name",
     "plugin_id",
+    "skill_key",
   ]);
 
   __clearCacheForTesting(): void {
@@ -152,7 +155,7 @@ export class PodRepository {
 
   private insertJoinTableIds(
     podId: string,
-    pod: Pick<Pod, "mcpServerNames" | "pluginIds">,
+    pod: Pick<Pod, "mcpServerNames" | "pluginIds" | "codexSkillKeys">,
   ): void {
     for (const mcpServerName of pod.mcpServerNames) {
       this.stmts.podMcpServerNames.insert.run({
@@ -165,6 +168,13 @@ export class PodRepository {
       this.stmts.podPluginIds.insert.run({
         $podId: podId,
         $pluginId: pluginId,
+      });
+    }
+
+    for (const skillKey of pod.codexSkillKeys) {
+      this.stmts.podCodexSkillKeys.insert.run({
+        $podId: podId,
+        $skillKey: skillKey,
       });
     }
   }
@@ -201,6 +211,14 @@ export class PodRepository {
         (valueId) => ({ $podId: podId, $pluginId: valueId }),
       );
     }
+    if (updates.codexSkillKeys !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podCodexSkillKeys,
+        updates.codexSkillKeys,
+        (valueId) => ({ $podId: podId, $skillKey: valueId }),
+      );
+    }
   }
 
   loadHydrationMaps(podIds: string[]): PodHydrationMaps {
@@ -209,6 +227,7 @@ export class PodRepository {
         relations: {
           mcpServerNames: new Map(),
           pluginIds: new Map(),
+          codexSkillKeys: new Map(),
         },
         bindingsMap: new Map(),
       };
@@ -222,6 +241,11 @@ export class PodRepository {
           podIds,
         ),
         pluginIds: this.loadRelation("pod_plugin_ids", "plugin_id", podIds),
+        codexSkillKeys: this.loadRelation(
+          "pod_codex_skill_keys",
+          "skill_key",
+          podIds,
+        ),
       },
       bindingsMap: this.loadBindings(podIds),
     };
@@ -245,6 +269,7 @@ export class PodRepository {
         $providerConfigJson: JSON.stringify(pod.providerConfig),
         $fastModeEnabled: pod.fastModeEnabled ? 1 : 0,
         $agentCanvasMcpEnabled: pod.agentCanvasMcpEnabled ? 1 : 0,
+        $codexSkillsInitialized: pod.codexSkillsInitialized ? 1 : 0,
       });
       this.insertJoinTableIds(id, pod);
     })();
@@ -346,6 +371,7 @@ export class PodRepository {
         $providerConfigJson: sanitizedProviderConfigJson,
         $fastModeEnabled: updatedPod.fastModeEnabled ? 1 : 0,
         $agentCanvasMcpEnabled: updatedPod.agentCanvasMcpEnabled ? 1 : 0,
+        $codexSkillsInitialized: updatedPod.codexSkillsInitialized ? 1 : 0,
       });
       this.updateJoinTables(podId, updates);
     })();
@@ -372,6 +398,25 @@ export class PodRepository {
           $mcpServerName: name,
         });
       }
+    })();
+  }
+
+  replaceCodexSkillKeys(
+    podId: string,
+    keys: string[],
+    initialized = true,
+  ): void {
+    getDb().transaction(() => {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podCodexSkillKeys,
+        keys,
+        (skillKey) => ({ $podId: podId, $skillKey: skillKey }),
+      );
+      this.stmts.pod.updateCodexSkillsInitialized.run({
+        $id: podId,
+        $initialized: initialized ? 1 : 0,
+      });
     })();
   }
 

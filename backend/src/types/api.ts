@@ -9,6 +9,7 @@ export interface CreatePodRequest {
   mcpServerNames?: string[];
   agentCanvasMcpEnabled?: boolean;
   pluginIds?: string[];
+  codexSkillKeys?: string[];
   provider?: ProviderName;
   providerConfig?: Record<string, unknown>;
   fastModeEnabled?: boolean;

@@ -97,6 +97,7 @@ export function enrichPod(pod: Pod): Pod {
     goal,
     schedule: withDefault(pod.schedule, null),
     pluginIds: withDefault(pod.pluginIds, []),
+    codexSkillKeys: withDefault(pod.codexSkillKeys, []),
     provider,
     providerConfig: resolveProviderConfig(provider, pod.providerConfig),
   };

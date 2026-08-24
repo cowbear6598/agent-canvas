@@ -432,6 +432,19 @@ export interface PodPluginsSetPayload {
   ignoredIds?: string[];
 }
 
+export interface PodCodexSkillsListResultPayload extends ResultPayload {
+  canvasId: string;
+  podId: string;
+  items: import("../codexSkill").CodexSkillAvailabilityItem[];
+  selectedKeys: string[];
+}
+
+export interface PodCodexSkillsSetPayload extends ResultPayload {
+  canvasId: string;
+  pod?: Pod;
+  ignoredKeys?: string[];
+}
+
 export interface PluginListResultPayload extends ResultPayload {
   plugins?: InstalledPlugin[];
 }

@@ -116,6 +116,7 @@ const podPublicViewSchema = z
     rotation: z.number(),
     mcpServerNames: z.array(z.string()),
     pluginIds: z.array(z.string()),
+    codexSkillKeys: z.array(z.string()),
     provider: z.string(),
     providerConfig: stringRecordSchema.nullable(),
     repositoryId: z.string().nullable(),
@@ -978,6 +979,21 @@ const serverEventContracts = {
   ),
   [WebSocketResponseEvents.POD_PLUGINS_SET]: withRequestError(
     "podPluginsSetPayloadSchema",
+    podMutationSuccessPayloadSchema,
+  ),
+  [WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT]: withRequestError(
+    "podCodexSkillsListResultPayloadSchema",
+    requestSuccessPayloadSchema
+      .extend({
+        canvasId: z.string(),
+        podId: z.string(),
+        items: z.array(z.unknown()),
+        selectedKeys: z.array(z.string()),
+      })
+      .passthrough(),
+  ),
+  [WebSocketResponseEvents.POD_CODEX_SKILLS_SET]: withRequestError(
+    "podCodexSkillsSetPayloadSchema",
     podMutationSuccessPayloadSchema,
   ),
   [WebSocketResponseEvents.BACKUP_TRIGGER_RESULT]: withRequestError(

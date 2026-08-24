@@ -218,4 +218,42 @@ describe("Pod Fast mode 與退役 Codex 模型 migration", () => {
       "agent_access_tokens",
     ]);
   });
+
+  it("Codex Skills 預設全關 migration 只清除一次錯誤的舊選取", () => {
+    db.exec(
+      "DELETE FROM schema_migrations WHERE key = 'codex-skills-default-off-v1'",
+    );
+    db.exec(
+      "INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'canvas1', 0)",
+    );
+    db.exec(
+      "INSERT INTO pods (id, canvas_id, name, workspace_path, provider, codex_skills_initialized) VALUES ('p1', 'c1', 'pod1', '/ws', 'codex', 1)",
+    );
+    db.exec(
+      "INSERT INTO pod_codex_skill_keys (pod_id, skill_key) VALUES ('p1', 'system:review')",
+    );
+
+    createTables(db);
+
+    const migratedPod = db
+      .prepare(
+        "SELECT codex_skills_initialized FROM pods WHERE id = 'p1'",
+      )
+      .get() as { codex_skills_initialized: number };
+    const migratedKeys = db
+      .prepare("SELECT skill_key FROM pod_codex_skill_keys WHERE pod_id = 'p1'")
+      .all();
+    expect(migratedPod.codex_skills_initialized).toBe(1);
+    expect(migratedKeys).toEqual([]);
+
+    db.exec(
+      "INSERT INTO pod_codex_skill_keys (pod_id, skill_key) VALUES ('p1', 'user:chosen')",
+    );
+    createTables(db);
+
+    const preservedKeys = db
+      .prepare("SELECT skill_key FROM pod_codex_skill_keys WHERE pod_id = 'p1'")
+      .all() as Array<{ skill_key: string }>;
+    expect(preservedKeys).toEqual([{ skill_key: "user:chosen" }]);
+  });
 });

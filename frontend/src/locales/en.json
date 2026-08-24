@@ -319,7 +319,17 @@
       "pluginsEmpty": "No skills imported",
       "pluginsLoadFailed": "Failed to load the skills list. Please try again later.",
       "pluginsToggleFailed": "Update failed, rolled back",
-      "pluginsCodexHint": "Codex skills are managed globally by codex",
+      "pluginsCodexHint": "Codex Skills are configured per Pod",
+      "canvasInstalledPlugins": "Installed by Canvas",
+      "resourcesLoading": "Loading Plugins and Codex Skills…",
+      "resourcesEmpty": "No Plugins or Codex Skills available",
+      "skillsLoadFailed": "Failed to load Codex Skills. Please try again.",
+      "skillsToggleFailed": "Codex Skill update failed and was rolled back",
+      "skillGloballyDisabled": "This Skill is disabled by the global Codex configuration",
+      "skillOrigin": {
+        "official": "Official Codex Skills",
+        "custom": "User-installed Plugins / Skills"
+      },
       "mcpLabel": "MCPs",
       "agentCanvasMcpLabel": "Agent Canvas",
       "mcpLoading": "Loading…",

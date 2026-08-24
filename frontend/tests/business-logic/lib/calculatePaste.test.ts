@@ -80,6 +80,7 @@ describe("transformPods", () => {
           repositoryId: "repo-1",
           mcpServerNames: ["filesystem"],
           pluginIds: ["jira"],
+          codexSkillKeys: ["system:review"],
           goal: { todos: [{ id: "todo-1", text: "Ship" }] },
         }),
       ],
@@ -95,6 +96,7 @@ describe("transformPods", () => {
       repositoryId: "repo-1",
       mcpServerNames: ["filesystem"],
       pluginIds: ["jira"],
+      codexSkillKeys: ["system:review"],
       goal: { todos: [{ id: "todo-1", text: "Ship" }] },
     });
   });

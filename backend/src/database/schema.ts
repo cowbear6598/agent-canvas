@@ -161,6 +161,32 @@ function ensurePodAgentCanvasMcpColumn(db: Database): void {
   })();
 }
 
+function ensurePodCodexSkillsInitializedColumn(db: Database): void {
+  addColumnIfMissing(
+    db,
+    "pods",
+    "codex_skills_initialized INTEGER NOT NULL DEFAULT 1",
+  );
+}
+
+const CODEX_SKILLS_DEFAULT_OFF_MIGRATION_KEY =
+  "codex-skills-default-off-v1";
+
+function migrateCodexSkillsDefaultOff(db: Database): void {
+  db.transaction(() => {
+    const migrated = db
+      .prepare("SELECT 1 FROM schema_migrations WHERE key = ?")
+      .get(CODEX_SKILLS_DEFAULT_OFF_MIGRATION_KEY);
+    if (migrated) return;
+
+    db.exec("DELETE FROM pod_codex_skill_keys");
+    db.exec("UPDATE pods SET codex_skills_initialized = 1");
+    db.prepare(
+      "INSERT INTO schema_migrations (key, applied_at) VALUES (?, ?)",
+    ).run(CODEX_SKILLS_DEFAULT_OFF_MIGRATION_KEY, new Date().toISOString());
+  })();
+}
+
 function migrateRetiredCodexModels(db: Database): void {
   db.transaction(() => {
     db.exec(
@@ -265,6 +291,7 @@ function createBaseTables(db: Database): void {
       "provider_config_json TEXT," +
       "fast_mode_enabled INTEGER NOT NULL DEFAULT 0," +
       "agent_canvas_mcp_enabled INTEGER NOT NULL DEFAULT 0," +
+      "codex_skills_initialized INTEGER NOT NULL DEFAULT 1," +
       "UNIQUE (canvas_id, name)" +
       ")",
   );
@@ -310,6 +337,14 @@ function createBaseTables(db: Database): void {
   );
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_pod_plugin_ids_plugin_id ON pod_plugin_ids(plugin_id)",
+  );
+
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS pod_codex_skill_keys (" +
+      "pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE," +
+      "skill_key TEXT NOT NULL," +
+      "PRIMARY KEY (pod_id, skill_key)" +
+      ")",
   );
 
   db.exec(
@@ -466,6 +501,12 @@ function createBaseTables(db: Database): void {
 
   db.exec(
     "CREATE TABLE IF NOT EXISTS global_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+  );
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS schema_migrations (" +
+      "key TEXT PRIMARY KEY," +
+      "applied_at TEXT NOT NULL" +
+      ")",
   );
 
   db.exec(
@@ -661,6 +702,8 @@ export function createTables(db: Database): void {
   createBaseTables(db);
   ensurePodFastModeColumn(db);
   ensurePodAgentCanvasMcpColumn(db);
+  ensurePodCodexSkillsInitializedColumn(db);
+  migrateCodexSkillsDefaultOff(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
   ensureConnectionPersistenceColumns(db);
   ensureSecretStorageVersionColumns(db);

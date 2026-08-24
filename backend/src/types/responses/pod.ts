@@ -1,5 +1,6 @@
 import type { PodPublicView } from "../pod.js";
 import type { MessageRole, SystemMessageMetadata } from "../message.js";
+import type { CodexSkillAvailabilityItem } from "../../services/codex/codexSkillService.js";
 
 export interface PodCreatedPayload {
   requestId: string;
@@ -114,6 +115,23 @@ export interface PodPluginsSetPayload {
   canvasId: string;
   success: true;
   pod?: PodPublicView;
+}
+
+export interface PodCodexSkillsListResultPayload {
+  requestId: string;
+  canvasId: string;
+  success: true;
+  podId: string;
+  items: CodexSkillAvailabilityItem[];
+  selectedKeys: string[];
+}
+
+export interface PodCodexSkillsSetPayload {
+  requestId: string;
+  canvasId: string;
+  success: true;
+  pod?: PodPublicView;
+  ignoredKeys?: string[];
 }
 
 export interface PodDeletedPayload {

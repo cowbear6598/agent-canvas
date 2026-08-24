@@ -30,6 +30,7 @@ function buildStatements(db: Database): {
     updateSessionId: ReturnType<Database["prepare"]>;
     updateRepositoryId: ReturnType<Database["prepare"]>;
     updateScheduleJson: ReturnType<Database["prepare"]>;
+    updateCodexSkillsInitialized: ReturnType<Database["prepare"]>;
     selectWithSchedule: ReturnType<Database["prepare"]>;
     selectByRepositoryId: ReturnType<Database["prepare"]>;
     selectByRepositoryIdAndCanvas: ReturnType<Database["prepare"]>;
@@ -78,6 +79,11 @@ function buildStatements(db: Database): {
     deleteByPodId: ReturnType<Database["prepare"]>;
     deleteOne: ReturnType<Database["prepare"]>;
     selectByPluginId: ReturnType<Database["prepare"]>;
+  };
+  podCodexSkillKeys: {
+    insert: ReturnType<Database["prepare"]>;
+    selectByPodId: ReturnType<Database["prepare"]>;
+    deleteByPodId: ReturnType<Database["prepare"]>;
   };
   connection: {
     insert: ReturnType<Database["prepare"]>;
@@ -249,12 +255,12 @@ function buildStatements(db: Database): {
           id, canvas_id, name, x, y, rotation, workspace_path,
           session_id, repository_id, goal_json, schedule_json,
           provider, provider_config_json, fast_mode_enabled,
-          agent_canvas_mcp_enabled
+          agent_canvas_mcp_enabled, codex_skills_initialized
         ) VALUES (
           $id, $canvasId, $name, $x, $y, $rotation, $workspacePath,
           $sessionId, $repositoryId, $goalJson, $scheduleJson,
           $provider, $providerConfigJson, $fastModeEnabled,
-          $agentCanvasMcpEnabled
+          $agentCanvasMcpEnabled, $codexSkillsInitialized
         )`,
       ),
       selectByCanvasId: db.prepare("SELECT * FROM pods WHERE canvas_id = ?"),
@@ -276,7 +282,8 @@ function buildStatements(db: Database): {
           provider = $provider,
           provider_config_json = $providerConfigJson,
           fast_mode_enabled = $fastModeEnabled,
-          agent_canvas_mcp_enabled = $agentCanvasMcpEnabled
+          agent_canvas_mcp_enabled = $agentCanvasMcpEnabled,
+          codex_skills_initialized = $codexSkillsInitialized
         WHERE id = $id`,
       ),
       updateSessionId: db.prepare(
@@ -287,6 +294,9 @@ function buildStatements(db: Database): {
       ),
       updateScheduleJson: db.prepare(
         "UPDATE pods SET schedule_json = $scheduleJson WHERE id = $id",
+      ),
+      updateCodexSkillsInitialized: db.prepare(
+        "UPDATE pods SET codex_skills_initialized = $initialized WHERE id = $id",
       ),
       selectWithSchedule: db.prepare(
         "SELECT * FROM pods WHERE schedule_json IS NOT NULL",
@@ -439,6 +449,18 @@ function buildStatements(db: Database): {
       ),
       selectByPluginId: db.prepare(
         "SELECT pod_id FROM pod_plugin_ids WHERE plugin_id = ?",
+      ),
+    },
+
+    podCodexSkillKeys: {
+      insert: db.prepare(
+        "INSERT OR IGNORE INTO pod_codex_skill_keys (pod_id, skill_key) VALUES ($podId, $skillKey)",
+      ),
+      selectByPodId: db.prepare(
+        "SELECT skill_key FROM pod_codex_skill_keys WHERE pod_id = ?",
+      ),
+      deleteByPodId: db.prepare(
+        "DELETE FROM pod_codex_skill_keys WHERE pod_id = ?",
       ),
     },
 

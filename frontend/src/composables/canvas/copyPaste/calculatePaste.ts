@@ -145,6 +145,7 @@ export function transformPods(
       fastModeEnabled: pod.fastModeEnabled === true,
       mcpServerNames: pod.mcpServerNames,
       pluginIds: pod.pluginIds,
+      codexSkillKeys: pod.codexSkillKeys,
       repositoryId: pod.repositoryId,
       goal: pod.goal ?? null,
     };

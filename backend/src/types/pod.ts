@@ -40,6 +40,10 @@ export interface Pod {
   /** 是否啟用只限目前 Run／Canvas 的內建 Agent Canvas MCP。 */
   agentCanvasMcpEnabled: boolean;
   pluginIds: string[];
+  /** Pod 明確啟用的 Codex Skill key（格式為 scope:name）。 */
+  codexSkillKeys: string[];
+  /** 舊 Pod 是否已完成第一次 Skill 白名單初始化。 */
+  codexSkillsInitialized: boolean;
   provider: ProviderName;
   /** providerConfig.model 是 model 的唯一來源（Claude 用短名如 "opus"，Codex 用完整名如 "gpt-5.6-luna"） */
   providerConfig: Record<string, unknown> | null;
@@ -68,6 +72,7 @@ export type PodPublicView = Omit<
   | "memoryEnabled"
   | "hasPodMemory"
   | "hasRepoMemory"
+  | "codexSkillsInitialized"
 > & {
   schedule?: PersistedScheduleConfig;
   memoryEnabled: boolean;
@@ -90,8 +95,13 @@ function serializeScheduleForPublicView(
 
 /** 將內部 Pod 轉換為對外廣播用的公開視圖（去除敏感欄位） */
 export function toPodPublicView(pod: Pod): PodPublicView {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { workspacePath, sessionId, schedule, ...publicView } = pod;
+  const {
+    workspacePath: _workspacePath,
+    sessionId: _sessionId,
+    schedule,
+    codexSkillsInitialized: _codexSkillsInitialized,
+    ...publicView
+  } = pod;
   return {
     ...publicView,
     schedule: serializeScheduleForPublicView(schedule),

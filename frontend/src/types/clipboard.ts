@@ -15,6 +15,7 @@ export interface CopiedPod {
   fastModeEnabled?: boolean;
   mcpServerNames?: string[];
   pluginIds?: string[];
+  codexSkillKeys?: string[];
   repositoryId?: string | null;
   goal?: PodGoal | null;
 }

@@ -304,6 +304,10 @@ export const usePodStore = defineStore("pod", () => {
     updatePodField(podId, "pluginIds", pluginIds);
   }
 
+  function updatePodCodexSkills(podId: string, skillKeys: string[]): void {
+    updatePodField(podId, "codexSkillKeys", skillKeys);
+  }
+
   /** 純前端狀態更新：設定 pod 的 MCP server 名稱清單（不發 WebSocket） */
   function updatePodMcpServers(podId: string, names: string[]): void {
     updatePodField(podId, "mcpServerNames", names);
@@ -440,6 +444,7 @@ export const usePodStore = defineStore("pod", () => {
     setRepositoryMemoryState,
     updatePodGoal,
     updatePodPlugins,
+    updatePodCodexSkills,
     updatePodMcpServers,
     updatePodAgentCanvasMcpEnabled,
     setMcpServersWithBackend,

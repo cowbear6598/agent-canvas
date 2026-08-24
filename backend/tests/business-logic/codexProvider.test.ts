@@ -14,7 +14,7 @@
  * 但 Bun.spawn 屬性是 writable，可透過 spyOn 攔截）
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import type { CodexOptions } from "../../src/services/provider/codexProvider.js";
 
@@ -34,6 +34,7 @@ vi.mock("../../src/services/mcp/codexMcpReader.js", () => ({
 
 import { readCodexMcpServers } from "../../src/services/mcp/codexMcpReader.js";
 import { logger } from "../../src/utils/logger.js";
+import { codexSkillService } from "../../src/services/codex/codexSkillService.js";
 
 const REMOVED_CODEX_SANDBOX_FLAG = ["--", "sandbox"].join("");
 const REMOVED_CODEX_SANDBOX_MODE = ["workspace", "write"].join("-");
@@ -122,6 +123,13 @@ import { codexProvider } from "../../src/services/provider/codexProvider.js";
 describe("CodexProvider", () => {
   // spawnSpy 在每個 test 中設定
   let spawnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.spyOn(codexSkillService, "list").mockResolvedValue({
+      items: [],
+      runtimeEntries: [],
+    });
+  });
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -965,5 +973,46 @@ describe("CodexProvider", () => {
       arg.includes("default_tools_approval_mode"),
     );
     expect(hasApproveFlag).toBe(false);
+  });
+
+  it("新對話與 resume 都應套用 Pod 的 Codex Skill 白名單", async () => {
+    vi.mocked(codexSkillService.list).mockResolvedValue({
+      items: [],
+      runtimeEntries: [
+        {
+          key: "system:review",
+          path: "/skills/review/SKILL.md",
+          globallyEnabled: true,
+        },
+        {
+          key: "system:plan",
+          path: "/skills/plan/SKILL.md",
+          globallyEnabled: true,
+        },
+      ],
+    });
+    spawnSpy = vi
+      .spyOn(Bun, "spawn")
+      .mockReturnValue(makeMockProc([]) as any);
+    const options = {
+      model: "gpt-5.6-luna",
+      resumeMode: "cli" as const,
+      codexSkillKeys: ["system:review"],
+      codexSkillsInitialized: true,
+    };
+
+    await collectEvents(codexProvider.chat(makeCtx({ options })));
+    await collectEvents(
+      codexProvider.chat(
+        makeCtx({ options, resumeSessionId: "session-skill-test" }),
+      ),
+    );
+
+    for (const call of spawnSpy.mock.calls) {
+      const [args] = call as [string[], unknown];
+      expect(args).toContain(
+        'skills.config=[{path="/skills/review/SKILL.md",enabled=true},{path="/skills/plan/SKILL.md",enabled=false}]',
+      );
+    }
   });
 });

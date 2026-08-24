@@ -195,6 +195,22 @@ export const podSetPluginsSchema = z.object({
   pluginIds: z.array(pluginIdSchema).max(50),
 });
 
+const codexSkillKeySchema = z.string().trim().min(1).max(300);
+
+export const podCodexSkillsListSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  forceReload: z.boolean().optional(),
+});
+
+export const podSetCodexSkillsSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  skillKeys: z.array(codexSkillKeySchema).max(200),
+});
+
 export type PodCreatePayload = z.infer<typeof podCreateSchema>;
 export type PodListPayload = z.infer<typeof podListSchema>;
 export type PodGetPayload = z.infer<typeof podGetSchema>;
@@ -215,3 +231,9 @@ export type PodGetMemoryPayload = z.infer<typeof podGetMemorySchema>;
 export type PodClearMemoryPayload = z.infer<typeof podClearMemorySchema>;
 export type PodDeletePayload = z.infer<typeof podDeleteSchema>;
 export type PodSetPluginsPayload = z.infer<typeof podSetPluginsSchema>;
+export type PodCodexSkillsListPayload = z.infer<
+  typeof podCodexSkillsListSchema
+>;
+export type PodSetCodexSkillsPayload = z.infer<
+  typeof podSetCodexSkillsSchema
+>;

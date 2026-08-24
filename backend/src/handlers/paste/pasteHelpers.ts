@@ -178,6 +178,7 @@ async function createSinglePod(
     fastModeEnabled: podItem.fastModeEnabled,
     mcpServerNames: podItem.mcpServerNames ?? [],
     pluginIds: podItem.pluginIds ?? [],
+    codexSkillKeys: podItem.codexSkillKeys ?? [],
     repositoryId: finalRepositoryId,
     goal: podItem.goal ?? null,
   });

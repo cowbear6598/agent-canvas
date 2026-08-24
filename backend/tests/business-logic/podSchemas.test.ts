@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   podSetPluginsSchema,
   podSetProviderSchema,
+  podSetCodexSkillsSchema,
 } from "../../src/schemas/podSchemas.js";
 import { pastePodItemSchema } from "../../src/schemas/pasteSchemas.js";
 
@@ -76,5 +77,18 @@ describe("pod provider schema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("pod Codex Skills schema", () => {
+  it("允許 Pod 保存 scope:name Skill key", () => {
+    const result = podSetCodexSkillsSchema.safeParse({
+      requestId: "44444444-4444-4444-8444-444444444444",
+      canvasId: "11111111-1111-4111-8111-111111111111",
+      podId: "22222222-2222-4222-8222-222222222222",
+      skillKeys: ["system:review", "repo:project-plan"],
+    });
+
+    expect(result.success).toBe(true);
   });
 });

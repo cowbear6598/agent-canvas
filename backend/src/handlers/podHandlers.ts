@@ -6,6 +6,8 @@ import type {
   PodMemoryResultPayload,
   PodMemoryClearedPayload,
   PodPluginsSetPayload,
+  PodCodexSkillsListResultPayload,
+  PodCodexSkillsSetPayload,
 } from "../types";
 import { toPodPublicView } from "../types/index.js";
 import type {
@@ -25,6 +27,8 @@ import type {
   PodClearMemoryPayload,
   PodDeletePayload,
   PodSetPluginsPayload,
+  PodCodexSkillsListPayload,
+  PodSetCodexSkillsPayload,
 } from "../schemas";
 import { podStore } from "../services/podStore.js";
 import {
@@ -41,6 +45,8 @@ import {
 } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { memoryStateService } from "../services/memoryStateService.js";
+import { codexSkillService } from "../services/codex/codexSkillService.js";
+import { resolvePodCwd } from "../services/shared/podPathResolver.js";
 import { dispatchApplicationCommand } from "../services/commands/applicationCommand.js";
 import {
   podCommandService,
@@ -566,3 +572,147 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
     );
   },
 );
+
+export const handlePodCodexSkillsList =
+  withCanvasId<PodCodexSkillsListPayload>(
+    WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: PodCodexSkillsListPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const pod = validatePod(
+        connectionId,
+        payload.podId,
+        WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+        requestId,
+      );
+      if (!pod) return;
+      if (pod.provider !== "codex") {
+        emitError(
+          connectionId,
+          WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+          "只有 Codex Pod 可以載入 Skills",
+          canvasId,
+          requestId,
+          pod.id,
+          "PROVIDER_UNSUPPORTED",
+        );
+        return;
+      }
+
+      try {
+        const { items, runtimeEntries } = await codexSkillService.list(
+          resolvePodCwd(pod),
+          payload.forceReload ?? false,
+        );
+        const selectedKeys = codexSkillService.resolveSelectedKeys(
+          pod.codexSkillKeys,
+          pod.codexSkillsInitialized,
+          runtimeEntries,
+        );
+        if (
+          !pod.codexSkillsInitialized ||
+          JSON.stringify(selectedKeys) !== JSON.stringify(pod.codexSkillKeys)
+        ) {
+          podStore.setCodexSkillKeys(pod.id, selectedKeys);
+        }
+
+        const response: PodCodexSkillsListResultPayload = {
+          requestId,
+          canvasId,
+          success: true,
+          podId: pod.id,
+          items,
+          selectedKeys,
+        };
+        socketService.emitToConnection(
+          connectionId,
+          WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+          response,
+        );
+      } catch (error) {
+        logger.error(
+          "Pod",
+          "Error",
+          `載入 Codex Skills 失敗：${error instanceof Error ? error.message : String(error)}`,
+        );
+        emitError(
+          connectionId,
+          WebSocketResponseEvents.POD_CODEX_SKILLS_LIST_RESULT,
+          "載入 Codex Skills 失敗",
+          canvasId,
+          requestId,
+          pod.id,
+          "CODEX_SKILLS_LOAD_FAILED",
+        );
+      }
+    },
+  );
+
+export const handlePodSetCodexSkills =
+  withCanvasId<PodSetCodexSkillsPayload>(
+    WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: PodSetCodexSkillsPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const pod = validatePod(
+        connectionId,
+        payload.podId,
+        WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
+        requestId,
+      );
+      if (!pod) return;
+
+      try {
+        const { runtimeEntries } = await codexSkillService.list(
+          resolvePodCwd(pod),
+          true,
+        );
+        const requestedKeys = [...new Set(payload.skillKeys)];
+        const validKeys = codexSkillService.resolveSelectedKeys(
+          requestedKeys,
+          true,
+          runtimeEntries,
+        );
+        const validKeySet = new Set(validKeys);
+        const ignoredKeys = requestedKeys.filter(
+          (key) => !validKeySet.has(key),
+        );
+        podStore.setCodexSkillKeys(pod.id, validKeys);
+        const updatedPod = podStore.getById(canvasId, pod.id);
+
+        const response: PodCodexSkillsSetPayload = {
+          requestId,
+          canvasId,
+          success: true,
+          ...(updatedPod ? { pod: toPodPublicView(updatedPod) } : {}),
+          ...(ignoredKeys.length > 0 ? { ignoredKeys } : {}),
+        };
+        socketService.emitToCanvas(
+          canvasId,
+          WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
+          response,
+        );
+      } catch (error) {
+        logger.error(
+          "Pod",
+          "Error",
+          `更新 Codex Skills 失敗：${error instanceof Error ? error.message : String(error)}`,
+        );
+        emitError(
+          connectionId,
+          WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
+          "更新 Codex Skills 失敗",
+          canvasId,
+          requestId,
+          pod.id,
+          "CODEX_SKILLS_UPDATE_FAILED",
+        );
+      }
+    },
+  );

@@ -24,6 +24,7 @@ export interface PodRow {
   provider_config_json: string | null;
   fast_mode_enabled: number;
   agent_canvas_mcp_enabled: number;
+  codex_skills_initialized: number;
 }
 
 export interface IntegrationBindingRow {
@@ -81,6 +82,7 @@ export function buildPodFromRow(
   relations: {
     mcpServerNames: Map<string, string[]>;
     pluginIds: Map<string, string[]>;
+    codexSkillKeys: Map<string, string[]>;
   },
   bindingsMap: Map<string, IntegrationBinding[]>,
   memoryStateMaps: {
@@ -112,6 +114,8 @@ export function buildPodFromRow(
     mcpServerNames: relations.mcpServerNames.get(row.id) ?? [],
     agentCanvasMcpEnabled: row.agent_canvas_mcp_enabled === 1,
     pluginIds: relations.pluginIds.get(row.id) ?? [],
+    codexSkillKeys: relations.codexSkillKeys.get(row.id) ?? [],
+    codexSkillsInitialized: row.codex_skills_initialized === 1,
     provider,
     providerConfig,
     fastModeEnabled: row.fast_mode_enabled === 1,

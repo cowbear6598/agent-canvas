@@ -72,6 +72,7 @@ export const pastePodItemSchema = z
       )
       .optional(),
     pluginIds: z.array(pluginIdSchema).optional(),
+    codexSkillKeys: z.array(z.string().min(1).max(300)).max(200).optional(),
     repositoryId: resourceIdSchema.nullable().optional(),
     goal: podGoalSchema.nullable().optional(),
   })

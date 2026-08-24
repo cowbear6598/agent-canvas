@@ -310,7 +310,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         v-else
         class="pod-popover-scrollable"
       >
-        <div class="space-y-1">
+        <div class="space-y-1 pr-3">
           <McpServerRow
             v-for="server in userMcpServers"
             :key="server.name"

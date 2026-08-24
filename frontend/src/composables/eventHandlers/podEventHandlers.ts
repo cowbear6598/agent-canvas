@@ -114,6 +114,22 @@ const handlePodPluginsSet = createUnifiedHandler<
   usePodStore().updatePodPlugins(payload.pod.id, payload.pod.pluginIds);
 });
 
+const handlePodCodexSkillsSet = createUnifiedHandler<
+  BasePayload & { canvasId: string; success?: boolean; pod?: Pod }
+>((payload) => {
+  if (
+    !payload.success ||
+    !payload.pod?.id ||
+    !Array.isArray(payload.pod.codexSkillKeys) ||
+    !payload.pod.codexSkillKeys.every((key) => typeof key === "string")
+  )
+    return;
+  usePodStore().updatePodCodexSkills(
+    payload.pod.id,
+    payload.pod.codexSkillKeys,
+  );
+});
+
 /**
  * 多人協作同步：當其他 client 更新 Pod 的 MCP server 名稱清單時，
  * 更新本地 podStore 狀態，避免各 client 之間狀態不同步。
@@ -207,6 +223,10 @@ export function getPodEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.POD_PLUGINS_SET,
       handler: handlePodPluginsSet as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.POD_CODEX_SKILLS_SET,
+      handler: handlePodCodexSkillsSet as (payload: unknown) => void,
     },
   ];
 }
