@@ -105,7 +105,7 @@ describe("podPackService", () => {
     expect(parsePodPackArchive(archive).manifest.version).toBe(1);
   });
 
-  it("磁碟串流 v2 會保留 Git metadata、note 與非忽略的 working tree", async () => {
+  it("PodPack 磁碟串流會保留 Git metadata、多 Pod note 綁定與非忽略的 working tree", async () => {
     const repositoryId = `podpack-${randomUUID().slice(0, 8)}`;
     await repositoryService.create(repositoryId);
     const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
@@ -123,30 +123,52 @@ describe("podPackService", () => {
     try {
       const data = createExportData();
       data.pods[0]!.repositoryId = repositoryId;
+      data.pods[1]!.repositoryId = repositoryId;
       await createPodPackArchiveFile({
         ...data,
-        repositoryNotes: [{
-          repositoryId,
-          name: "Repository note",
-          x: 40,
-          y: 50,
-          boundToOriginalPodId: SOURCE_ID,
-          originalPosition: null,
-        }],
+        repositoryNotes: [
+          {
+            repositoryId,
+            name: "Repository note",
+            x: 40,
+            y: 50,
+            boundToOriginalPodId: SOURCE_ID,
+            originalPosition: null,
+          },
+          {
+            repositoryId,
+            name: "Reviewer repository note",
+            x: 300,
+            y: 80,
+            boundToOriginalPodId: TARGET_ID,
+            originalPosition: null,
+          },
+        ],
       }, archivePath);
       const prepared = await preparePodPackArchive(archivePath, transferRoot);
 
       expect(prepared.manifest.version).toBe(2);
       if (prepared.manifest.version !== 2) throw new Error("預期為 v2 manifest");
-      expect(prepared.manifest.repositories[0]).toMatchObject({
+      const repository = prepared.manifest.repositories[0]!;
+      expect(repository).toMatchObject({
         originalId: repositoryId,
         source: "git",
         note: { name: "Repository note", boundToOriginalPodId: SOURCE_ID },
+        notes: [
+          { name: "Repository note", boundToOriginalPodId: SOURCE_ID },
+          {
+            name: "Reviewer repository note",
+            boundToOriginalPodId: TARGET_ID,
+          },
+        ],
       });
       const restored = prepared.repositoryDirectories.get(repositoryId)!;
       await expect(fs.stat(path.join(restored, ".git"))).resolves.toBeDefined();
       await expect(fs.readFile(path.join(restored, "keep.txt"), "utf-8")).resolves.toBe("keep");
       await expect(fs.stat(path.join(restored, "ignored.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+
+      // 即使封包只帶部分 note，也直接依 Pod 的 Repository 關聯補齊綁定。
+      repository.notes = repository.notes?.slice(0, 1);
 
       const canvas = await canvasStore.create(`podpack-${randomUUID().slice(0, 8)}`);
       if (!canvas.success) throw new Error("建立測試 Canvas 失敗");
@@ -159,10 +181,19 @@ describe("podPackService", () => {
       });
       importedRepositoryId = imported.createdPods[0]?.repositoryId ?? null;
       expect(importedRepositoryId).toBe(`${repositoryId}-imported`);
-      expect(imported.createdRepositoryNotes[0]).toMatchObject({
-        repositoryId: importedRepositoryId,
-        boundToPodId: imported.createdPods[0]?.id,
-      });
+      expect(imported.createdPods.every(
+        (pod) => pod.repositoryId === importedRepositoryId,
+      )).toBe(true);
+      expect(imported.createdRepositoryNotes).toEqual([
+        expect.objectContaining({
+          repositoryId: importedRepositoryId,
+          boundToPodId: imported.createdPods[0]?.id,
+        }),
+        expect.objectContaining({
+          repositoryId: importedRepositoryId,
+          boundToPodId: imported.createdPods[1]?.id,
+        }),
+      ]);
       await expect(fs.readFile(
         path.join(repositoryService.getRepositoryPath(importedRepositoryId!), "keep.txt"),
         "utf-8",

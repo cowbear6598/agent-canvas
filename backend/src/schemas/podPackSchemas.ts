@@ -81,7 +81,9 @@ export const podPackRepositorySchema = z
     currentBranch: z.string().min(1).max(500).nullable(),
     fingerprint: fingerprintSchema,
     bundlePath: z.string().regex(/^repositories\/[a-f0-9]{64}\.zip$/),
+    /** note 保留主要項目，notes 保存完整清單。 */
     note: podPackRepositoryNoteSchema.nullable(),
+    notes: z.array(podPackRepositoryNoteSchema).max(50).optional(),
   })
   .strict();
 

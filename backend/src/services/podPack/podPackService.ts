@@ -61,6 +61,7 @@ const POD_PACK_OMITTED_RESOURCES = [
 type ArchiveEntries = Record<string, Uint8Array>;
 type DependencyAction = "reuse" | "install" | "rename";
 type ManifestRepository = Extract<PodPackManifest, { version: 2 }>["repositories"][number];
+type ManifestRepositoryNote = NonNullable<ManifestRepository["note"]>;
 
 export interface PodPackDependencyPreview {
   originalKey: string;
@@ -100,6 +101,41 @@ export interface PreparedPodPack {
 
 function repositoriesOf(manifest: PodPackManifest): ManifestRepository[] {
   return manifest.version === 2 ? manifest.repositories : [];
+}
+
+function repositoryNotesOf(
+  repository: ManifestRepository,
+): ManifestRepositoryNote[] {
+  return repository.notes ?? (repository.note ? [repository.note] : []);
+}
+
+function repositoryNotesForImport(
+  repository: ManifestRepository,
+  manifest: PodPackManifest,
+): ManifestRepositoryNote[] {
+  const notes = repositoryNotesOf(repository);
+  const boundPodIds = new Set(
+    notes.flatMap((note) =>
+      note.boundToOriginalPodId ? [note.boundToOriginalPodId] : [],
+    ),
+  );
+  const template = notes[0];
+  const missingNotes = manifest.pods
+    .filter(
+      (pod) =>
+        pod.repositoryId === repository.originalId &&
+        !boundPodIds.has(pod.originalId),
+    )
+    .map((pod) => ({
+      repositoryId: repository.originalId,
+      name: template?.name ?? repository.displayName,
+      x: template?.x ?? pod.x,
+      y: template?.y ?? pod.y,
+      boundToOriginalPodId: pod.originalId,
+      originalPosition: template?.originalPosition ?? null,
+    }));
+
+  return [...notes, ...missingNotes];
 }
 
 function sha256(...parts: Array<string | Uint8Array>): string {
@@ -280,7 +316,9 @@ async function repositorySnapshot(
   await fs.mkdir(path.dirname(destination), { recursive: true });
   await fs.rename(temporaryPath, destination);
   const branchResult = isGit ? await gitService.getCurrentBranch(repositoryPath) : null;
-  const note = input.repositoryNotes.find((item) => item.repositoryId === repositoryId) ?? null;
+  const notes = input.repositoryNotes.filter(
+    (item) => item.repositoryId === repositoryId,
+  );
   return {
     manifest: {
       originalId: repositoryId,
@@ -289,7 +327,8 @@ async function repositorySnapshot(
       currentBranch: branchResult?.success ? branchResult.data : null,
       fingerprint,
       bundlePath,
-      note,
+      note: notes[0] ?? null,
+      notes,
     },
     diskEntry: { archivePath: bundlePath, filePath: destination },
   };
@@ -436,7 +475,9 @@ function validateManifestReferences(manifest: PodPackManifest): void {
     throw new Error("POD_PACK_CONNECTION_REFERENCE_INVALID");
   }
   for (const repository of repositories) {
-    if (repository.note?.boundToOriginalPodId && !podIds.has(repository.note.boundToOriginalPodId)) {
+    if (repositoryNotesOf(repository).some(
+      (note) => note.boundToOriginalPodId && !podIds.has(note.boundToOriginalPodId),
+    )) {
       throw new Error("POD_PACK_REPOSITORY_NOTE_REFERENCE_INVALID");
     }
   }
@@ -817,19 +858,24 @@ function importRepositoryNotes(
   artifacts: ImportArtifacts,
 ): Array<ReturnType<typeof repositoryNoteStore.create>> {
   return repositoriesOf(prepared.manifest).flatMap((repository) => {
-    if (!repository.note) return [];
     const repositoryId = repositoryMap.get(repository.originalId);
     if (!repositoryId) return [];
-    const note = repositoryNoteStore.create(options.canvasId, {
-      repositoryId,
-      name: repository.note.name,
-      x: repository.note.x + offset.x,
-      y: repository.note.y + offset.y,
-      boundToPodId: repository.note.boundToOriginalPodId ? podMap[repository.note.boundToOriginalPodId] ?? null : null,
-      originalPosition: repository.note.originalPosition,
-    });
-    artifacts.noteIds.push(note.id);
-    return [note];
+    return repositoryNotesForImport(repository, prepared.manifest).map(
+      (source) => {
+        const note = repositoryNoteStore.create(options.canvasId, {
+          repositoryId,
+          name: source.name,
+          x: source.x + offset.x,
+          y: source.y + offset.y,
+          boundToPodId: source.boundToOriginalPodId
+            ? podMap[source.boundToOriginalPodId] ?? null
+            : null,
+          originalPosition: source.originalPosition,
+        });
+        artifacts.noteIds.push(note.id);
+        return note;
+      },
+    );
   });
 }
 
