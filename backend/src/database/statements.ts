@@ -85,6 +85,11 @@ function buildStatements(db: Database): {
     selectByPodId: ReturnType<Database["prepare"]>;
     deleteByPodId: ReturnType<Database["prepare"]>;
   };
+  podCodexMcpServerKeys: {
+    insert: ReturnType<Database["prepare"]>;
+    selectByPodId: ReturnType<Database["prepare"]>;
+    deleteByPodId: ReturnType<Database["prepare"]>;
+  };
   connection: {
     insert: ReturnType<Database["prepare"]>;
     selectByCanvasId: ReturnType<Database["prepare"]>;
@@ -461,6 +466,18 @@ function buildStatements(db: Database): {
       ),
       deleteByPodId: db.prepare(
         "DELETE FROM pod_codex_skill_keys WHERE pod_id = ?",
+      ),
+    },
+
+    podCodexMcpServerKeys: {
+      insert: db.prepare(
+        "INSERT OR IGNORE INTO pod_codex_mcp_server_keys (pod_id, server_key) VALUES ($podId, $serverKey)",
+      ),
+      selectByPodId: db.prepare(
+        "SELECT server_key FROM pod_codex_mcp_server_keys WHERE pod_id = ?",
+      ),
+      deleteByPodId: db.prepare(
+        "DELETE FROM pod_codex_mcp_server_keys WHERE pod_id = ?",
       ),
     },
 

@@ -34,7 +34,6 @@ import { logger } from "../../utils/logger.js";
 import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
-import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
 import { buildMcpBootstrapPrompt } from "./mcpBootstrapPrompt.js";
 import { formatPluginSkillCatalogPrompt } from "../plugin/pluginCatalogBuilder.js";
 import {
@@ -45,6 +44,7 @@ import { collectStderr } from "../codex/codexHelpers.js";
 import { isEnoentError } from "./utils.js";
 import { codexSkillService } from "../codex/codexSkillService.js";
 import { podStore } from "../podStore.js";
+import { codexMcpService } from "../codex/codexMcpService.js";
 
 /**
  * Codex provider 的執行時選項（執行時型別，由 buildOptions 輸出）。
@@ -74,6 +74,8 @@ export interface CodexOptions {
   pluginCatalogText: string;
   /** Pod 明確選取的 Codex Skill key。 */
   codexSkillKeys: string[];
+  /** Pod 明確選取的 Codex 原生 MCP key。 */
+  codexMcpServerKeys: string[];
   /** 是否已完成舊 Pod 的首次 Skill 白名單初始化。 */
   codexSkillsInitialized: boolean;
 }
@@ -345,6 +347,7 @@ function buildNewSessionArgs(
   mcpAutoApproveArgs: string[],
   goalMcpConfigArgs: string[],
   skillConfigArgs: string[],
+  nativeMcpConfigArgs: string[],
   thinkingLevel?: string,
   fastModeEnabled = false,
 ): string[] {
@@ -360,6 +363,7 @@ function buildNewSessionArgs(
     ...(thinkingLevel ? ["-c", `model_reasoning_effort=${thinkingLevel}`] : []),
     ...buildFastModeArgs(fastModeEnabled),
     ...goalMcpConfigArgs,
+    ...nativeMcpConfigArgs,
     ...skillConfigArgs,
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
     ...mcpAutoApproveArgs,
@@ -390,13 +394,14 @@ function buildCodexArgs(
   options?: CodexOptions,
   thinkingLevel?: string,
   skillConfigArgs: string[] = [],
+  nativeMcpConfigArgs: string[] = [],
+  nativeMcpServerNames: string[] = [],
 ): string[] {
   const entries = options?.mcpEntries ?? [];
 
-  // auto-approve 對象：codex 自己讀的 ~/.codex/config.toml MCPs + 我們注入的 entries。
-  // 兩邊合在一起，避免 MCP tool 在 headless run 中卡 approval。
+  // auto-approve 僅套用 Pod 選取的 Codex 原生 MCP 與 Canvas 動態注入 entries。
   const autoApproveServerNames = [
-    ...readCodexMcpServers().map((server) => server.name),
+    ...nativeMcpServerNames,
     ...entries.map((entry) => entry.name),
   ];
 
@@ -418,6 +423,7 @@ function buildCodexArgs(
         mcpAutoApproveArgs,
         runtimeMcpConfigArgs,
         skillConfigArgs,
+        nativeMcpConfigArgs,
         thinkingLevel,
         fastModeEnabled,
       );
@@ -439,6 +445,7 @@ function buildCodexArgs(
         : []),
       ...buildFastModeArgs(fastModeEnabled),
       ...runtimeMcpConfigArgs,
+      ...nativeMcpConfigArgs,
       ...skillConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
@@ -453,6 +460,7 @@ function buildCodexArgs(
     mcpAutoApproveArgs,
     runtimeMcpConfigArgs,
     skillConfigArgs,
+    nativeMcpConfigArgs,
     thinkingLevel,
     fastModeEnabled,
   );
@@ -737,6 +745,7 @@ const codexMetadata: ProviderMetadata<CodexOptions> = {
     hasGoalRuntime: false,
     pluginCatalogText: "",
     codexSkillKeys: [],
+    codexMcpServerKeys: [],
     codexSkillsInitialized: true,
     fastModeEnabled: false,
   },
@@ -747,6 +756,8 @@ const codexMetadata: ProviderMetadata<CodexOptions> = {
 function prepareCodexExecution(
   ctx: ChatRequestContext<CodexOptions>,
   skillConfigArgs: string[],
+  nativeMcpConfigArgs: string[],
+  nativeMcpServerNames: string[],
 ): { codexArgs: string[]; promptText: string } | null {
   const {
     message,
@@ -768,6 +779,8 @@ function prepareCodexExecution(
     options,
     options?.thinkingLevel,
     skillConfigArgs,
+    nativeMcpConfigArgs,
+    nativeMcpServerNames,
   );
   const goalRuntimeAvailable = Boolean(options?.hasGoalRuntime);
   const pluginCatalogText = options?.pluginCatalogText ?? "";
@@ -805,6 +818,7 @@ export const codexProvider: AgentProvider<CodexOptions> = {
       hasGoalRuntime,
       pluginCatalogText: formatPluginSkillCatalogPrompt(pluginCatalog),
       codexSkillKeys: [...(pod.codexSkillKeys ?? [])],
+      codexMcpServerKeys: [...(pod.codexMcpServerKeys ?? [])],
       codexSkillsInitialized: pod.codexSkillsInitialized ?? false,
       fastModeEnabled:
         pod.fastModeEnabled === true && isFastModeSupported("codex", model),
@@ -822,6 +836,21 @@ export const codexProvider: AgentProvider<CodexOptions> = {
     ctx: ChatRequestContext<CodexOptions>,
   ): AsyncIterable<NormalizedEvent> {
     const { podId, podName, workspacePath, abortSignal, options } = ctx;
+    const requestedModel = options?.model ?? codexMetadata.defaultOptions.model;
+    if (!MODEL_RE.test(requestedModel)) {
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[CodexProvider] model 驗證失敗，不合法的 model 名稱：${requestedModel}`,
+      );
+      yield buildCodexSystemError({
+        content: "不合法的 model 名稱",
+        fatal: true,
+        code: "INVALID_MODEL",
+        recovery: "unrecoverable",
+      });
+      return;
+    }
 
     let skillConfigArgs: string[];
     try {
@@ -861,7 +890,51 @@ export const codexProvider: AgentProvider<CodexOptions> = {
       return;
     }
 
-    const execution = prepareCodexExecution(ctx, skillConfigArgs);
+    let nativeMcpConfigArgs: string[];
+    let nativeMcpServerNames: string[];
+    try {
+      const runtimeEntries = await codexMcpService.list(workspacePath);
+      const selectedKeys = codexMcpService.resolveSelectedKeys(
+        options?.codexMcpServerKeys ?? [],
+        runtimeEntries,
+      );
+      if (
+        JSON.stringify(selectedKeys) !==
+        JSON.stringify(options?.codexMcpServerKeys ?? [])
+      ) {
+        podStore.setCodexMcpServerKeys(podId, selectedKeys);
+      }
+      nativeMcpConfigArgs = codexMcpService.buildRuntimeConfigArgs(
+        selectedKeys,
+        runtimeEntries,
+      );
+      const selectedSet = new Set(selectedKeys);
+      nativeMcpServerNames = runtimeEntries
+        .filter(
+          (entry) => entry.globallyEnabled && selectedSet.has(entry.key),
+        )
+        .map((entry) => entry.name);
+    } catch (error) {
+      logger.error(
+        "Chat",
+        "Error",
+        `[CodexProvider] 載入 Pod MCP 失敗（podId: ${podId}）：${error instanceof Error ? error.message : String(error)}`,
+      );
+      yield buildCodexSystemError({
+        content: "無法載入 Codex MCP 設定，請稍後再試",
+        fatal: true,
+        code: "CODEX_MCP_LOAD_FAILED",
+        recovery: "unrecoverable",
+      });
+      return;
+    }
+
+    const execution = prepareCodexExecution(
+      ctx,
+      skillConfigArgs,
+      nativeMcpConfigArgs,
+      nativeMcpServerNames,
+    );
     if (execution === null) {
       const model = options?.model ?? codexMetadata.defaultOptions.model;
       logger.warn(

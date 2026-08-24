@@ -332,6 +332,12 @@
       },
       "mcpLabel": "MCPs",
       "agentCanvasMcpLabel": "Agent Canvas",
+      "mcpSource": {
+        "official": "官方",
+        "user": "使用者",
+        "canvas": "畫布"
+      },
+      "mcpCodexGloballyDisabled": "已由 Codex 全域設定停用",
       "mcpLoading": "載入中…",
       "mcpEmpty": "尚未安裝 MCP server",
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",

@@ -63,6 +63,7 @@ export async function updatePodMcpServers(
   podId: string,
   mcpServerNames: string[],
   agentCanvasMcpEnabled?: boolean,
+  codexMcpServerKeys?: string[],
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (!websocketClient.isConnected.value) {
@@ -107,6 +108,7 @@ export async function updatePodMcpServers(
       canvasId,
       podId,
       mcpServerNames,
+      ...(codexMcpServerKeys !== undefined && { codexMcpServerKeys }),
       ...(agentCanvasMcpEnabled !== undefined && { agentCanvasMcpEnabled }),
       requestId,
     } as PodSetMcpServerNamesPayload);

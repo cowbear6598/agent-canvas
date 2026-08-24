@@ -334,6 +334,7 @@ export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
   canvasId: string;
   podId?: string;
   mcpServerNames?: string[];
+  codexMcpServerKeys?: string[];
   agentCanvasMcpEnabled?: boolean;
   /**
    * self-healing 過濾掉的 MCP server name 清單。
@@ -343,6 +344,7 @@ export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
    * - opencode → ~/.config/opencode/opencode.json
    */
   ignoredNames?: string[];
+  ignoredCodexMcpServerKeys?: string[];
   pod?: Pod;
 }
 

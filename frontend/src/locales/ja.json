@@ -332,6 +332,12 @@
       },
       "mcpLabel": "MCP",
       "agentCanvasMcpLabel": "Agent Canvas",
+      "mcpSource": {
+        "official": "公式",
+        "user": "ユーザー",
+        "canvas": "Canvas"
+      },
+      "mcpCodexGloballyDisabled": "Codex のグローバル設定で無効です",
       "mcpLoading": "読み込み中…",
       "mcpEmpty": "MCP server がインストールされていません",
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",

@@ -348,6 +348,14 @@ function createBaseTables(db: Database): void {
   );
 
   db.exec(
+    "CREATE TABLE IF NOT EXISTS pod_codex_mcp_server_keys (" +
+      "pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE," +
+      "server_key TEXT NOT NULL," +
+      "PRIMARY KEY (pod_id, server_key)" +
+      ")",
+  );
+
+  db.exec(
     "CREATE TABLE IF NOT EXISTS connections (" +
       "id TEXT PRIMARY KEY," +
       "canvas_id TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE," +

@@ -140,6 +140,7 @@ const handlePodMcpServerNamesUpdated = createUnifiedHandler<
     canvasId: string;
     podId?: string;
     mcpServerNames?: string[];
+    codexMcpServerKeys?: string[];
     agentCanvasMcpEnabled?: boolean;
   }
 >((payload) => {
@@ -150,9 +151,16 @@ const handlePodMcpServerNamesUpdated = createUnifiedHandler<
   )
     return;
   invalidatePodMcpAvailabilityCache(undefined, payload.podId);
-  usePodStore().updatePodMcpServers(payload.podId, payload.mcpServerNames);
+  const podStore = usePodStore();
+  podStore.updatePodMcpServers(payload.podId, payload.mcpServerNames);
+  if (
+    Array.isArray(payload.codexMcpServerKeys) &&
+    payload.codexMcpServerKeys.every((key) => typeof key === "string")
+  ) {
+    podStore.updatePodCodexMcpServers(payload.podId, payload.codexMcpServerKeys);
+  }
   if (typeof payload.agentCanvasMcpEnabled === "boolean") {
-    usePodStore().updatePodAgentCanvasMcpEnabled(
+    podStore.updatePodAgentCanvasMcpEnabled(
       payload.podId,
       payload.agentCanvasMcpEnabled,
     );

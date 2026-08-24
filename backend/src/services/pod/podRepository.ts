@@ -26,6 +26,7 @@ export interface PodHydrationMaps {
     mcpServerNames: Map<string, string[]>;
     pluginIds: Map<string, string[]>;
     codexSkillKeys: Map<string, string[]>;
+    codexMcpServerKeys: Map<string, string[]>;
   };
   bindingsMap: Map<string, IntegrationBinding[]>;
 }
@@ -49,12 +50,14 @@ export class PodRepository {
     "pod_mcp_server_names",
     "pod_plugin_ids",
     "pod_codex_skill_keys",
+    "pod_codex_mcp_server_keys",
   ]);
 
   private static readonly ALLOWED_RELATION_COLUMNS = new Set([
     "mcp_server_name",
     "plugin_id",
     "skill_key",
+    "server_key",
   ]);
 
   __clearCacheForTesting(): void {
@@ -155,7 +158,10 @@ export class PodRepository {
 
   private insertJoinTableIds(
     podId: string,
-    pod: Pick<Pod, "mcpServerNames" | "pluginIds" | "codexSkillKeys">,
+    pod: Pick<
+      Pod,
+      "mcpServerNames" | "pluginIds" | "codexSkillKeys" | "codexMcpServerKeys"
+    >,
   ): void {
     for (const mcpServerName of pod.mcpServerNames) {
       this.stmts.podMcpServerNames.insert.run({
@@ -175,6 +181,13 @@ export class PodRepository {
       this.stmts.podCodexSkillKeys.insert.run({
         $podId: podId,
         $skillKey: skillKey,
+      });
+    }
+
+    for (const serverKey of pod.codexMcpServerKeys ?? []) {
+      this.stmts.podCodexMcpServerKeys.insert.run({
+        $podId: podId,
+        $serverKey: serverKey,
       });
     }
   }
@@ -219,6 +232,14 @@ export class PodRepository {
         (valueId) => ({ $podId: podId, $skillKey: valueId }),
       );
     }
+    if (updates.codexMcpServerKeys !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podCodexMcpServerKeys,
+        updates.codexMcpServerKeys,
+        (valueId) => ({ $podId: podId, $serverKey: valueId }),
+      );
+    }
   }
 
   loadHydrationMaps(podIds: string[]): PodHydrationMaps {
@@ -228,6 +249,7 @@ export class PodRepository {
           mcpServerNames: new Map(),
           pluginIds: new Map(),
           codexSkillKeys: new Map(),
+          codexMcpServerKeys: new Map(),
         },
         bindingsMap: new Map(),
       };
@@ -244,6 +266,11 @@ export class PodRepository {
         codexSkillKeys: this.loadRelation(
           "pod_codex_skill_keys",
           "skill_key",
+          podIds,
+        ),
+        codexMcpServerKeys: this.loadRelation(
+          "pod_codex_mcp_server_keys",
+          "server_key",
           podIds,
         ),
       },
@@ -391,13 +418,23 @@ export class PodRepository {
 
   replaceMcpServerNames(podId: string, names: string[]): void {
     getDb().transaction(() => {
-      this.stmts.podMcpServerNames.deleteByPodId.run(podId);
-      for (const name of names) {
-        this.stmts.podMcpServerNames.insert.run({
-          $podId: podId,
-          $mcpServerName: name,
-        });
-      }
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podMcpServerNames,
+        names,
+        (name) => ({ $podId: podId, $mcpServerName: name }),
+      );
+    })();
+  }
+
+  replaceCodexMcpServerKeys(podId: string, keys: string[]): void {
+    getDb().transaction(() => {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podCodexMcpServerKeys,
+        keys,
+        (key) => ({ $podId: podId, $serverKey: key }),
+      );
     })();
   }
 

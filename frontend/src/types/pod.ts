@@ -115,6 +115,8 @@ export interface Pod {
   hasRepoMemory?: boolean;
   workspacePath?: string;
   mcpServerNames?: string[];
+  /** Pod 明確啟用的 Codex 原生 MCP key。 */
+  codexMcpServerKeys?: string[];
   agentCanvasMcpEnabled?: boolean;
   pluginIds?: string[];
   /** Pod 明確啟用的 Codex Skill key（格式為 scope:name）。 */

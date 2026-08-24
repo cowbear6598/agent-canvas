@@ -35,6 +35,8 @@ function createPod(overrides: Partial<Pod> = {}): Pod {
     rotation: overrides.rotation ?? 0,
     sessionId: overrides.sessionId ?? null,
     mcpServerNames: overrides.mcpServerNames ?? [],
+    codexMcpServerKeys: overrides.codexMcpServerKeys ?? [],
+    agentCanvasMcpEnabled: overrides.agentCanvasMcpEnabled ?? false,
     pluginIds: overrides.pluginIds ?? [],
     provider: overrides.provider ?? "claude",
     providerConfig: overrides.providerConfig ?? null,
@@ -241,5 +243,51 @@ describe("ManagedMcpAvailabilityService business rules", () => {
         }),
       );
     }
+  });
+
+  it("Codex 原生 MCP 依 official/user 來源顯示，且全域停用項目不可選", () => {
+    const service = createManagedMcpAvailabilityService({
+      store: { list: vi.fn(() => []) },
+      runtimeService: { getRuntimeSnapshot: vi.fn(() => null) },
+    });
+    const availability = service.listForPod(
+      createPod({ codexMcpServerKeys: ["plugin:official:docs"] }),
+      [
+        {
+          key: "plugin:official:docs",
+          name: "docs",
+          source: "official",
+          transport: "stdio",
+          globallyEnabled: true,
+          configTarget: { kind: "plugin", pluginId: "official" },
+        },
+        {
+          key: "user:local",
+          name: "local",
+          source: "user",
+          transport: "http",
+          globallyEnabled: false,
+          configTarget: { kind: "user" },
+        },
+      ],
+    );
+
+    expect(availability).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "plugin:official:docs",
+          source: "official",
+          selected: true,
+          selectable: true,
+        }),
+        expect.objectContaining({
+          key: "user:local",
+          source: "user",
+          selected: false,
+          selectable: false,
+          disabledReasonKey: "codexGloballyDisabled",
+        }),
+      ]),
+    );
   });
 });

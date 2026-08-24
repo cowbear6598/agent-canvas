@@ -20,6 +20,22 @@ import { createI18nError } from "../utils/i18nError.js";
 import { emitError, emitNotFound } from "../utils/websocketResponse.js";
 import { getCanvasId } from "../utils/handlerHelpers.js";
 import { logger } from "../utils/logger.js";
+import {
+  codexMcpService,
+  type CodexMcpRuntimeEntry,
+} from "../services/codex/codexMcpService.js";
+import { resolvePodCwd } from "../services/shared/podPathResolver.js";
+
+async function loadCodexMcpEntriesForPod(
+  pod: Parameters<typeof resolvePodCwd>[0],
+): Promise<CodexMcpRuntimeEntry[]> {
+  if (pod.provider !== "codex") return [];
+  return codexMcpService.list(resolvePodCwd(pod));
+}
+
+function isCodexMcpSource(source: string | undefined): boolean {
+  return source === "official" || source === "user";
+}
 
 function toManagedMcpRegistryItem(entry: ManagedMcpServerRecord): {
   id: string;
@@ -251,7 +267,30 @@ export async function handlePodMcpAvailabilityList(
     return;
   }
 
-  const items = managedMcpAvailabilityService.listForPod(podRef.pod);
+  let codexEntries;
+  try {
+    codexEntries = await loadCodexMcpEntriesForPod(podRef.pod);
+  } catch (error) {
+    logger.error(
+      "McpServer",
+      "Error",
+      `載入 Codex MCP 清單失敗（podId: ${payload.podId}）：${error instanceof Error ? error.message : String(error)}`,
+    );
+    emitError(
+      connectionId,
+      WebSocketResponseEvents.POD_MCP_AVAILABILITY_LIST_RESULT,
+      new Error("無法載入 Codex MCP 清單，請稍後再試"),
+      null,
+      requestId,
+      payload.podId,
+      "CODEX_MCP_LOAD_FAILED",
+    );
+    return;
+  }
+  const items = managedMcpAvailabilityService.listForPod(
+    podRef.pod,
+    codexEntries,
+  );
 
   socketService.emitToConnection(
     connectionId,
@@ -281,7 +320,12 @@ export async function handlePodSetMcpServerNames(
   payload: PodSetMcpServerNamesPayload,
   requestId: string,
 ): Promise<void> {
-  const { podId, mcpServerNames, agentCanvasMcpEnabled } = payload;
+  const {
+    podId,
+    mcpServerNames,
+    codexMcpServerKeys,
+    agentCanvasMcpEnabled,
+  } = payload;
 
   // 取得 canvasId（未設定 active canvas 時 getCanvasId 已自動回傳 error）
   const canvasId = getCanvasId(
@@ -307,10 +351,34 @@ export async function handlePodSetMcpServerNames(
 
   // self-healing：依 managed registry 過濾掉不可選的 name（已從 registry 刪除或被 disable），
   // 避免異常呼叫時繞過驗證。
+  let codexEntries;
+  try {
+    codexEntries = await loadCodexMcpEntriesForPod(pod);
+  } catch (error) {
+    emitError(
+      connectionId,
+      WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,
+      error instanceof Error ? error : new Error("無法載入 Codex MCP 清單"),
+      canvasId,
+      requestId,
+      podId,
+      "CODEX_MCP_LOAD_FAILED",
+    );
+    return;
+  }
+  const availability = managedMcpAvailabilityService.listForPod(
+    pod,
+    codexEntries,
+  );
   const availableNameSet = new Set(
-    managedMcpAvailabilityService
-      .listForPod(pod)
-      .filter((item) => !item.system && !item.locked && item.selectable)
+    availability
+      .filter(
+        (item) =>
+          !isCodexMcpSource(item.source) &&
+          !item.system &&
+          !item.locked &&
+          item.selectable,
+      )
       .map((item) => item.name),
   );
 
@@ -324,7 +392,23 @@ export async function handlePodSetMcpServerNames(
   }
   const validNames = mcpServerNames.filter((n) => availableNameSet.has(n));
 
+  const availableCodexKeySet = new Set(
+    availability
+      .filter((item) => isCodexMcpSource(item.source) && item.selectable)
+      .map((item) => item.key),
+  );
+  const requestedCodexKeys = codexMcpServerKeys ?? pod.codexMcpServerKeys ?? [];
+  const invalidCodexKeys = requestedCodexKeys.filter(
+    (key) => !availableCodexKeySet.has(key),
+  );
+  const validCodexKeys = requestedCodexKeys.filter((key) =>
+    availableCodexKeySet.has(key),
+  );
+
   podStore.setMcpServerNames(podId, validNames);
+  if (codexMcpServerKeys !== undefined) {
+    podStore.setCodexMcpServerKeys(podId, validCodexKeys);
+  }
   if (agentCanvasMcpEnabled !== undefined) {
     podStore.update(canvasId, podId, { agentCanvasMcpEnabled });
   }
@@ -340,9 +424,14 @@ export async function handlePodSetMcpServerNames(
       podId,
       success: true,
       mcpServerNames: validNames,
+      codexMcpServerKeys:
+        codexMcpServerKeys === undefined
+          ? (pod.codexMcpServerKeys ?? [])
+          : validCodexKeys,
       agentCanvasMcpEnabled:
         agentCanvasMcpEnabled ?? pod.agentCanvasMcpEnabled,
       ignoredNames: invalidNames,
+      ignoredCodexMcpServerKeys: invalidCodexKeys,
     },
   );
 }

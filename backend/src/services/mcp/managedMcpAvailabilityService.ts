@@ -9,6 +9,7 @@ import {
   type ManagedMcpRuntimeSnapshot,
 } from "./managedMcpRuntimeService.js";
 import type { Pod } from "../../types/pod.js";
+import type { CodexMcpRuntimeEntry } from "../codex/codexMcpService.js";
 
 interface ManagedMcpStoreLike {
   list(): ManagedMcpServerRecord[];
@@ -28,7 +29,9 @@ function buildGoalAvailabilityItem(
 ): PodMcpAvailabilityItem {
   const item = buildGoalRuntimeMcpListItem(pod);
   return {
+    key: "canvas:system:agent_canvas_goal",
     name: item.name,
+    source: "canvas",
     transport: "stdio",
     status: item.status,
     selected: true,
@@ -63,7 +66,9 @@ function buildPluginAvailabilityItem(
       ? "Bundle MCP 可用，但目前未啟用任何 skill bundle"
       : `已啟用 ${count} 個 skill bundle`;
   return {
+    key: "canvas:system:agent_canvas_plugin",
     name: "agent_canvas_plugin",
+    source: "canvas",
     transport: "stdio",
     status: "healthy",
     selected: true,
@@ -80,7 +85,9 @@ function buildAgentCanvasAvailabilityItem(
   pod: Pick<Pod, "agentCanvasMcpEnabled">,
 ): PodMcpAvailabilityItem {
   return {
+    key: "canvas:system:agent_canvas",
     name: "agent_canvas",
+    source: "canvas",
     transport: "stdio",
     status: "healthy",
     selected: pod.agentCanvasMcpEnabled,
@@ -90,6 +97,26 @@ function buildAgentCanvasAvailabilityItem(
     system: true,
     locked: false,
     description: "只限目前 Canvas 與 Run 的 Workflow 執行工具",
+  };
+}
+
+function buildCodexAvailabilityItem(
+  entry: CodexMcpRuntimeEntry,
+  selectedKeys: ReadonlySet<string>,
+): PodMcpAvailabilityItem {
+  return {
+    key: entry.key,
+    name: entry.name,
+    source: entry.source,
+    transport: entry.transport,
+    status: entry.globallyEnabled ? "healthy" : "disabled",
+    selected: entry.globallyEnabled && selectedKeys.has(entry.key),
+    selectable: entry.globallyEnabled,
+    disabledReason: null,
+    ...(entry.globallyEnabled
+      ? {}
+      : ({ disabledReasonKey: "codexGloballyDisabled" } as const)),
+    lastError: null,
   };
 }
 
@@ -115,9 +142,12 @@ export class ManagedMcpAvailabilityService {
       | "mcpServerNames"
       | "pluginIds"
       | "agentCanvasMcpEnabled"
+      | "codexMcpServerKeys"
     >,
+    codexEntries: readonly CodexMcpRuntimeEntry[] = [],
   ): PodMcpAvailabilityItem[] {
     const selectedNames = new Set(pod.mcpServerNames);
+    const selectedCodexKeys = new Set(pod.codexMcpServerKeys ?? []);
     const registry = this.deps.store.list();
     const registryByName = new Map(
       registry.map((entry) => [entry.name, entry]),
@@ -127,13 +157,18 @@ export class ManagedMcpAvailabilityService {
       buildGoalAvailabilityItem(pod),
       buildPluginAvailabilityItem(pod),
       buildAgentCanvasAvailabilityItem(pod),
+      ...codexEntries.map((entry) =>
+        buildCodexAvailabilityItem(entry, selectedCodexKeys),
+      ),
       ...registry.map((entry) => {
         const runtimeSnapshot = this.deps.runtimeService.getRuntimeSnapshot(
           entry.name,
         );
         const disabledReason = resolveDisabledReason(entry);
         return {
+          key: `canvas:managed:${entry.name}`,
           name: entry.name,
+          source: "canvas",
           transport: entry.transport,
           status:
             disabledReason !== null
@@ -150,7 +185,9 @@ export class ManagedMcpAvailabilityService {
     for (const selectedName of selectedNames) {
       if (registryByName.has(selectedName)) continue;
       items.push({
+        key: `canvas:managed:${selectedName}`,
         name: selectedName,
+        source: "canvas",
         transport: "stdio",
         status: "error",
         selected: true,

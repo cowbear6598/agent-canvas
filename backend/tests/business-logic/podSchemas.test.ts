@@ -5,6 +5,7 @@ import {
   podSetCodexSkillsSchema,
 } from "../../src/schemas/podSchemas.js";
 import { pastePodItemSchema } from "../../src/schemas/pasteSchemas.js";
+import { podSetMcpServerNamesSchema } from "../../src/schemas/mcpSchemas.js";
 
 describe("pod plugin id schema", () => {
   it("允許 pod:set-plugins 使用 upload bundle id", () => {
@@ -87,6 +88,20 @@ describe("pod Codex Skills schema", () => {
       canvasId: "11111111-1111-4111-8111-111111111111",
       podId: "22222222-2222-4222-8222-222222222222",
       skillKeys: ["system:review", "repo:project-plan"],
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("pod Codex MCP schema", () => {
+  it("允許 Pod 分開保存 Canvas names 與 Codex source keys", () => {
+    const result = podSetMcpServerNamesSchema.safeParse({
+      requestId: "44444444-4444-4444-8444-444444444444",
+      canvasId: "11111111-1111-4111-8111-111111111111",
+      podId: "22222222-2222-4222-8222-222222222222",
+      mcpServerNames: ["canvas-docs"],
+      codexMcpServerKeys: ["plugin:openai%2Fdocs:docs", "user:docs"],
     });
 
     expect(result.success).toBe(true);

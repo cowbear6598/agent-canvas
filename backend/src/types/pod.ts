@@ -37,6 +37,8 @@ export interface Pod {
   rotation: number;
   sessionId: string | null;
   mcpServerNames: string[];
+  /** Pod 明確啟用的 Codex 原生 MCP key；未設定等同全部不啟用。 */
+  codexMcpServerKeys?: string[];
   /** 是否啟用只限目前 Run／Canvas 的內建 Agent Canvas MCP。 */
   agentCanvasMcpEnabled: boolean;
   pluginIds: string[];

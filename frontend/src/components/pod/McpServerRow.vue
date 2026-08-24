@@ -13,6 +13,7 @@ import type { McpTransport } from "@/types/mcp";
  * ignored 通知。
  */
 const props = defineProps<{
+  resourceKey: string;
   name: string;
   label?: string;
   transport?: McpTransport;
@@ -25,7 +26,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  toggle: [name: string, value: boolean];
+  toggle: [key: string, value: boolean];
 }>();
 
 const { t } = useI18n();
@@ -81,7 +82,7 @@ const transportLabel = computed(() =>
         :model-value="props.checked"
         :disabled="props.disabled"
         @click.stop
-        @update:model-value="(val: boolean) => emit('toggle', props.name, val)"
+        @update:model-value="(val: boolean) => emit('toggle', props.resourceKey, val)"
       />
     </div>
   </div>

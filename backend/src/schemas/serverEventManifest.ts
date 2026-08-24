@@ -117,6 +117,7 @@ const podPublicViewSchema = z
     mcpServerNames: z.array(z.string()),
     pluginIds: z.array(z.string()),
     codexSkillKeys: z.array(z.string()),
+    codexMcpServerKeys: z.array(z.string()).optional(),
     provider: z.string(),
     providerConfig: stringRecordSchema.nullable(),
     repositoryId: z.string().nullable(),

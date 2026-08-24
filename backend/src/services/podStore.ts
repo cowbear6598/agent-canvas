@@ -89,6 +89,7 @@ class PodStore {
       agentCanvasMcpEnabled: data.agentCanvasMcpEnabled ?? false,
       pluginIds: data.pluginIds ?? [],
       codexSkillKeys: data.codexSkillKeys ?? [],
+      codexMcpServerKeys: [],
       // 新建 Pod 採獨立白名單；空陣列代表預設不啟用任何 Codex Skill。
       codexSkillsInitialized: true,
       provider,
@@ -244,6 +245,10 @@ class PodStore {
 
   setCodexSkillKeys(podId: string, keys: string[]): void {
     podRepository.replaceCodexSkillKeys(podId, keys, true);
+  }
+
+  setCodexMcpServerKeys(podId: string, keys: string[]): void {
+    podRepository.replaceCodexMcpServerKeys(podId, keys);
   }
 
   findByRepositoryId(canvasId: string, repositoryId: string): Pod[] {

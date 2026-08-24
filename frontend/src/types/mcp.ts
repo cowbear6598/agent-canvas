@@ -1,4 +1,5 @@
 export type McpTransport = "stdio" | "http" | "sse";
+export type McpSource = "official" | "user" | "canvas";
 
 export type McpDisplayStatus =
   | "healthy"
@@ -61,12 +62,15 @@ export type ManagedMcpRegistryInput =
  * 描述在特定 Pod / provider 下是否可選、是否已選取，以及顯示所需的狀態資訊。
  */
 export interface PodMcpAvailabilityItem {
+  key: string;
   name: string;
+  source: McpSource;
   transport: McpTransport;
   status: McpDisplayStatus;
   selected: boolean;
   selectable: boolean;
   disabledReason: string | null;
+  disabledReasonKey?: "codexGloballyDisabled";
   lastError: string | null;
   system?: boolean;
   locked?: boolean;

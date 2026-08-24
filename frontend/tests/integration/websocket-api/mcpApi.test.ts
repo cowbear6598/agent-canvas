@@ -103,6 +103,30 @@ describe("mcpApi", () => {
     await expect(requestPromise).resolves.toBeUndefined();
   });
 
+  it("可用獨立 key 更新 Codex 原生 MCP，避免與 Canvas 名稱碰撞", async () => {
+    const requestPromise = updatePodMcpServers(
+      "canvas-1",
+      "pod-1",
+      ["docs"],
+      undefined,
+      ["plugin:openai%2Fdocs:docs", "user:docs"],
+    );
+
+    expect(mockWebSocketClient.emit).toHaveBeenCalledWith(
+      "pod:set-mcp-server-names",
+      expect.objectContaining({
+        mcpServerNames: ["docs"],
+        codexMcpServerKeys: ["plugin:openai%2Fdocs:docs", "user:docs"],
+      }),
+    );
+    simulateEvent("pod:mcp-server-names:updated", {
+      requestId: "req-mcp-update",
+      success: true,
+    });
+
+    await expect(requestPromise).resolves.toBeUndefined();
+  });
+
   it("parseUpdateError 遇到 i18nError payload 時應保留 reason key", () => {
     expect(
       parseUpdateError({

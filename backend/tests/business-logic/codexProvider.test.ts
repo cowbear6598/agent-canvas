@@ -30,11 +30,13 @@ vi.mock("../../src/utils/logger.js", () => ({
 // ── codexMcpReader mock（預設回傳空陣列，各測試可覆寫） ────────────────
 vi.mock("../../src/services/mcp/codexMcpReader.js", () => ({
   readCodexMcpServers: vi.fn().mockReturnValue([]),
+  readCodexPluginMcpEnabledOverrides: vi.fn().mockReturnValue([]),
 }));
 
 import { readCodexMcpServers } from "../../src/services/mcp/codexMcpReader.js";
 import { logger } from "../../src/utils/logger.js";
 import { codexSkillService } from "../../src/services/codex/codexSkillService.js";
+import { codexMcpService } from "../../src/services/codex/codexMcpService.js";
 
 const REMOVED_CODEX_SANDBOX_FLAG = ["--", "sandbox"].join("");
 const REMOVED_CODEX_SANDBOX_MODE = ["workspace", "write"].join("-");
@@ -129,6 +131,7 @@ describe("CodexProvider", () => {
       items: [],
       runtimeEntries: [],
     });
+    vi.spyOn(codexMcpService, "list").mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -316,11 +319,21 @@ describe("CodexProvider", () => {
     expect(mockProc.stdin.write).toHaveBeenCalledWith("fix the failing test");
   });
 
-  it("Codex 把 mcpEntries 注入 -c mcp_servers.* 並仍對 ~/.codex/config.toml 的 MCP 加上 auto-approve", async () => {
+  it("Codex 把 mcpEntries 注入 -c，並只對 Pod 選取的原生 MCP 加上 auto-approve", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
     vi.mocked(readCodexMcpServers).mockReturnValue([
       { name: "legacy-installed", type: "stdio" } as any,
+    ]);
+    vi.mocked(codexMcpService.list).mockResolvedValue([
+      {
+        key: "user:legacy-installed",
+        name: "legacy-installed",
+        source: "user",
+        transport: "stdio",
+        globallyEnabled: true,
+        configTarget: { kind: "user" },
+      },
     ]);
 
     const provider = codexProvider;
@@ -340,6 +353,7 @@ describe("CodexProvider", () => {
           },
         ],
         hasGoalRuntime: false,
+        codexMcpServerKeys: ["user:legacy-installed"],
       },
     });
 
@@ -353,7 +367,10 @@ describe("CodexProvider", () => {
     expect(spawnArgs).toContain(
       `mcp_servers.team-server.args=${JSON.stringify(["/tmp/team-server.js"])}`,
     );
-    // ~/.codex/config.toml 的 MCP 仍會被加 auto-approve
+    // Pod 選取的 Codex 原生 MCP 會被啟用並加 auto-approve
+    expect(spawnArgs).toContain(
+      "mcp_servers.legacy-installed.enabled=true",
+    );
     expect(spawnArgs).toContain(
       `mcp_servers.legacy-installed.default_tools_approval_mode=approve`,
     );
@@ -770,17 +787,37 @@ describe("CodexProvider", () => {
 
   // ── MCP auto-approve：新對話 args 包含每個 MCP server 的 default_tools_approval_mode=approve ──
   it("新對話時 args 應包含每個 MCP server 的 default_tools_approval_mode=approve 旗標", async () => {
-    // mock readCodexMcpServers 回傳兩個 server
-    vi.mocked(readCodexMcpServers).mockReturnValue([
-      { name: "figma", type: "http" },
-      { name: "context7", type: "stdio" },
+    vi.mocked(codexMcpService.list).mockResolvedValue([
+      {
+        key: "user:figma",
+        name: "figma",
+        source: "user",
+        transport: "http",
+        globallyEnabled: true,
+        configTarget: { kind: "user" },
+      },
+      {
+        key: "user:context7",
+        name: "context7",
+        source: "user",
+        transport: "stdio",
+        globallyEnabled: true,
+        configTarget: { kind: "user" },
+      },
     ]);
 
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
     const provider = codexProvider;
-    const ctx = makeCtx({ resumeSessionId: null });
+    const ctx = makeCtx({
+      resumeSessionId: null,
+      options: {
+        model: "gpt-5.6-luna",
+        resumeMode: "cli",
+        codexMcpServerKeys: ["user:figma", "user:context7"],
+      },
+    });
     await collectEvents(provider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
@@ -803,16 +840,29 @@ describe("CodexProvider", () => {
 
   // ── MCP auto-approve：resume args 同樣包含每個 MCP server 的 auto-approve 旗標 ──
   it("resume 時 args 應包含每個 MCP server 的 default_tools_approval_mode=approve 旗標", async () => {
-    // mock readCodexMcpServers 回傳一個 server
-    vi.mocked(readCodexMcpServers).mockReturnValue([
-      { name: "my-mcp", type: "stdio" },
+    vi.mocked(codexMcpService.list).mockResolvedValue([
+      {
+        key: "user:my-mcp",
+        name: "my-mcp",
+        source: "user",
+        transport: "stdio",
+        globallyEnabled: true,
+        configTarget: { kind: "user" },
+      },
     ]);
 
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
     const provider = codexProvider;
-    const ctx = makeCtx({ resumeSessionId: "session-abc123" });
+    const ctx = makeCtx({
+      resumeSessionId: "session-abc123",
+      options: {
+        model: "gpt-5.6-luna",
+        resumeMode: "cli",
+        codexMcpServerKeys: ["user:my-mcp"],
+      },
+    });
     await collectEvents(provider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();

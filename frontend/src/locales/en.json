@@ -332,6 +332,12 @@
       },
       "mcpLabel": "MCPs",
       "agentCanvasMcpLabel": "Agent Canvas",
+      "mcpSource": {
+        "official": "Official",
+        "user": "User",
+        "canvas": "Canvas"
+      },
+      "mcpCodexGloballyDisabled": "Disabled by the global Codex configuration",
       "mcpLoading": "Loading…",
       "mcpEmpty": "No MCP server installed",
       "mcpClaudeEmptyHint": "Run `claude mcp add` to install",

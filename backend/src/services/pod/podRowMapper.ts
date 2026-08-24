@@ -83,6 +83,7 @@ export function buildPodFromRow(
     mcpServerNames: Map<string, string[]>;
     pluginIds: Map<string, string[]>;
     codexSkillKeys: Map<string, string[]>;
+    codexMcpServerKeys: Map<string, string[]>;
   },
   bindingsMap: Map<string, IntegrationBinding[]>,
   memoryStateMaps: {
@@ -115,6 +116,7 @@ export function buildPodFromRow(
     agentCanvasMcpEnabled: row.agent_canvas_mcp_enabled === 1,
     pluginIds: relations.pluginIds.get(row.id) ?? [],
     codexSkillKeys: relations.codexSkillKeys.get(row.id) ?? [],
+    codexMcpServerKeys: relations.codexMcpServerKeys.get(row.id) ?? [],
     codexSkillsInitialized: row.codex_skills_initialized === 1,
     provider,
     providerConfig,

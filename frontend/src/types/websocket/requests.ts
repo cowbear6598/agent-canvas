@@ -354,6 +354,7 @@ export interface PodSetMcpServerNamesPayload {
   canvasId: string;
   podId: string;
   mcpServerNames: string[];
+  codexMcpServerKeys?: string[];
   agentCanvasMcpEnabled?: boolean;
 }
 

@@ -192,6 +192,7 @@ describe("PodStore integration with database and temp filesystem", () => {
 
     podStore.setMcpServerNames(pod.id, ["filesystem", "database"]);
     podStore.setCodexSkillKeys(pod.id, ["user:review", "repo:plan"]);
+    podStore.setCodexMcpServerKeys(pod.id, ["user:figma", "plugin:official:docs"]);
     const updated = podStore.update(canvasId, pod.id, {
       name: "store-update-pod-renamed",
       x: 100,
@@ -217,6 +218,10 @@ describe("PodStore integration with database and temp filesystem", () => {
     expect(byId?.codexSkillKeys.toSorted()).toEqual([
       "repo:plan",
       "user:review",
+    ]);
+    expect(byId?.codexMcpServerKeys?.toSorted()).toEqual([
+      "plugin:official:docs",
+      "user:figma",
     ]);
     expect(byId?.codexSkillsInitialized).toBe(true);
     expect(listed).toEqual(byId);

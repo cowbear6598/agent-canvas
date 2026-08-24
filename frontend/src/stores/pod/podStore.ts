@@ -313,6 +313,11 @@ export const usePodStore = defineStore("pod", () => {
     updatePodField(podId, "mcpServerNames", names);
   }
 
+  /** 純前端狀態更新：設定 Pod 的 Codex 原生 MCP key 清單。 */
+  function updatePodCodexMcpServers(podId: string, keys: string[]): void {
+    updatePodField(podId, "codexMcpServerKeys", keys);
+  }
+
   function updatePodAgentCanvasMcpEnabled(
     podId: string,
     enabled: boolean,
@@ -446,6 +451,7 @@ export const usePodStore = defineStore("pod", () => {
     updatePodPlugins,
     updatePodCodexSkills,
     updatePodMcpServers,
+    updatePodCodexMcpServers,
     updatePodAgentCanvasMcpEnabled,
     setMcpServersWithBackend,
     addPodFromEvent,

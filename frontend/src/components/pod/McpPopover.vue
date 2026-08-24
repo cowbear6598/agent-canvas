@@ -10,7 +10,7 @@ import { logger } from "@/utils/logger";
 import { usePodStore } from "@/stores/pod";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
-import type { PodMcpAvailabilityItem } from "@/types/mcp";
+import type { McpSource, PodMcpAvailabilityItem } from "@/types/mcp";
 import type { PodProvider } from "@/types/pod";
 import { shouldPreservePodResourceMenu } from "@/lib/podResourceMenu";
 
@@ -44,8 +44,10 @@ const AGENT_CANVAS_MCP_SERVER_NAME = "agent_canvas";
  *   會在 toggle off 後仍因 server.selected=true 而顯示為勾選。
  * 改為一律從 podStore 衍生狀態，optimistic update 透過 podStore.updatePodMcpServers 流入。
  */
-const podMcpServerNames = computed<string[]>(
-  () => podStore.getPodById(props.podId)?.mcpServerNames ?? [],
+const pod = computed(() => podStore.getPodById(props.podId));
+const podMcpServerNames = computed<string[]>(() => pod.value?.mcpServerNames ?? []);
+const podCodexMcpServerKeys = computed<string[]>(
+  () => pod.value?.codexMcpServerKeys ?? [],
 );
 
 /** 搜尋框輸入字串 */
@@ -55,10 +57,6 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
 
 function isSystemLockedServer(server: PodMcpAvailabilityItem): boolean {
   return server.locked === true;
-}
-
-function isSystemServer(server: PodMcpAvailabilityItem): boolean {
-  return server.system === true;
 }
 
 function isGoalRuntimeServer(server: PodMcpAvailabilityItem): boolean {
@@ -91,19 +89,12 @@ const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
   );
 });
 
-/** 內建 MCP（系統鎖定，例如 Goal Runtime）：顯示於分隔線下方 */
-const systemMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
-  filteredMcpServers.value.filter((server) => isSystemServer(server)),
-);
-
-/** 使用者建立的 MCP（從 Header 管理面板新增）：顯示於分隔線上方 */
-const userMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
-  filteredMcpServers.value.filter((server) => !isSystemServer(server)),
-);
-
-/** 兩組皆有資料時才畫 divider，避免單組時出現孤立分隔線 */
-const showGroupDivider = computed<boolean>(
-  () => systemMcpServers.value.length > 0 && userMcpServers.value.length > 0,
+const MCP_SOURCE_ORDER: McpSource[] = ["canvas", "official", "user"];
+const mcpGroups = computed(() =>
+  MCP_SOURCE_ORDER.map((source) => ({
+    source,
+    items: filteredMcpServers.value.filter((server) => server.source === source),
+  })).filter((group) => group.items.length > 0),
 );
 
 const showSearchEmpty = computed(
@@ -124,6 +115,9 @@ const showEmptyState = computed(
 
 /** podStore 的 mcpServerNames 轉成 Set，讓 v-for 中的查找從 O(n) 降為 O(1) */
 const mcpServerNamesSet = computed(() => new Set(podMcpServerNames.value));
+const codexMcpServerKeysSet = computed(
+  () => new Set(podCodexMcpServerKeys.value),
+);
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -165,16 +159,15 @@ onUnmounted(() => {
 
 useEscapeClose(() => emit("close"));
 
-/** 純函式：依 enabled 組裝下一個 MCP server 名稱清單 */
-const buildNextNames = (
+const buildNextSelection = (
   current: string[],
-  name: string,
+  value: string,
   enabled: boolean,
 ): string[] => {
   if (enabled) {
-    return current.includes(name) ? [...current] : [...current, name];
+    return current.includes(value) ? [...current] : [...current, value];
   }
-  return current.filter((n) => n !== name);
+  return current.filter((item) => item !== value);
 };
 
 /** 從例外取得錯誤描述字串；一律使用 i18n fallback，避免後端 message 未過濾直接洩漏到 UI */
@@ -183,20 +176,30 @@ const resolveMcpErrorDescription = (_err: unknown): string =>
 
 function isServerChecked(server: PodMcpAvailabilityItem): boolean {
   if (isAgentCanvasMcpServer(server)) {
-    return podStore.getPodById(props.podId)?.agentCanvasMcpEnabled === true;
+    return pod.value?.agentCanvasMcpEnabled === true;
+  }
+  if (server.source !== "canvas") {
+    return server.selectable && codexMcpServerKeysSet.value.has(server.key);
   }
   return (
     isSystemLockedServer(server) || mcpServerNamesSet.value.has(server.name)
   );
 }
 
+function resolveDisabledReason(server: PodMcpAvailabilityItem): string | null {
+  if (server.disabledReasonKey === "codexGloballyDisabled") {
+    return t("pod.slot.mcpCodexGloballyDisabled");
+  }
+  return server.disabledReason;
+}
+
 function isServerDisabled(server: PodMcpAvailabilityItem): boolean {
   return server.selectable === false || server.locked === true;
 }
 
-const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
+const handleToggle = async (key: string, enabled: boolean): Promise<void> => {
   const targetServer = availableMcpServers.value.find(
-    (server) => server.name === name,
+    (server) => server.key === key,
   );
   if (
     !targetServer ||
@@ -206,15 +209,12 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
     return;
   }
 
-  const nextNames = buildNextNames(podMcpServerNames.value, name, enabled);
-
   // 取得 canvasId，取不到直接 return（不進入樂觀更新）
   const canvasId = getActiveCanvasIdOrWarn("McpPopover");
   if (!canvasId) return;
 
   if (isAgentCanvasMcpServer(targetServer)) {
-    const previous =
-      podStore.getPodById(props.podId)?.agentCanvasMcpEnabled === true;
+    const previous = pod.value?.agentCanvasMcpEnabled === true;
     podStore.updatePodAgentCanvasMcpEnabled(props.podId, enabled);
     try {
       await updatePodMcpServersApi(
@@ -222,6 +222,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         props.podId,
         podMcpServerNames.value,
         enabled,
+        podCodexMcpServerKeys.value,
       );
     } catch (error) {
       podStore.updatePodAgentCanvasMcpEnabled(props.podId, previous);
@@ -233,12 +234,47 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
     return;
   }
 
+  if (targetServer.source !== "canvas") {
+    const previous = [...podCodexMcpServerKeys.value];
+    const nextKeys = buildNextSelection(previous, key, enabled);
+    podStore.updatePodCodexMcpServers(props.podId, nextKeys);
+    try {
+      await updatePodMcpServersApi(
+        canvasId,
+        props.podId,
+        podMcpServerNames.value,
+        undefined,
+        nextKeys,
+      );
+    } catch (error) {
+      podStore.updatePodCodexMcpServers(props.podId, previous);
+      logger.warn(
+        "[McpPopover] Codex MCP update failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    return;
+  }
+
+  const nextNames = buildNextSelection(
+    podMcpServerNames.value,
+    targetServer.name,
+    enabled,
+  );
+
   await runToggle(nextNames, {
     getCurrent: () => [...podMcpServerNames.value],
     // 唯一來源是 podStore，本元件不再持有 local 狀態，setLocal 為 no-op
     setLocal: () => {},
     setStore: (items) => podStore.updatePodMcpServers(props.podId, items),
-    callApi: (items) => updatePodMcpServersApi(canvasId, props.podId, items),
+    callApi: (items) =>
+      updatePodMcpServersApi(
+        canvasId,
+        props.podId,
+        items,
+        undefined,
+        podCodexMcpServerKeys.value,
+      ),
     resolveError: resolveMcpErrorDescription,
     failToast: { title: "Pod" },
   });
@@ -305,45 +341,40 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         </p>
       </div>
 
-      <!-- MCP server 列表：使用者 MCP → divider → 內建（Goal 等系統 MCP） -->
       <ScrollArea
         v-else
         class="pod-popover-scrollable"
       >
         <div class="space-y-1 pr-3">
-          <McpServerRow
-            v-for="server in userMcpServers"
-            :key="server.name"
-            :name="server.name"
-            :label="resolveServerLabel(server)"
-            :transport="server.transport"
-            :checked="isServerChecked(server)"
-            :disabled="isServerDisabled(server)"
-            :readonly="isSystemLockedServer(server)"
-            :locked="isSystemLockedServer(server)"
-            :locked-label="t('pod.slot.builtinBadge')"
-            :disabled-reason="server.disabledReason"
-            @toggle="handleToggle"
-          />
-          <div
-            v-if="showGroupDivider"
-            data-testid="mcp-group-divider"
-            class="my-1 border-t border-dashed border-doodle-ink/40"
-          />
-          <McpServerRow
-            v-for="server in systemMcpServers"
-            :key="server.name"
-            :name="server.name"
-            :label="resolveServerLabel(server)"
-            :transport="server.transport"
-            :checked="isServerChecked(server)"
-            :disabled="isServerDisabled(server)"
-            :readonly="isSystemLockedServer(server)"
-            :locked="isSystemLockedServer(server)"
-            :locked-label="t('pod.slot.builtinBadge')"
-            :disabled-reason="server.disabledReason"
-            @toggle="handleToggle"
-          />
+          <section
+            v-for="(group, groupIndex) in mcpGroups"
+            :key="group.source"
+            :data-testid="`mcp-source-${group.source}`"
+          >
+            <div
+              v-if="groupIndex > 0"
+              data-testid="mcp-group-divider"
+              class="my-1 border-t border-dashed border-doodle-ink/40"
+            />
+            <p class="px-2 py-1 text-[10px] font-mono text-muted-foreground">
+              {{ t(`pod.slot.mcpSource.${group.source}`) }}
+            </p>
+            <McpServerRow
+              v-for="server in group.items"
+              :key="server.key"
+              :resource-key="server.key"
+              :name="server.name"
+              :label="resolveServerLabel(server)"
+              :transport="server.transport"
+              :checked="isServerChecked(server)"
+              :disabled="isServerDisabled(server)"
+              :readonly="isSystemLockedServer(server)"
+              :locked="isSystemLockedServer(server)"
+              :locked-label="t('pod.slot.builtinBadge')"
+              :disabled-reason="resolveDisabledReason(server)"
+              @toggle="handleToggle"
+            />
+          </section>
         </div>
       </ScrollArea>
     </div>

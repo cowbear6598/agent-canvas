@@ -151,12 +151,15 @@ export const managedMcpRegistryTestRequestSchema = z
 
 export const podMcpAvailabilityItemSchema = z
   .object({
+    key: z.string().min(1),
     name: z.string().min(1),
+    source: z.enum(["official", "user", "canvas"]),
     transport: mcpTransportSchema,
     status: managedMcpStatusSchema,
     selected: z.boolean(),
     selectable: z.boolean(),
     disabledReason: z.string().nullable(),
+    disabledReasonKey: z.enum(["codexGloballyDisabled"]).optional(),
     lastError: z.string().nullable(),
     system: z.boolean().optional(),
     locked: z.boolean().optional(),
@@ -194,6 +197,8 @@ export const podSetMcpServerNamesSchema = z
     mcpServerNames: z
       .array(z.string().min(1).max(200).regex(MCP_SERVER_NAME_PATTERN))
       .max(50),
+    /** Codex 原生 MCP 穩定識別 key；與 Canvas managed name 分開儲存。 */
+    codexMcpServerKeys: z.array(z.string().min(1).max(1000)).max(200).optional(),
     agentCanvasMcpEnabled: z.boolean().optional(),
   })
   .strict();

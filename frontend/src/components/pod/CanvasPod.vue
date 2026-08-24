@@ -234,6 +234,7 @@ watch(
 const podMcpActiveCount = computed(
   () =>
     (props.pod.mcpServerNames?.length ?? 0) +
+    (props.pod.codexMcpServerKeys?.length ?? 0) +
     (props.pod.agentCanvasMcpEnabled === true ? 1 : 0),
 );
 

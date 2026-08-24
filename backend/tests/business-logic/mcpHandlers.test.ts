@@ -21,6 +21,7 @@ vi.mock("../../src/services/podStore.js", () => ({
     getByIdGlobal: vi.fn(),
     getById: vi.fn(),
     setMcpServerNames: vi.fn(),
+    setCodexMcpServerKeys: vi.fn(),
   },
 }));
 
@@ -54,6 +55,19 @@ const { mockManagedMcpAvailabilityService } = vi.hoisted(() => ({
 
 vi.mock("../../src/services/mcp/managedMcpAvailabilityService.js", () => ({
   managedMcpAvailabilityService: mockManagedMcpAvailabilityService,
+}));
+
+const { mockCodexMcpService } = vi.hoisted(() => ({
+  mockCodexMcpService: { list: vi.fn() },
+}));
+
+vi.mock("../../src/services/codex/codexMcpService.js", () => ({
+  codexMcpService: mockCodexMcpService,
+}));
+
+vi.mock("../../src/services/shared/podPathResolver.js", () => ({
+  resolvePodCwd: (pod: { workspacePath?: string }) =>
+    pod.workspacePath ?? "/tmp/pod",
 }));
 
 vi.mock("../../src/utils/handlerHelpers.js", () => ({
@@ -392,5 +406,56 @@ describe("handlePodSetMcpServerNames", () => {
     );
     // emitToConnection 是 emitError 用的，busy guard 移除後不該被呼叫
     expect(socketService.emitToConnection).not.toHaveBeenCalled();
+  });
+
+  it("Codex 原生 MCP 依 source key 驗證後獨立保存", async () => {
+    vi.mocked(podStore.getById).mockReturnValue({
+      id: "pod-1",
+      provider: "codex",
+      workspacePath: "/tmp/pod-1",
+      mcpServerNames: [],
+      codexMcpServerKeys: [],
+      agentCanvasMcpEnabled: false,
+    } as any);
+    mockCodexMcpService.list.mockResolvedValue([
+      {
+        key: "plugin:official:docs",
+        name: "docs",
+        source: "official",
+        transport: "stdio",
+        globallyEnabled: true,
+        configTarget: { kind: "plugin", pluginId: "official" },
+      },
+    ]);
+    mockManagedMcpAvailabilityService.listForPod.mockReturnValue([
+      {
+        key: "plugin:official:docs",
+        name: "docs",
+        source: "official",
+        selectable: true,
+      },
+    ] as any);
+
+    await handlePodSetMcpServerNames(
+      "conn-1",
+      {
+        podId: "pod-1",
+        mcpServerNames: [],
+        codexMcpServerKeys: ["plugin:official:docs", "user:missing"],
+      } as any,
+      "req-codex-mcp",
+    );
+
+    expect(podStore.setCodexMcpServerKeys).toHaveBeenCalledWith("pod-1", [
+      "plugin:official:docs",
+    ]);
+    expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      "canvas-1",
+      WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,
+      expect.objectContaining({
+        codexMcpServerKeys: ["plugin:official:docs"],
+        ignoredCodexMcpServerKeys: ["user:missing"],
+      }),
+    );
   });
 });

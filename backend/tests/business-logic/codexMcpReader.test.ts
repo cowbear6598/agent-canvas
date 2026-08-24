@@ -135,7 +135,11 @@ describe("codexMcpReader", () => {
       const result = readCodexMcpServers();
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ name: "context7", type: "stdio" });
+      expect(result[0]).toEqual({
+        name: "context7",
+        type: "stdio",
+        enabled: true,
+      });
     });
 
     it("含 command 欄位（同時有其他欄位）的 entry 應判斷為 stdio 類型", async () => {
@@ -161,7 +165,38 @@ describe("codexMcpReader", () => {
       const result = readCodexMcpServers();
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ name: "figma", type: "http" });
+      expect(result[0]).toEqual({
+        name: "figma",
+        type: "http",
+        enabled: true,
+      });
+    });
+  });
+
+  describe("全域啟用狀態", () => {
+    it("enabled=false 時應保留項目並標示為停用", async () => {
+      await writeFile(
+        codexConfigPath,
+        '[mcp_servers.disabled]\ncommand = "npx"\nenabled = false\n',
+      );
+      const { readCodexMcpServers } = await reimportCodexMcpReader();
+
+      expect(readCodexMcpServers()).toEqual([
+        { name: "disabled", type: "stdio", enabled: false },
+      ]);
+    });
+
+    it("應讀取 Plugin 內個別 MCP 的 enabled 覆寫", async () => {
+      await writeFile(
+        codexConfigPath,
+        '[plugins."openai/docs".mcp_servers.search]\nenabled = false\n',
+      );
+      const { readCodexPluginMcpEnabledOverrides } =
+        await reimportCodexMcpReader();
+
+      expect(readCodexPluginMcpEnabledOverrides()).toEqual([
+        { pluginId: "openai/docs", name: "search", enabled: false },
+      ]);
     });
   });
 
@@ -179,6 +214,48 @@ describe("codexMcpReader", () => {
       const httpEntry = result.find((s) => s.name === "figma");
       expect(stdioEntry?.type).toBe("stdio");
       expect(httpEntry?.type).toBe("http");
+    });
+  });
+
+  describe("trusted project 設定", () => {
+    it("合併專案 .codex/config.toml，且專案同名 MCP 覆蓋使用者設定", async () => {
+      const repoRoot = join(tmpHome, "repo");
+      const cwd = join(repoRoot, "packages", "app");
+      await mkdir(join(repoRoot, ".git"), { recursive: true });
+      await mkdir(join(repoRoot, ".codex"), { recursive: true });
+      await mkdir(cwd, { recursive: true });
+      await writeFile(
+        codexConfigPath,
+        `[projects.${JSON.stringify(repoRoot)}]\ntrust_level = "trusted"\n\n` +
+          '[mcp_servers.shared]\ncommand = "node"\n',
+      );
+      await writeFile(
+        join(repoRoot, ".codex", "config.toml"),
+        '[mcp_servers.shared]\nurl = "https://example.com/mcp"\n\n' +
+          '[mcp_servers.project-only]\ncommand = "bun"\n',
+      );
+      const { readCodexMcpServers } = await reimportCodexMcpReader();
+
+      expect(readCodexMcpServers(cwd)).toEqual([
+        { name: "shared", type: "http", enabled: true },
+        { name: "project-only", type: "stdio", enabled: true },
+      ]);
+    });
+
+    it("未受信任的專案不讀取專案 MCP 設定", async () => {
+      const repoRoot = join(tmpHome, "untrusted-repo");
+      await mkdir(join(repoRoot, ".git"), { recursive: true });
+      await mkdir(join(repoRoot, ".codex"), { recursive: true });
+      await writeFile(codexConfigPath, makeStdioToml("user-only", "node"));
+      await writeFile(
+        join(repoRoot, ".codex", "config.toml"),
+        makeStdioToml("project-only", "bun"),
+      );
+      const { readCodexMcpServers } = await reimportCodexMcpReader();
+
+      expect(readCodexMcpServers(repoRoot)).toEqual([
+        { name: "user-only", type: "stdio", enabled: true },
+      ]);
     });
   });
 
