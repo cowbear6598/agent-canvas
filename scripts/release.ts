@@ -13,7 +13,10 @@ const RELEASE_NOTES_TMP = "./.release-notes.tmp";
 
 function parseVersion(version: string): [number, number, number] {
   const parts = version.split(".").map(Number);
-  if (parts.length !== 3 || parts.some(isNaN)) {
+  if (
+    (parts.length !== 3 && parts.length !== 4) ||
+    parts.some(isNaN)
+  ) {
     console.error(`無效的版本號格式：${version}`);
     process.exit(1);
   }

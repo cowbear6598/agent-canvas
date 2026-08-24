@@ -49,7 +49,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           # 驗證版本格式，防止將未預期字串拼入 sed pattern
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
             echo "錯誤：版本格式不正確：$VERSION" >&2
             exit 1
           fi
