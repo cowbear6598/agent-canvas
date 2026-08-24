@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.9] - 2026-08-24
+
+### 新增
+- Codex Pod 支援個別選擇原生 Skills 與 MCP，並依官方、使用者及畫布來源分組顯示
+- 支援專案、使用者、系統、管理員與已安裝 Plugin Skills，以及 trusted project MCP 設定
+
+### 優化
+- Skills 與 MCP 清單改為直接讀取本機設定及 Plugin cache，不再等待 Codex App Server 啟動
+- 隔離損壞的 Skill、Plugin manifest 與 MCP 設定來源，避免單一錯誤造成整份清單持續載入
+
 ## [2.3.8] - 2026-08-23
 
 ### 修正
