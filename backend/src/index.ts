@@ -87,6 +87,8 @@ async function startServer(): Promise<void> {
   Bun.serve<ConnectionSocketData>({
     port: PORT,
     hostname: "0.0.0.0",
+    // podpack 採串流寫入磁碟並依可用空間驗證，不限制封裝檔案總大小。
+    maxRequestBodySize: Infinity,
     async fetch(req, server) {
       const url = new URL(req.url);
 
@@ -108,7 +110,8 @@ async function startServer(): Promise<void> {
         ? {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Headers":
+              "Content-Type, Authorization, X-Pod-Pack-Transfer-Id, X-Pod-Pack-Filename",
             // redeem-reconnect-grant 等端點需要瀏覽器收下後端 Set-Cookie；
             // 前端用 credentials:"include" 發送時，瀏覽器會檢查此 header
             "Access-Control-Allow-Credentials": "true",

@@ -15,6 +15,8 @@ import {
 import { repositoryService } from "../../src/services/repositoryService.js";
 import { config } from "../../src/config/index.js";
 import { canvasStore } from "../../src/services/canvasStore.js";
+import { createDirectoryArchive } from "../../src/utils/directoryArchive.js";
+import { extractStreamingZip } from "../../src/utils/streamingZip.js";
 
 const SOURCE_ID = "11111111-1111-4111-8111-111111111111";
 const TARGET_ID = "22222222-2222-4222-8222-222222222222";
@@ -112,8 +114,14 @@ describe("podPackService", () => {
     await fs.writeFile(path.join(repositoryPath, ".gitignore"), "ignored.txt\n");
     await fs.writeFile(path.join(repositoryPath, "keep.txt"), "keep");
     await fs.writeFile(path.join(repositoryPath, "ignored.txt"), "ignored");
+    await fs.mkdir(path.join(repositoryPath, "links"));
+    await fs.symlink("../keep.txt", path.join(repositoryPath, "links", "keep-link"));
     await simpleGit({ baseDir: repositoryPath }).init();
-    await simpleGit({ baseDir: repositoryPath }).add([".gitignore", "keep.txt"]);
+    await simpleGit({ baseDir: repositoryPath }).add([
+      ".gitignore",
+      "keep.txt",
+      "links/keep-link",
+    ]);
 
     await fs.mkdir(config.tmpRoot, { recursive: true });
     const transferRoot = await fs.mkdtemp(path.join(config.tmpRoot, "podpack-test-"));
@@ -194,10 +202,15 @@ describe("podPackService", () => {
           boundToPodId: imported.createdPods[1]?.id,
         }),
       ]);
-      await expect(fs.readFile(
-        path.join(repositoryService.getRepositoryPath(importedRepositoryId!), "keep.txt"),
-        "utf-8",
-      )).resolves.toBe("keep");
+      const importedRepositoryPath = repositoryService.getRepositoryPath(
+        importedRepositoryId!,
+      );
+      await expect(
+        fs.readFile(path.join(importedRepositoryPath, "keep.txt"), "utf-8"),
+      ).resolves.toBe("keep");
+      await expect(fs.readlink(
+        path.join(importedRepositoryPath, "links", "keep-link"),
+      )).resolves.toBe("../keep.txt");
     } finally {
       if (canvasId) await canvasStore.delete(canvasId);
       if (importedRepositoryId) await repositoryService.delete(importedRepositoryId);
@@ -223,5 +236,46 @@ describe("podPackService", () => {
     expect(() => parsePodPackArchive(archive)).toThrow(
       "POD_PACK_MANIFEST_INVALID",
     );
+  });
+
+  it("修復舊版匯入流程留下的 Repository 暫存區絕對 symlink", async () => {
+    await fs.mkdir(config.tmpRoot, { recursive: true });
+    const root = await fs.mkdtemp(path.join(config.tmpRoot, "podpack-symlink-test-"));
+    const source = path.join(root, "source");
+    const destination = path.join(root, "destination");
+    const archivePath = path.join(root, "repository.zip");
+    const linkPath = path.join(source, "app", "node_modules", ".bin", "cli");
+    const restoredLinkPath = path.join(
+      destination,
+      "app",
+      "node_modules",
+      ".bin",
+      "cli",
+    );
+    const fingerprint = "a".repeat(64);
+    try {
+      await fs.mkdir(path.join(source, "app", "bin"), { recursive: true });
+      await fs.mkdir(path.join(source, "app", "node_modules", ".bin"), {
+        recursive: true,
+      });
+      await fs.writeFile(path.join(source, "app", "bin", "cli.js"), "cli");
+      await fs.symlink(
+        `/Users/legacy/AgentCanvas/tmp/pod-packs/transfer/archive/validated/repositories/${fingerprint}/app/bin/cli.js`,
+        linkPath,
+      );
+      await createDirectoryArchive(source, archivePath);
+
+      await extractStreamingZip(archivePath, destination, {
+        allowSymlinks: true,
+        repairLegacyRepositorySymlinks: true,
+      });
+
+      await expect(fs.readlink(restoredLinkPath)).resolves.toBe(
+        "../../bin/cli.js",
+      );
+      await expect(fs.readFile(restoredLinkPath, "utf-8")).resolves.toBe("cli");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });

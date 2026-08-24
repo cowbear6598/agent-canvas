@@ -45,6 +45,31 @@ function isSymlink(entry: yauzl.Entry): boolean {
   return (mode & POSIX_TYPE_MASK) === POSIX_SYMLINK;
 }
 
+function isAbsoluteSymlinkTarget(target: string): boolean {
+  return path.posix.isAbsolute(target) || path.win32.isAbsolute(target);
+}
+
+function repairLegacyRepositorySymlinkTarget(
+  target: string,
+  entryName: string,
+  entryNames: Set<string>,
+): string {
+  if (!isAbsoluteSymlinkTarget(target)) return target;
+  const normalized = target.replaceAll("\\", "/");
+  const match = normalized.match(
+    /\/archive\/validated\/repositories\/[a-f0-9]{64}\/(.+)$/,
+  );
+  const archivedTarget = match?.[1]?.replace(/\/$/, "");
+  if (
+    !archivedTarget ||
+    (!entryNames.has(archivedTarget) &&
+      !entryNames.has(`${archivedTarget}/`))
+  ) {
+    return target;
+  }
+  return path.posix.relative(path.posix.dirname(entryName), archivedTarget);
+}
+
 async function assertParentsAreDirectories(
   destination: string,
   target: string,
@@ -98,6 +123,8 @@ export async function createStreamingZip(
 export interface ExtractZipOptions {
   allowSymlinks?: boolean;
   allowEmpty?: boolean;
+  /** 修復舊版匯入流程把 Repository 相對 symlink 改寫成暫存區絕對路徑的封裝。 */
+  repairLegacyRepositorySymlinks?: boolean;
   allowedPath?: (archivePath: string) => boolean;
 }
 
@@ -167,9 +194,15 @@ export async function extractStreamingZip(
       await fs.mkdir(path.dirname(target), { recursive: true });
       const stream = await zip.openReadStreamPromise(entry);
       if (isSymlink(entry)) {
-        const linkTarget = (await streamToSmallBuffer(stream, 4096)).toString();
+        const rawLinkTarget = (await streamToSmallBuffer(stream, 4096)).toString();
+        const linkTarget = options.repairLegacyRepositorySymlinks
+          ? repairLegacyRepositorySymlinkTarget(rawLinkTarget, name, names)
+          : rawLinkTarget;
         const resolvedLink = path.resolve(path.dirname(target), linkTarget);
-        if (path.isAbsolute(linkTarget) || !resolvedLink.startsWith(`${root}${path.sep}`)) {
+        if (
+          isAbsoluteSymlinkTarget(linkTarget) ||
+          !resolvedLink.startsWith(`${root}${path.sep}`)
+        ) {
           throw new Error("POD_PACK_SYMLINK_TARGET_INVALID");
         }
         await fs.symlink(linkTarget, target);

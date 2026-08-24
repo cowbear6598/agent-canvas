@@ -646,7 +646,11 @@ async function validatePreparedBundles(
       throw new Error(`POD_PACK_REPOSITORY_FINGERPRINT_MISMATCH:${repository.originalId}`);
     }
     const destination = path.join(rootPath, "validated", "repositories", repository.fingerprint);
-    await extractStreamingZip(bundlePath, destination, { allowSymlinks: true, allowEmpty: true });
+    await extractStreamingZip(bundlePath, destination, {
+      allowSymlinks: true,
+      allowEmpty: true,
+      repairLegacyRepositorySymlinks: true,
+    });
     const gitPathExists = await fs.lstat(path.join(destination, ".git")).then(() => true).catch(() => false);
     if ((repository.source === "git") !== gitPathExists) {
       throw new Error(`POD_PACK_REPOSITORY_SOURCE_MISMATCH:${repository.originalId}`);
@@ -784,7 +788,12 @@ async function importRepositories(prepared: PreparedPodPack, artifacts: ImportAr
     if (await repositoryService.exists(item.resolvedName)) throw new Error("POD_PACK_REPOSITORY_PATH_CONFLICT");
     await fs.mkdir(path.dirname(repositoryPath), { recursive: true });
     artifacts.repositoryIds.push(item.resolvedName);
-    await fs.cp(prepared.repositoryDirectories.get(item.originalKey)!, repositoryPath, { recursive: true, errorOnExist: true, force: false });
+    await fs.cp(prepared.repositoryDirectories.get(item.originalKey)!, repositoryPath, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+      verbatimSymlinks: true,
+    });
     if (source.currentBranch) await repositoryService.registerMetadata(item.resolvedName, { currentBranch: source.currentBranch });
     result.set(item.originalKey, item.resolvedName);
   }
