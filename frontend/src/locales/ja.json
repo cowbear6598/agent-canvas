@@ -1292,7 +1292,6 @@
       "repositories": "リポジトリ",
       "plugins": "Plugin Skill",
       "managedMcps": "Managed MCP サーバー",
-      "skills": "Skill",
       "executableFiles": "実行可能ファイルまたはスクリプトが {count} 件含まれます",
       "emptyEnv": "次の環境変数は空の値で作成されます: {names}",
       "confirm": "確認してインポート",
@@ -1307,13 +1306,6 @@
       "uploading": "Pod パックをアップロードして検証しています...",
       "importing": "一時保存した Pod パックを復元しています...",
       "downloading": "ダウンロードの準備ができました"
-    },
-    "repositorySource": { "git": "Git リポジトリ", "directory": "ローカルディレクトリ" },
-    "omitted": {
-      "chats": "Pod のチャット履歴",
-      "runtimeWorkspaces": "Pod の実行中ワークスペース",
-      "secrets": "API キーと MCP 環境変数の値",
-      "repositoryMemory": "Repository memory"
     },
     "action": { "reuse": "既存を再利用", "install": "インストール", "rename": "新しい名前でインストール" },
     "errors": {

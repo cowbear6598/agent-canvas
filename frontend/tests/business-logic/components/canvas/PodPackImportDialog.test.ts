@@ -10,7 +10,16 @@ function createPreview(): PodPackPreview {
     version: 1,
     podCount: 1,
     connectionCount: 0,
-    repositories: [],
+    repositories: [
+      {
+        originalKey: "repository-1",
+        name: "GameFactory",
+        resolvedName: "GameFactory-imported",
+        fingerprint: "b".repeat(64),
+        action: "rename",
+        source: "directory",
+      },
+    ],
     plugins: [
       {
         originalKey: "plugin-1",
@@ -29,27 +38,29 @@ function createPreview(): PodPackPreview {
       },
     ],
     managedMcps: [],
-    omitted: [],
+    omitted: ["chats", "runtimeWorkspaces", "secrets"],
   };
 }
 
 describe("PodPackImportDialog", () => {
-  it("逐項顯示可用 Skill，且可執行檔只顯示數量警告", () => {
+  it("隱藏匯入細節，只保留必要的相依項目與警告", () => {
     const wrapper = mount(PodPackImportDialog, {
       props: { preview: createPreview() },
       global: { plugins: [i18n] },
     });
+    const text = wrapper.text();
 
-    const skillItems = wrapper.findAll("li li");
-    expect(skillItems.map((item) => item.text())).toEqual([
-      "skills/develop-script",
-      "skills/render-takes",
-    ]);
-    expect(wrapper.text()).toContain(
+    expect(text).toContain("GameFactory");
+    expect(text).not.toContain("GameFactory-imported");
+    expect(text).not.toContain("skills/develop-script");
+    expect(text).not.toContain("skills/render-takes");
+    expect(text).not.toContain("podPack.import.omitted");
+    expect(text).not.toContain("Pod 對話紀錄");
+    expect(text).toContain(
       i18n.global.t("podPack.import.executableFiles", { count: 2 }),
     );
-    expect(wrapper.text()).not.toContain("initialize_chapter.py");
-    expect(wrapper.text()).not.toContain("compile_h3_jobs.py");
-    expect(wrapper.text()).not.toContain(i18n.global.t("podPack.action.reuse"));
+    expect(text).not.toContain("initialize_chapter.py");
+    expect(text).not.toContain("compile_h3_jobs.py");
+    expect(text).not.toContain(i18n.global.t("podPack.action.reuse"));
   });
 });

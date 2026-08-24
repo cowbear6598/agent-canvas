@@ -1292,7 +1292,6 @@
       "repositories": "Repositories",
       "plugins": "Plugin Skills",
       "managedMcps": "Managed MCP servers",
-      "skills": "Skills",
       "executableFiles": "Contains {count} executable or script files",
       "emptyEnv": "These environment variables will be created empty: {names}",
       "confirm": "Confirm and import",
@@ -1307,13 +1306,6 @@
       "uploading": "Uploading and validating the Pod pack...",
       "importing": "Restoring the staged Pod pack...",
       "downloading": "The download is ready"
-    },
-    "repositorySource": { "git": "Git repository", "directory": "Local directory" },
-    "omitted": {
-      "chats": "Pod chat history",
-      "runtimeWorkspaces": "Pod runtime workspaces",
-      "secrets": "API keys and MCP environment variable values",
-      "repositoryMemory": "Repository memory"
     },
     "action": { "reuse": "Reuse existing", "install": "Install", "rename": "Install with new name" },
     "errors": {

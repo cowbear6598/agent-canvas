@@ -1292,7 +1292,6 @@
       "repositories": "Repository",
       "plugins": "Plugin Skill",
       "managedMcps": "Managed MCP 伺服器",
-      "skills": "Skill",
       "executableFiles": "包含 {count} 個可執行檔或指令稿",
       "emptyEnv": "下列環境變數會以空值建立：{names}",
       "confirm": "確認並匯入",
@@ -1307,13 +1306,6 @@
       "uploading": "正在上傳並驗證 Pod 封裝...",
       "importing": "正在還原已暫存的 Pod 封裝...",
       "downloading": "下載已準備完成"
-    },
-    "repositorySource": { "git": "Git Repository", "directory": "本機目錄" },
-    "omitted": {
-      "chats": "Pod 對話紀錄",
-      "runtimeWorkspaces": "Pod 執行中工作目錄",
-      "secrets": "API 金鑰與 MCP 環境變數值",
-      "repositoryMemory": "Repository memory"
     },
     "action": { "reuse": "重用既有項目", "install": "安裝", "rename": "以新名稱安裝" },
     "errors": {

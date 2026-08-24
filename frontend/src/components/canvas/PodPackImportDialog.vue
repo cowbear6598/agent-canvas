@@ -40,13 +40,7 @@ const { t } = useI18n();
             :key="repository.originalKey"
             class="rounded-lg border p-3 text-sm"
           >
-            <div class="flex justify-between gap-3">
-              <span>{{ repository.name }}</span>
-              <span class="text-muted-foreground">
-                {{ t(`podPack.repositorySource.${repository.source}`) }} ·
-                {{ t(`podPack.action.${repository.action}`) }}<template v-if="repository.resolvedName !== repository.name"> · {{ repository.resolvedName }}</template>
-              </span>
-            </div>
+            {{ repository.name }}
           </li>
         </ul>
       </div>
@@ -70,21 +64,6 @@ const { t } = useI18n();
                 class="text-muted-foreground"
               >{{ t(`podPack.action.${plugin.action}`) }}<template v-if="plugin.resolvedName !== plugin.name"> · {{ plugin.resolvedName }}</template></span>
             </div>
-            <div
-              v-if="plugin.skills?.length"
-              class="mt-2 text-xs text-muted-foreground"
-            >
-              <p>{{ t("podPack.import.skills") }}</p>
-              <ul class="mt-1 list-disc space-y-0.5 pl-5">
-                <li
-                  v-for="skill in plugin.skills"
-                  :key="skill.skillName"
-                  class="break-all"
-                >
-                  {{ skill.skillName }}
-                </li>
-              </ul>
-            </div>
             <p
               v-if="plugin.executableFiles?.length"
               class="mt-2 flex items-start gap-1 text-xs text-amber-700"
@@ -94,23 +73,6 @@ const { t } = useI18n();
                 class="mt-0.5 shrink-0"
               /><span>{{ t("podPack.import.executableFiles", { count: plugin.executableFiles.length }) }}</span>
             </p>
-          </li>
-        </ul>
-      </div>
-
-      <div
-        v-if="preview.omitted.length"
-        class="mt-5 rounded-lg border border-dashed p-3 text-xs text-muted-foreground"
-      >
-        <p class="font-medium text-foreground">
-          {{ t("podPack.import.omitted") }}
-        </p>
-        <ul class="mt-1 list-disc pl-5">
-          <li
-            v-for="item in preview.omitted"
-            :key="item"
-          >
-            {{ t(`podPack.omitted.${item}`) }}
           </li>
         </ul>
       </div>
