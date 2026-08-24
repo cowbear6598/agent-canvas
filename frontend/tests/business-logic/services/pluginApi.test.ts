@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { uploadPluginBundle } from "@/services/pluginApi";
+import { installPlugin, uploadPluginBundle } from "@/services/pluginApi";
+import { createWebSocketRequest } from "@/services/websocket/createWebSocketRequest";
 import type { InstalledPlugin } from "@/types/plugin";
 
 vi.mock("@/services/utils", () => ({
@@ -26,6 +27,24 @@ function createPlugin(overrides?: Partial<InstalledPlugin>): InstalledPlugin {
 describe("pluginApi", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("installPlugin 不應設定請求逾時", async () => {
+    const plugin = createPlugin({
+      id: "0x0funky/agent-sprite-forge",
+      source: { type: "github", ref: "0x0funky/agent-sprite-forge" },
+    });
+    vi.mocked(createWebSocketRequest).mockResolvedValueOnce({ plugin });
+
+    await expect(
+      installPlugin("0x0funky/agent-sprite-forge"),
+    ).resolves.toEqual(plugin);
+    expect(createWebSocketRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: { githubRepo: "0x0funky/agent-sprite-forge" },
+        timeout: null,
+      }),
+    );
   });
 
   it("uploadPluginBundle 會帶上 credentials include", async () => {

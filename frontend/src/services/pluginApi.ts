@@ -68,6 +68,7 @@ export async function installPlugin(
     requestEvent: WebSocketRequestEvents.PLUGIN_INSTALL,
     responseEvent: WebSocketResponseEvents.PLUGIN_INSTALLED,
     payload: { githubRepo },
+    timeout: null,
   });
 
   if (!result.plugin) {

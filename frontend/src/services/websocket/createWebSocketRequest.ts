@@ -12,7 +12,8 @@ export interface WebSocketRequestConfig<TPayload, TResult> {
   requestEvent: string;
   responseEvent?: string;
   payload: Omit<TPayload, "requestId">;
-  timeout?: number;
+  /** null 表示持續等待，直到收到回應或 WebSocket 斷線。 */
+  timeout?: number | null;
   matchResponse?: (response: TResult, requestId: string) => boolean;
 }
 
@@ -22,7 +23,7 @@ interface PendingRequest<T = unknown> {
   requestId: string;
   resolve: (data: T) => void;
   reject: (error: Error) => void;
-  timeoutId: ReturnType<typeof setTimeout>;
+  timeoutId: ReturnType<typeof setTimeout> | null;
   responseEvent: string;
   timestamp: number;
   matchResponse?: (response: T, requestId: string) => boolean;
@@ -56,7 +57,7 @@ function settlePendingRequest(requestId: string, response: unknown): boolean {
   const request = removePendingRequest(requestId);
   if (!request) return false;
 
-  clearTimeout(request.timeoutId);
+  clearTimeout(request.timeoutId ?? undefined);
   const mappedResponse = mapWebSocketResponse(response);
 
   if (!mappedResponse.ok) {
@@ -72,7 +73,7 @@ function rejectPendingRequest(requestId: string, error: Error): boolean {
   const request = removePendingRequest(requestId);
   if (!request) return false;
 
-  clearTimeout(request.timeoutId);
+  clearTimeout(request.timeoutId ?? undefined);
   request.reject(error);
   return true;
 }
@@ -187,10 +188,15 @@ export async function createWebSocketRequest<
     }
 
     const requestId = generateRequestId();
-    const timeoutId = setTimeout(() => {
-      removePendingRequest(requestId);
-      reject(new Error(t("websocket.requestTimeout", { event: requestEvent })));
-    }, timeout);
+    const timeoutId =
+      timeout === null
+        ? null
+        : setTimeout(() => {
+            removePendingRequest(requestId);
+            reject(
+              new Error(t("websocket.requestTimeout", { event: requestEvent })),
+            );
+          }, timeout);
 
     registerPendingRequest({
       requestId,
