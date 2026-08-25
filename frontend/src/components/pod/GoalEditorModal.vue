@@ -54,12 +54,16 @@ const editingTodoId = ref<string | null>(null);
 
 const GOAL_CARD_HEIGHT_REM = 3.5;
 const GOAL_CARD_GAP_REM = 0.5;
+const GOAL_LIST_BOTTOM_PADDING_REM = 0.25;
+const GOAL_VISIBLE_CARD_LIMIT = 9;
 
 const goalListHeight = computed(() => {
   const itemCount = Math.max(todos.value.length, 1);
+  const visibleItemCount = Math.min(itemCount, GOAL_VISIBLE_CARD_LIMIT);
   const contentHeight =
-    itemCount * GOAL_CARD_HEIGHT_REM +
-    (itemCount - 1) * GOAL_CARD_GAP_REM;
+    visibleItemCount * GOAL_CARD_HEIGHT_REM +
+    (visibleItemCount - 1) * GOAL_CARD_GAP_REM +
+    GOAL_LIST_BOTTOM_PADDING_REM;
 
   return `min(60vh, ${contentHeight}rem)`;
 });
@@ -243,10 +247,13 @@ defineExpose({ todos, appendTodo, updateTodo, removeTodo });
   flex-direction: column;
   gap: 0.5rem;
   padding-right: 0.75rem;
+  padding-bottom: 0.25rem;
 }
 
 .goal-card {
   display: grid;
+  flex: 0 0 3.5rem;
+  height: 3.5rem;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.5rem;

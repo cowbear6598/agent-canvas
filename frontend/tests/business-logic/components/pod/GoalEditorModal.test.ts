@@ -4,50 +4,67 @@ import { describe, expect, it, vi } from "vitest";
 import GoalEditorModal from "@/components/pod/GoalEditorModal.vue";
 import i18n from "@/i18n";
 
-describe("GoalEditorModal", () => {
-  it("使用共用 ScrollArea 承載可溢出的 Goal 清單，並為兩張卡片保留完整高度", () => {
-    const wrapper = shallowMount(GoalEditorModal, {
-      props: {
-        open: true,
-        pod: {
-          id: "11111111-1111-4111-8111-111111111111",
-          name: "Planner",
-          x: 0,
-          y: 0,
-          rotation: 0,
-          provider: "claude",
-          providerConfig: { model: "opus" },
-          repositoryId: null,
-          workspacePath: "/tmp/planner",
-          goal: {
-            todos: [
-              { id: "todo-1", text: "Ship" },
-              { id: "todo-2", text: "Verify" },
-            ],
-          },
-        } as never,
-      },
-      global: {
-        plugins: [createTestingPinia({ createSpy: vi.fn }), i18n],
-        stubs: {
-          Dialog: { template: "<div><slot /></div>" },
-          DialogContent: { template: "<div><slot /></div>" },
-          DialogHeader: { template: "<div><slot /></div>" },
-          DialogTitle: { template: "<div><slot /></div>" },
-          DialogFooter: { template: "<div><slot /></div>" },
-          ScrollArea: {
-            props: ["style"],
-            template: '<div data-testid="goal-scroll-area" :style="style"><slot /></div>',
-          },
+function mountGoalEditor(todoCount: number) {
+  return shallowMount(GoalEditorModal, {
+    props: {
+      open: true,
+      pod: {
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Planner",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        provider: "claude",
+        providerConfig: { model: "opus" },
+        repositoryId: null,
+        workspacePath: "/tmp/planner",
+        goal: {
+          todos: Array.from({ length: todoCount }, (_, index) => ({
+            id: `todo-${index + 1}`,
+            text: `Todo ${index + 1}`,
+          })),
+        },
+      } as never,
+    },
+    global: {
+      plugins: [createTestingPinia({ createSpy: vi.fn }), i18n],
+      stubs: {
+        Dialog: { template: "<div><slot /></div>" },
+        DialogContent: { template: "<div><slot /></div>" },
+        DialogHeader: { template: "<div><slot /></div>" },
+        DialogTitle: { template: "<div><slot /></div>" },
+        DialogFooter: { template: "<div><slot /></div>" },
+        ScrollArea: {
+          props: ["style"],
+          template:
+            '<div data-testid="goal-scroll-area" :style="style"><slot /></div>',
         },
       },
-    });
+    },
+  });
+}
 
-    expect(wrapper.find('[data-testid="goal-scroll-area"] .goal-editor-list').exists()).toBe(true);
-    const setupState = (wrapper.vm.$ as unknown as {
-      setupState: { goalListHeight: string };
-    }).setupState;
+function getGoalListHeight(
+  wrapper: ReturnType<typeof mountGoalEditor>,
+): string {
+  return (wrapper.vm.$ as unknown as {
+    setupState: { goalListHeight: string };
+  }).setupState.goalListHeight;
+}
 
-    expect(setupState.goalListHeight).toBe("min(60vh, 7.5rem)");
+describe("GoalEditorModal", () => {
+  it("九張以內的 Goal 卡片都保留完整高度", () => {
+    const wrapper = mountGoalEditor(4);
+
+    expect(
+      wrapper.find('[data-testid="goal-scroll-area"] .goal-editor-list').exists(),
+    ).toBe(true);
+    expect(getGoalListHeight(wrapper)).toBe("min(60vh, 15.75rem)");
+  });
+
+  it("超過九張 Goal 卡片時將清單高度限制為九張", () => {
+    expect(getGoalListHeight(mountGoalEditor(10))).toBe(
+      "min(60vh, 35.75rem)",
+    );
   });
 });
