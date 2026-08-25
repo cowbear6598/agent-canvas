@@ -270,6 +270,21 @@
         "copy": "複製",
         "paste": "貼上",
         "copySuccess": "Goal 已複製",
+        "yaml": {
+          "import": "匯入",
+          "export": "匯出",
+          "importSuccess": "Goal YAML 已匯入",
+          "exportSuccess": "Goal YAML 已匯出",
+          "importFailed": "Goal YAML 匯入失敗",
+          "exportFailed": "Goal YAML 匯出失敗",
+          "errors": {
+            "invalidFileType": "請選擇副檔名為 .yaml 的檔案",
+            "tooLarge": "YAML 檔案不可超過 1 MB",
+            "invalidFormat": "YAML 格式不正確",
+            "unsupportedVersion": "不支援此 Goal YAML 版本",
+            "invalidTodo": "每個 Todo 都必須包含非空白的文字內容"
+          }
+        },
         "validation": {
           "noEmptyRows": "請填完空白待辦，或把它刪掉"
         }

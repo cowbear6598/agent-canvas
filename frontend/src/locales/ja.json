@@ -270,6 +270,21 @@
         "copy": "コピー",
         "paste": "貼り付け",
         "copySuccess": "Goal をコピーしました",
+        "yaml": {
+          "import": "インポート",
+          "export": "エクスポート",
+          "importSuccess": "Goal YAML をインポートしました",
+          "exportSuccess": "Goal YAML をエクスポートしました",
+          "importFailed": "Goal YAML のインポートに失敗しました",
+          "exportFailed": "Goal YAML のエクスポートに失敗しました",
+          "errors": {
+            "invalidFileType": ".yaml 拡張子のファイルを選択してください",
+            "tooLarge": "YAML ファイルは 1 MB 以下にしてください",
+            "invalidFormat": "YAML の形式が正しくありません",
+            "unsupportedVersion": "この Goal YAML バージョンはサポートされていません",
+            "invalidTodo": "すべての Todo に空白以外のテキストが必要です"
+          }
+        },
         "validation": {
           "noEmptyRows": "空の Todo は入力するか削除してください"
         }

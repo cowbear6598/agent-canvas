@@ -9,7 +9,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { GripVertical, Plus, Target, Trash2 } from "lucide-vue-next";
+import {
+  Download,
+  GripVertical,
+  Plus,
+  Target,
+  Trash2,
+  Upload,
+} from "lucide-vue-next";
 import { VueDraggable } from "vue-draggable-plus";
 import type { Pod, PodGoal } from "@/types";
 import { useGoalEditorForm } from "@/composables/pod/useGoalEditorForm";
@@ -19,6 +26,13 @@ import { useI18n } from "vue-i18n";
 import { storeToRefs } from "pinia";
 import { useGoalClipboardStore } from "@/stores/goalClipboardStore";
 import { useToast } from "@/composables/useToast";
+import { generateUUID } from "@/services/utils";
+import {
+  createGoalYamlFilename,
+  GoalYamlError,
+  parseGoalYamlFile,
+  serializeGoalYaml,
+} from "@/lib/goalYaml";
 
 const props = defineProps<{
   open: boolean;
@@ -51,6 +65,7 @@ const subModalOpen = ref(false);
 const subModalMode = ref<"add" | "edit">("add");
 const subModalInitialText = ref("");
 const editingTodoId = ref<string | null>(null);
+const yamlFileInput = ref<HTMLInputElement | null>(null);
 
 const GOAL_CARD_HEIGHT_REM = 3.5;
 const GOAL_CARD_GAP_REM = 0.5;
@@ -112,6 +127,64 @@ const handleCopy = (): void => {
 const handlePaste = (): void => {
   const newTodos = goalClipboardStore.cloneAsNewTodos();
   replaceTodos(newTodos);
+};
+
+const handleExportYaml = (): void => {
+  try {
+    const yaml = serializeGoalYaml(todos.value);
+    const blob = new Blob([yaml], { type: "application/yaml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = createGoalYamlFilename(props.pod.name);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    toast({ title: t("pod.goal.editor.yaml.exportSuccess") });
+  } catch {
+    toast({
+      title: t("pod.goal.editor.yaml.exportFailed"),
+      variant: "destructive",
+    });
+  }
+};
+
+const handleOpenYamlImport = (): void => {
+  if (!yamlFileInput.value) return;
+  yamlFileInput.value.value = "";
+  yamlFileInput.value.click();
+};
+
+const getYamlImportErrorMessage = (error: unknown): string => {
+  const errorCode =
+    error instanceof GoalYamlError ? error.code : "invalidFormat";
+  return t(`pod.goal.editor.yaml.errors.${errorCode}`);
+};
+
+const handleImportYaml = async (event: Event): Promise<void> => {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const todoTexts = await parseGoalYamlFile(file);
+    replaceTodos(
+      todoTexts.map((text) => ({
+        id: generateUUID(),
+        text,
+      })),
+    );
+    toast({ title: t("pod.goal.editor.yaml.importSuccess") });
+  } catch (error) {
+    toast({
+      title: t("pod.goal.editor.yaml.importFailed"),
+      description: getYamlImportErrorMessage(error),
+      variant: "destructive",
+    });
+  } finally {
+    input.value = "";
+  }
 };
 
 defineExpose({ todos, appendTodo, updateTodo, removeTodo });
@@ -210,6 +283,34 @@ defineExpose({ todos, appendTodo, updateTodo, removeTodo });
           >
             {{ t("pod.goal.editor.paste") }}
           </button>
+          <div class="goal-editor-file-actions">
+            <input
+              ref="yamlFileInput"
+              type="file"
+              accept=".yaml,application/yaml,text/yaml"
+              class="sr-only"
+              data-testid="goal-editor-yaml-input"
+              @change="handleImportYaml"
+            >
+            <button
+              type="button"
+              class="goal-editor-action-btn"
+              data-testid="goal-editor-import"
+              @click="handleOpenYamlImport"
+            >
+              <Upload :size="14" />
+              {{ t("pod.goal.editor.yaml.import") }}
+            </button>
+            <button
+              type="button"
+              class="goal-editor-action-btn"
+              data-testid="goal-editor-export"
+              @click="handleExportYaml"
+            >
+              <Download :size="14" />
+              {{ t("pod.goal.editor.yaml.export") }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -349,6 +450,13 @@ defineExpose({ todos, appendTodo, updateTodo, removeTodo });
 .goal-editor-action-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.goal-editor-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 .goal-editor-validation {

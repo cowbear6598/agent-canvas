@@ -270,6 +270,21 @@
         "copy": "Copy",
         "paste": "Paste",
         "copySuccess": "Goal copied",
+        "yaml": {
+          "import": "Import",
+          "export": "Export",
+          "importSuccess": "Goal YAML imported",
+          "exportSuccess": "Goal YAML exported",
+          "importFailed": "Failed to import Goal YAML",
+          "exportFailed": "Failed to export Goal YAML",
+          "errors": {
+            "invalidFileType": "Choose a file with the .yaml extension",
+            "tooLarge": "The YAML file must not exceed 1 MB",
+            "invalidFormat": "The YAML format is invalid",
+            "unsupportedVersion": "This Goal YAML version is not supported",
+            "invalidTodo": "Every todo must contain non-blank text"
+          }
+        },
         "validation": {
           "noEmptyRows": "Fill in blank todos or remove them"
         }
