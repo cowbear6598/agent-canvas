@@ -8,6 +8,7 @@ import {
   createPodPackArchive,
   createPodPackArchiveFile,
   importPreparedPodPack,
+  importPodPackArchive,
   parsePodPackArchive,
   preparePodPackArchive,
   previewPodPackArchive,
@@ -17,6 +18,7 @@ import { config } from "../../src/config/index.js";
 import { canvasStore } from "../../src/services/canvasStore.js";
 import { createDirectoryArchive } from "../../src/utils/directoryArchive.js";
 import { extractStreamingZip } from "../../src/utils/streamingZip.js";
+import { managedPluginStore } from "../../src/services/plugin/managedPluginRegistry.js";
 
 const SOURCE_ID = "11111111-1111-4111-8111-111111111111";
 const TARGET_ID = "22222222-2222-4222-8222-222222222222";
@@ -88,6 +90,72 @@ describe("podPackService", () => {
       await createPodPackArchive(createExportData()),
     );
     expect(preview).toMatchObject({ podCount: 2, connectionCount: 1 });
+  });
+
+  it("相同來源的 Plugin 已存在時會沿用本機版本", async () => {
+    await fs.mkdir(config.tmpRoot, { recursive: true });
+    const pluginRoot = await fs.mkdtemp(
+      path.join(config.tmpRoot, "podpack-existing-plugin-"),
+    );
+    const pluginId = `podpack-existing-${randomUUID()}`;
+    const source = {
+      type: "github" as const,
+      ref: `agent-canvas/podpack-existing-${randomUUID()}`,
+    };
+    const now = new Date().toISOString();
+    let canvasId: string | null = null;
+
+    try {
+      await fs.writeFile(path.join(pluginRoot, "SKILL.md"), "# 封裝版本");
+      managedPluginStore.insert({
+        id: pluginId,
+        source,
+        githubRepo: source.ref,
+        displayName: "本機 Plugin",
+        description: null,
+        installPath: pluginRoot,
+        installedAt: now,
+        updatedAt: now,
+      });
+
+      const data = createExportData();
+      const archive = await createPodPackArchive({
+        ...data,
+        pods: data.pods.map((pod, index) =>
+          index === 0 ? { ...pod, pluginIds: [pluginId] } : pod,
+        ),
+      });
+
+      // 模擬同一來源的本機 Plugin 已更新，不再等同封裝內的快照。
+      await fs.writeFile(path.join(pluginRoot, "local-only.txt"), "本機版本");
+
+      const preview = await previewPodPackArchive(archive);
+      expect(preview.plugins[0]).toMatchObject({
+        originalKey: pluginId,
+        resolvedName: "本機 Plugin",
+        action: "existing",
+      });
+
+      const canvas = await canvasStore.create(
+        `podpack-${randomUUID().slice(0, 8)}`,
+      );
+      if (!canvas.success) throw new Error("建立測試 Canvas 失敗");
+      canvasId = canvas.data.id;
+      await fs.mkdir(config.getCanvasPath(canvas.data.name), { recursive: true });
+
+      const imported = await importPodPackArchive(archive, {
+        canvasId,
+        targetX: 0,
+        targetY: 0,
+      });
+
+      expect(imported.createdPods[0]?.pluginIds).toContain(pluginId);
+      expect(managedPluginStore.getBySource(source)?.id).toBe(pluginId);
+    } finally {
+      if (canvasId) await canvasStore.delete(canvasId);
+      managedPluginStore.delete(pluginId);
+      await fs.rm(pluginRoot, { recursive: true, force: true });
+    }
   });
 
   it("仍可解析 v1 Pod pack", () => {

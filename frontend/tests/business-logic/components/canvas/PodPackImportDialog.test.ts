@@ -26,7 +26,7 @@ function createPreview(): PodPackPreview {
         name: "AI video production",
         resolvedName: "AI video production",
         fingerprint: "a".repeat(64),
-        action: "reuse",
+        action: "existing",
         skills: [
           { skillName: "skills/develop-script", description: "" },
           { skillName: "skills/render-takes", description: "" },
@@ -61,6 +61,6 @@ describe("PodPackImportDialog", () => {
     );
     expect(text).not.toContain("initialize_chapter.py");
     expect(text).not.toContain("compile_h3_jobs.py");
-    expect(text).not.toContain(i18n.global.t("podPack.action.reuse"));
+    expect(text).toContain(i18n.global.t("podPack.action.existing"));
   });
 });

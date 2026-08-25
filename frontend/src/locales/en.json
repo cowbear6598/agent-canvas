@@ -1297,7 +1297,7 @@
       "confirm": "Confirm and import",
       "importing": "Importing...",
       "success": "Imported {pods} Pods and {connections} connections",
-      "result": "Dependencies: {installed} installed, {reused} reused, {renamed} renamed for conflicts",
+      "result": "Dependencies: {installed} installed, {existing} already present and kept local, {reused} reused, {renamed} renamed for conflicts",
       "failed": "The Pod pack was not imported",
       "previewFailed": "Could not inspect this Pod pack"
     },
@@ -1307,7 +1307,7 @@
       "importing": "Restoring the staged Pod pack...",
       "downloading": "The download is ready"
     },
-    "action": { "reuse": "Reuse existing", "install": "Install", "rename": "Install with new name" },
+    "action": { "reuse": "Reuse existing", "existing": "Already exists (use local version)", "install": "Install", "rename": "Install with new name" },
     "errors": {
       "tooLarge": "This Pod pack exceeds the allowed size.",
       "invalidManifest": "The Pod pack manifest or version is invalid.",

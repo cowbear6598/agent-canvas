@@ -7,7 +7,7 @@ import type {
   RepositoryNote,
 } from "@/types";
 
-export type PodPackDependencyAction = "reuse" | "install" | "rename";
+export type PodPackDependencyAction = "reuse" | "existing" | "install" | "rename";
 
 export interface PodPackDependencyPreview {
   originalKey: string;

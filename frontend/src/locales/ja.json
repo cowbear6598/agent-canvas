@@ -1297,7 +1297,7 @@
       "confirm": "確認してインポート",
       "importing": "インポート中...",
       "success": "{pods} 個の Pod と {connections} 本の接続をインポートしました",
-      "result": "依存項目: {installed} 件をインストール、{reused} 件を再利用、競合した {renamed} 件を改名",
+      "result": "依存項目: {installed} 件をインストール、{existing} 件は既存のローカル版を使用、{reused} 件を再利用、競合した {renamed} 件を改名",
       "failed": "Pod パックをインポートできませんでした",
       "previewFailed": "この Pod パックを確認できませんでした"
     },
@@ -1307,7 +1307,7 @@
       "importing": "一時保存した Pod パックを復元しています...",
       "downloading": "ダウンロードの準備ができました"
     },
-    "action": { "reuse": "既存を再利用", "install": "インストール", "rename": "新しい名前でインストール" },
+    "action": { "reuse": "既存を再利用", "existing": "既に存在（ローカル版を使用）", "install": "インストール", "rename": "新しい名前でインストール" },
     "errors": {
       "tooLarge": "Pod パックが許可されたサイズを超えています。",
       "invalidManifest": "Pod パックの manifest またはバージョンが無効です。",

@@ -59,7 +59,7 @@ const POD_PACK_OMITTED_RESOURCES = [
 ] as const;
 
 type ArchiveEntries = Record<string, Uint8Array>;
-type DependencyAction = "reuse" | "install" | "rename";
+type DependencyAction = "reuse" | "existing" | "install" | "rename";
 type ManifestRepository = Extract<PodPackManifest, { version: 2 }>["repositories"][number];
 type ManifestRepositoryNote = NonNullable<ManifestRepository["note"]>;
 
@@ -541,20 +541,29 @@ async function resolvePreview(manifest: PodPackManifest): Promise<PodPackPreview
   const pluginRecords = managedPluginStore.list();
   const pluginNames = new Set(pluginRecords.map((item) => item.displayName ?? item.id));
   const plugins = manifest.plugins.map((plugin) => {
+    const sourceMatch = managedPluginStore.getBySource(plugin.source);
     const fingerprintMatch = pluginFingerprints.get(plugin.fingerprint);
-    const matched = fingerprintMatch &&
+    const compatibleFingerprintMatch = fingerprintMatch &&
       fingerprintMatch.source.type === plugin.source.type &&
       (plugin.source.type === "upload" || fingerprintMatch.source.ref === plugin.source.ref)
       ? fingerprintMatch
       : undefined;
-    const resolvedName = matched?.name ?? uniqueDisplayName(plugin.displayName, pluginNames);
-    if (!matched) pluginNames.add(resolvedName);
+    const resolvedName = sourceMatch
+      ? sourceMatch.displayName ?? sourceMatch.id
+      : compatibleFingerprintMatch?.name ?? uniqueDisplayName(plugin.displayName, pluginNames);
+    if (!sourceMatch && !compatibleFingerprintMatch) pluginNames.add(resolvedName);
     return {
       originalKey: plugin.originalId,
       name: plugin.displayName,
       resolvedName,
       fingerprint: plugin.fingerprint,
-      action: matched ? "reuse" as const : resolvedName === plugin.displayName ? "install" as const : "rename" as const,
+      action: sourceMatch
+        ? "existing" as const
+        : compatibleFingerprintMatch
+          ? "reuse" as const
+          : resolvedName === plugin.displayName
+            ? "install" as const
+            : "rename" as const,
       source: plugin.source,
       skills: plugin.skills,
       executableFiles: plugin.executableFiles,
@@ -719,6 +728,12 @@ async function importPlugins(prepared: PreparedPodPack, artifacts: ImportArtifac
   const fingerprints = await installedPluginFingerprints();
   for (const item of prepared.preview.plugins) {
     const source = prepared.manifest.plugins.find((plugin) => plugin.originalId === item.originalKey)!;
+    if (item.action === "existing") {
+      const existing = managedPluginStore.getBySource(source.source);
+      if (!existing) throw new Error("POD_PACK_PLUGIN_CHANGED_DURING_IMPORT");
+      result.set(item.originalKey, existing.id);
+      continue;
+    }
     if (item.action === "reuse") {
       const matched = fingerprints.get(item.fingerprint);
       const sourceMatches = matched &&

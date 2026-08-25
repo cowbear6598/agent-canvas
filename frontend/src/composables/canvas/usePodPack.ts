@@ -199,6 +199,7 @@ export function usePodPack(): UsePodPackResult {
         t("podPack.import.success", { pods: result.createdPods.length, connections: result.createdConnections.length }),
         t("podPack.import.result", {
           installed: dependencies.filter((item) => item.action === "install").length,
+          existing: dependencies.filter((item) => item.action === "existing").length,
           reused: dependencies.filter((item) => item.action === "reuse").length,
           renamed: dependencies.filter((item) => item.action === "rename").length,
         }),

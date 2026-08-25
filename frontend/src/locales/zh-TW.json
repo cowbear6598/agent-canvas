@@ -1297,7 +1297,7 @@
       "confirm": "確認並匯入",
       "importing": "匯入中...",
       "success": "已匯入 {pods} 個 Pod 與 {connections} 條連線",
-      "result": "相依項目：安裝 {installed}、重用 {reused}、因衝突重新命名 {renamed}",
+      "result": "相依項目：安裝 {installed}、已存在並沿用本機版本 {existing}、重用 {reused}、因衝突重新命名 {renamed}",
       "failed": "Pod 封裝未匯入",
       "previewFailed": "無法檢查此 Pod 封裝"
     },
@@ -1307,7 +1307,7 @@
       "importing": "正在還原已暫存的 Pod 封裝...",
       "downloading": "下載已準備完成"
     },
-    "action": { "reuse": "重用既有項目", "install": "安裝", "rename": "以新名稱安裝" },
+    "action": { "reuse": "重用既有項目", "existing": "已存在（使用本機版本）", "install": "安裝", "rename": "以新名稱安裝" },
     "errors": {
       "tooLarge": "Pod 封裝超過允許大小。",
       "invalidManifest": "Pod 封裝的 manifest 或版本無效。",
