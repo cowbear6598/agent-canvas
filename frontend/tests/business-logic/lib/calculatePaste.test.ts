@@ -187,6 +187,10 @@ describe("calculatePastePositions", () => {
         summaryThinkingLevel: "high",
         label: "Approved",
         description: "Continue after approval",
+        routingPoints: [
+          { x: 80, y: -40, orthogonalRole: "source-leg" },
+          { x: 220, y: -20, orthogonalRole: "lane" },
+        ],
       },
     ];
 
@@ -203,6 +207,11 @@ describe("calculatePastePositions", () => {
       new Set(),
     );
 
+    const offset = {
+      x: 100 - (200 + POD_WIDTH) / 2,
+      y: 100 - POD_HEIGHT / 2,
+    };
+
     expect(result.connections).toEqual([
       {
         originalSourcePodId: "pod-source",
@@ -216,6 +225,18 @@ describe("calculatePastePositions", () => {
         summaryThinkingLevel: "high",
         label: "Approved",
         description: "Continue after approval",
+        routingPoints: [
+          {
+            x: 80 + offset.x,
+            y: -40 + offset.y,
+            orthogonalRole: "source-leg",
+          },
+          {
+            x: 220 + offset.x,
+            y: -20 + offset.y,
+            orthogonalRole: "lane",
+          },
+        ],
       },
     ]);
   });

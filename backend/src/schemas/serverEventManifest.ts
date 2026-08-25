@@ -65,6 +65,7 @@ const canvasRequestSuccessPayloadSchema = requestSuccessPayloadSchema
 
 const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
 const connectionBaseTriggerModeSchema = z.enum(["auto", "branch"]);
+const connectionRoutingModeSchema = z.enum(["bezier", "orthogonal"]);
 const pathwayStateSchema = z.enum([
   "not-applicable",
   "pending",
@@ -138,6 +139,20 @@ const connectionPayloadSchema = z
     sourceAnchor: anchorPositionSchema,
     targetPodId: z.string(),
     targetAnchor: anchorPositionSchema,
+    routingMode: connectionRoutingModeSchema.optional(),
+    routingOffset: z.number().finite().optional(),
+    routingPoints: z
+      .array(
+        z.object({
+          x: z.number().finite(),
+          y: z.number().finite(),
+          orthogonalRole: z
+            .enum(["source-leg", "lane", "target-leg"])
+            .optional(),
+        }),
+      )
+      .max(3)
+      .optional(),
     triggerMode: connectionBaseTriggerModeSchema.optional(),
     direct: z.boolean().optional(),
     summaryModel: z.string().optional(),

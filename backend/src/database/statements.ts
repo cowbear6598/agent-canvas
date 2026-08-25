@@ -485,11 +485,13 @@ function buildStatements(db: Database): {
       insert: db.prepare(
         `INSERT INTO connections (
           id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
+          routing_mode, routing_offset, routing_points,
           trigger_mode,
           summary_model, summary_provider, summary_thinking_level, direct_enabled,
           label, description
         ) VALUES (
           $id, $canvasId, $sourcePodId, $sourceAnchor, $targetPodId, $targetAnchor,
+          $routingMode, $routingOffset, $routingPoints,
           $triggerMode,
           $summaryModel, $summaryProvider, $summaryThinkingLevel, $directEnabled,
           $label, $description
@@ -505,6 +507,8 @@ function buildStatements(db: Database): {
         `UPDATE connections SET
           source_pod_id = $sourcePodId, source_anchor = $sourceAnchor,
           target_pod_id = $targetPodId, target_anchor = $targetAnchor,
+          routing_mode = $routingMode, routing_offset = $routingOffset,
+          routing_points = $routingPoints,
           trigger_mode = $triggerMode,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
           summary_thinking_level = $summaryThinkingLevel,
@@ -517,6 +521,8 @@ function buildStatements(db: Database): {
         `UPDATE connections SET
           source_pod_id = $sourcePodId, source_anchor = $sourceAnchor,
           target_pod_id = $targetPodId, target_anchor = $targetAnchor,
+          routing_mode = $routingMode, routing_offset = $routingOffset,
+          routing_points = $routingPoints,
           trigger_mode = $triggerMode,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
           summary_thinking_level = $summaryThinkingLevel,

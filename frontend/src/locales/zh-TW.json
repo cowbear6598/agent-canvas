@@ -827,6 +827,11 @@
       "changeFailed": "變更失敗",
       "triggerModeChangeFailed": "無法變更觸發模式",
       "directChangeFailed": "無法切換直接觸發",
+      "routingBezier": "貝茲曲線",
+      "routingOrthogonal": "直角折線",
+      "routingChanged": "連線線型已變更",
+      "routingChangedDesc": "已切換為{mode}",
+      "routingChangeFailed": "無法變更連線線型",
       "summaryModelChanged": "總結模型已變更",
       "summaryModelChangeFailed": "無法變更總結模型",
       "branchModelChanged": "Branch 模型已變更",
@@ -904,6 +909,11 @@
       "aiRejectedReason": "未被選中原因：{reason}",
       "aiErrorReason": "錯誤：{reason}"
     },
+    "connectionRouting": {
+      "dragHandle": "拖曳以調整連線路徑",
+      "movePoint": "拖曳以移動路徑節點",
+      "addPoint": "拖曳以新增路徑節點"
+    },
     "podTypeMenu": {}
   },
   "store": {
@@ -920,6 +930,7 @@
       "createFailed": "連線建立失敗",
       "deleteFailed": "連線刪除失敗",
       "updateFailed": "連線更新失敗",
+      "routingUpdateFailed": "連線路徑更新失敗",
       "summaryModelUpdateFailed": "連線摘要模型更新失敗",
       "branchLabelEmpty": "Branch label 不可為空",
       "branchLabelTooLong": "Branch label 長度不可超過 {max} 字元",

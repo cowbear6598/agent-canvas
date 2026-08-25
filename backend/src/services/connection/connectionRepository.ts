@@ -2,6 +2,8 @@ import { getDb } from "../../database/index.js";
 import { getStatements } from "../../database/statements.js";
 import type {
   AnchorPosition,
+  ConnectionRoutingMode,
+  ConnectionRoutingPoint,
   TriggerMode,
 } from "../../types/index.js";
 import type { ProviderName } from "../provider/index.js";
@@ -16,6 +18,9 @@ export interface InsertConnectionRowInput {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  routingMode: ConnectionRoutingMode;
+  routingOffset: number;
+  routingPoints: ConnectionRoutingPoint[];
   triggerMode: TriggerMode;
   summaryModel: string;
   summaryProvider: ProviderName | null;
@@ -64,6 +69,9 @@ export class ConnectionRepository {
       $sourceAnchor: input.sourceAnchor,
       $targetPodId: input.targetPodId,
       $targetAnchor: input.targetAnchor,
+      $routingMode: input.routingMode,
+      $routingOffset: input.routingOffset,
+      $routingPoints: JSON.stringify(input.routingPoints),
       $triggerMode: persistedTriggerMode,
       $summaryModel: input.summaryModel,
       $summaryProvider: input.summaryProvider,
@@ -118,6 +126,9 @@ export class ConnectionRepository {
       $sourceAnchor: input.sourceAnchor,
       $targetPodId: input.targetPodId,
       $targetAnchor: input.targetAnchor,
+      $routingMode: input.routingMode,
+      $routingOffset: input.routingOffset,
+      $routingPoints: JSON.stringify(input.routingPoints),
       $triggerMode: persistedTriggerMode,
       $summaryModel: input.summaryModel,
       $summaryProvider: input.summaryProvider,

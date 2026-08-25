@@ -42,6 +42,49 @@
     fill 0.3s ease;
 }
 
+.connection-line .route-handle {
+  pointer-events: all;
+}
+
+.connection-line .route-point-handle {
+  cursor: move;
+}
+
+.connection-line .route-insertion-handle {
+  opacity: 0.65;
+}
+
+.connection-line .route-insertion-handle:hover {
+  opacity: 1;
+}
+
+.connection-line .route-handle.vertical {
+  cursor: ns-resize;
+}
+
+.connection-line .route-handle.horizontal {
+  cursor: ew-resize;
+}
+
+.connection-line .route-handle circle {
+  fill: var(--card);
+  stroke: currentColor;
+  stroke-width: 2px;
+  filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.2));
+}
+
+.connection-line .route-handle path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.connection-line .route-handle.dragging circle {
+  fill: var(--secondary);
+  stroke-width: 3px;
+}
+
 .connection-line:hover .arrow {
   opacity: 0.8;
 }

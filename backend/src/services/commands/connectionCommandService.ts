@@ -62,6 +62,15 @@ class ConnectionCommandService {
         sourceAnchor: params.payload.sourceAnchor,
         targetPodId: params.payload.targetPodId,
         targetAnchor: params.payload.targetAnchor,
+        ...(params.payload.routingMode !== undefined && {
+          routingMode: params.payload.routingMode,
+        }),
+        ...(params.payload.routingOffset !== undefined && {
+          routingOffset: params.payload.routingOffset,
+        }),
+        ...(params.payload.routingPoints !== undefined && {
+          routingPoints: params.payload.routingPoints,
+        }),
         ...(params.payload.summaryModel !== undefined && {
           summaryModel: params.payload.summaryModel,
         }),
@@ -207,6 +216,15 @@ class ConnectionCommandService {
       }),
       ...(params.payload.description !== undefined && {
         description: params.payload.description ?? null,
+      }),
+      ...(params.payload.routingMode !== undefined && {
+        routingMode: params.payload.routingMode,
+      }),
+      ...(params.payload.routingOffset !== undefined && {
+        routingOffset: params.payload.routingOffset,
+      }),
+      ...(params.payload.routingPoints !== undefined && {
+        routingPoints: params.payload.routingPoints,
       }),
     };
 

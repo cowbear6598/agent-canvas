@@ -178,6 +178,7 @@ function transformNotes<
 
 function transformConnections(
   connections: CopiedConnection[],
+  offset: { offsetX: number; offsetY: number },
 ): PasteConnectionItem[] {
   return connections.map((connection) => {
     const payload: PasteConnectionItem = {
@@ -185,6 +186,15 @@ function transformConnections(
       sourceAnchor: connection.sourceAnchor,
       originalTargetPodId: connection.targetPodId,
       targetAnchor: connection.targetAnchor,
+      routingMode: connection.routingMode,
+      routingOffset: connection.routingOffset,
+      routingPoints: connection.routingPoints?.map((point) => ({
+        x: point.x + offset.offsetX,
+        y: point.y + offset.offsetY,
+        ...(point.orthogonalRole
+          ? { orthogonalRole: point.orthogonalRole }
+          : {}),
+      })),
       triggerMode: connection.triggerMode,
       direct: connection.direct,
       summaryProvider: connection.summaryProvider,
@@ -282,6 +292,6 @@ export function calculatePastePositions(
         originalPosition: note.originalPosition,
       }),
     }),
-    connections: transformConnections(connections),
+    connections: transformConnections(connections, offset),
   };
 }

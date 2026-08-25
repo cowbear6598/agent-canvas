@@ -140,6 +140,12 @@ describe("copyPasteFlow", () => {
       label: "approved",
       description: "Continue after review",
       direct: true,
+      routingMode: "orthogonal",
+      routingOffset: -160,
+      routingPoints: [
+        { x: 180, y: -100 },
+        { x: 420, y: -140 },
+      ],
     });
     const externalConnection = createMockConnection({
       id: "conn-external",
@@ -193,6 +199,12 @@ describe("copyPasteFlow", () => {
         triggerMode: "branch",
         direct: true,
         label: "approved",
+        routingMode: "orthogonal",
+        routingOffset: -160,
+        routingPoints: [
+          { x: 180, y: -100 },
+          { x: 420, y: -140 },
+        ],
       }),
     ]);
 
@@ -284,6 +296,12 @@ describe("copyPasteFlow", () => {
               triggerMode: "branch",
               direct: true,
               label: "approved",
+              routingMode: "orthogonal",
+              routingOffset: -160,
+              routingPoints: [
+                { x: expect.any(Number), y: expect.any(Number) },
+                { x: expect.any(Number), y: expect.any(Number) },
+              ],
             }),
           ],
         }),

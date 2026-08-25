@@ -915,6 +915,8 @@ function importConnections(
     if (!sourcePodId || !targetPodId) throw new Error("POD_PACK_CONNECTION_REFERENCE_INVALID");
     const connection = connectionStore.create(canvasId, {
       sourcePodId, sourceAnchor: item.sourceAnchor, targetPodId, targetAnchor: item.targetAnchor,
+      routingMode: item.routingMode, routingOffset: item.routingOffset,
+      routingPoints: item.routingPoints,
       triggerMode: item.triggerMode, direct: item.direct,
       summaryProvider: item.summaryProvider ?? undefined, summaryModel: item.summaryModel,
       summaryThinkingLevel: item.summaryThinkingLevel, label: item.label, description: item.description,

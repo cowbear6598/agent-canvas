@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import type { ConnectionBaseMode } from "@/types/connection";
-import { Zap, Brain, ArrowRight } from "lucide-vue-next";
+import type {
+  ConnectionBaseMode,
+  ConnectionRoutingMode,
+} from "@/types/connection";
+import { Zap, Brain, ArrowRight, Check, Route, Spline } from "lucide-vue-next";
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -17,9 +20,12 @@ interface Props {
   connectionId: string;
   currentTriggerMode: ConnectionBaseMode;
   directEnabled: boolean;
+  routingMode?: ConnectionRoutingMode;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  routingMode: "bezier",
+});
 
 const emit = defineEmits<{
   close: [];
@@ -30,6 +36,18 @@ const emit = defineEmits<{
 const connectionStore = useConnectionStore();
 const { toast } = useToast();
 const { t } = useI18n();
+const routingOptions = [
+  {
+    value: "bezier" as ConnectionRoutingMode,
+    icon: Spline,
+    labelKey: "canvas.connectionContextMenu.routingBezier",
+  },
+  {
+    value: "orthogonal" as ConnectionRoutingMode,
+    icon: Route,
+    labelKey: "canvas.connectionContextMenu.routingOrthogonal",
+  },
+];
 
 const handleSetTriggerMode = async (
   targetMode: ConnectionBaseMode,
@@ -89,6 +107,37 @@ const handleSetDirect = async (nextDirectEnabled: boolean): Promise<void> => {
   toast({
     title: t("canvas.connectionContextMenu.changeFailed"),
     description: t("canvas.connectionContextMenu.directChangeFailed"),
+    duration: DEFAULT_TOAST_DURATION_MS,
+  });
+};
+
+const handleSetRoutingMode = async (
+  routingMode: ConnectionRoutingMode,
+): Promise<void> => {
+  if (routingMode === props.routingMode) return;
+  const result = await connectionStore.updateConnectionRouting(
+    props.connectionId,
+    { routingMode },
+  );
+
+  if (result) {
+    toast({
+      title: t("canvas.connectionContextMenu.routingChanged"),
+      description: t("canvas.connectionContextMenu.routingChangedDesc", {
+        mode: t(
+          routingMode === "bezier"
+            ? "canvas.connectionContextMenu.routingBezier"
+            : "canvas.connectionContextMenu.routingOrthogonal",
+        ),
+      }),
+      duration: SHORT_TOAST_DURATION_MS,
+    });
+    return;
+  }
+
+  toast({
+    title: t("canvas.connectionContextMenu.changeFailed"),
+    description: t("canvas.connectionContextMenu.routingChangeFailed"),
     duration: DEFAULT_TOAST_DURATION_MS,
   });
 };
@@ -183,5 +232,28 @@ onUnmounted(() => {
         tabindex="-1"
       />
     </div>
+
+    <div class="border-t border-border my-1" />
+
+    <button
+      v-for="option in routingOptions"
+      :key="option.value"
+      type="button"
+      :data-testid="`connection-routing-${option.value}`"
+      class="flex w-full items-center justify-between gap-3 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+      @click="handleSetRoutingMode(option.value)"
+    >
+      <span class="flex items-center gap-2 font-mono">
+        <component
+          :is="option.icon"
+          :size="14"
+        />
+        <span>{{ $t(option.labelKey) }}</span>
+      </span>
+      <Check
+        v-if="routingMode === option.value"
+        :size="14"
+      />
+    </button>
   </div>
 </template>

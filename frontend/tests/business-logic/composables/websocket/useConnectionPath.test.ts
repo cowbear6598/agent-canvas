@@ -14,7 +14,9 @@ describe("useConnectionPath", () => {
         targetAnchor: "left",
       });
 
-      expect(result.path).toMatch(/^M \d+(\.\d+)?,\d+(\.\d+)? C /);
+      expect(result.path).toMatch(
+        /^M \d+(\.\d+)?,\d+(\.\d+)? L \d+(\.\d+)?,\d+(\.\d+)? C /,
+      );
       expect(result.path).toContain("M ");
       expect(result.path).toContain(" C ");
     });
@@ -157,13 +159,9 @@ describe("useConnectionPath", () => {
       // 由於 anchor 是 right/left，offset 應該影響 x 座標
       expect(result.path).toMatch(/C /);
 
-      // path 的格式為 "M startX,startY C cp1x,cp1y cp2x,cp2y endX,endY"
-      const coords = result.path.match(/[\d.]+/g)?.map(Number);
-      expect(coords!.length).toBe(8); // 4 個點，每點 x, y
-
-      // cp1x (右側 anchor) 應該是 startX + offset ≈ 100 + 42.4 = 142.4
-      const cp1x = coords![2];
-      expect(cp1x).toBeGreaterThan(100);
+      const controlMatch = result.path.match(/C ([\d.]+),([\d.]+)/);
+      const cp1x = Number(controlMatch![1]);
+      expect(cp1x).toBeGreaterThan(124);
       expect(cp1x).toBeLessThan(200);
     });
 
@@ -179,11 +177,9 @@ describe("useConnectionPath", () => {
         targetAnchor: "left",
       });
 
-      const coords = result.path.match(/[\d.]+/g)?.map(Number);
-
-      // cp1x (右側 anchor) 應該是 startX + offset = 100 + 100 = 200
-      const cp1x = coords![2];
-      expect(cp1x).toBeCloseTo(200, 1);
+      const controlMatch = result.path.match(/C ([\d.]+),([\d.]+)/);
+      const cp1x = Number(controlMatch![1]);
+      expect(cp1x).toBeCloseTo(224, 1);
     });
 
     it("所有 anchor 位置應正確計算 offset（top）", () => {
@@ -230,6 +226,51 @@ describe("useConnectionPath", () => {
 
       expect(result.angle).toBeGreaterThanOrEqual(-180);
       expect(result.angle).toBeLessThanOrEqual(180);
+    });
+
+    it("水平排列的 Bezier 連線應可沿垂直方向調整曲率", () => {
+      const { calculatePathData } = useConnectionPath();
+      const base = calculatePathData({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "bezier",
+      });
+      const adjusted = calculatePathData({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "bezier",
+        routingOffset: -120,
+      });
+
+      expect(adjusted.routeAxis).toBe("y");
+      expect(adjusted.handlePoint.y).toBeCloseTo(base.handlePoint.y - 120);
+      expect(adjusted.path).not.toBe(base.path);
+    });
+
+    it("垂直排列的 Bezier 連線應可沿水平方向調整曲率", () => {
+      const { calculatePathData } = useConnectionPath();
+      const base = calculatePathData({
+        start: { x: 200, y: 100 },
+        end: { x: 200, y: 500 },
+        sourceAnchor: "bottom",
+        targetAnchor: "top",
+        routingMode: "bezier",
+      });
+      const adjusted = calculatePathData({
+        start: { x: 200, y: 100 },
+        end: { x: 200, y: 500 },
+        sourceAnchor: "bottom",
+        targetAnchor: "top",
+        routingMode: "bezier",
+        routingOffset: 90,
+      });
+
+      expect(adjusted.routeAxis).toBe("x");
+      expect(adjusted.handlePoint.x).toBeCloseTo(base.handlePoint.x + 90);
     });
   });
 
@@ -478,6 +519,272 @@ describe("useConnectionPath", () => {
         expect(uniqueX.size).toBeGreaterThan(1);
         expect(uniqueY.size).toBeGreaterThan(1);
       }
+    });
+  });
+
+  describe("orthogonal routing", () => {
+    it("應產生只包含水平與垂直線段的 SVG path", () => {
+      const { calculatePathData } = useConnectionPath();
+      const result = calculatePathData({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "orthogonal",
+        routingOffset: -120,
+      });
+
+      expect(result.path).toContain("L ");
+      expect(result.path).not.toContain("C ");
+      expect(result.path).toBe(
+        "M 100,200 L 124,200 L 124,80 L 476,80 L 476,200 L 500,200",
+      );
+      expect(result.routeAxis).toBe("y");
+      expect(result.handlePoint.y).toBe(80);
+      expect(result.bounds.top).toBe(80);
+    });
+
+    it("垂直排列的端點應以水平方向調整 routing offset", () => {
+      const { calculatePathData } = useConnectionPath();
+      const result = calculatePathData({
+        start: { x: 100, y: 100 },
+        end: { x: 100, y: 500 },
+        sourceAnchor: "bottom",
+        targetAnchor: "top",
+        routingMode: "orthogonal",
+        routingOffset: 90,
+      });
+
+      expect(result.routeAxis).toBe("x");
+      expect(result.handlePoint.x).toBe(190);
+      expect(result.bounds.right).toBe(190);
+    });
+
+    it("路徑方向應依端點排列決定，端點直線則依 anchor 方向", () => {
+      const { calculatePathData } = useConnectionPath();
+      const result = calculatePathData({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "top",
+        targetAnchor: "bottom",
+        routingMode: "orthogonal",
+        routingOffset: -120,
+      });
+
+      expect(result.routeAxis).toBe("y");
+      expect(result.path).toBe(
+        "M 100,200 L 100,80 L 500,80 L 500,224 L 500,200",
+      );
+    });
+
+    it("Bezier 兩端應保留固定 24px 的 anchor 直線", () => {
+      const { calculatePathData } = useConnectionPath();
+      const result = calculatePathData({
+        start: { x: 100, y: 100 },
+        end: { x: 300, y: 100 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "bezier",
+      });
+
+      expect(result.path).toMatch(/^M 100,100 L 124,100 C /);
+      expect(result.path).toMatch(/ 276,100 L 300,100$/);
+    });
+
+    it("箭頭應沿直角折線排列且角度為水平或垂直", () => {
+      const { calculateMultipleArrowPositions } = useConnectionPath();
+      const arrows = calculateMultipleArrowPositions(
+        {
+          start: { x: 100, y: 200 },
+          end: { x: 500, y: 200 },
+          sourceAnchor: "right",
+          targetAnchor: "left",
+          routingMode: "orthogonal",
+          routingOffset: -120,
+        },
+        80,
+      );
+
+      expect(arrows.length).toBeGreaterThan(1);
+      for (const arrow of arrows) {
+        expect(Math.abs(arrow.angle) % 90).toBe(0);
+      }
+    });
+
+    it("Bezier 應平滑穿過最多三個路徑節點", () => {
+      const { calculatePathData } = useConnectionPath();
+      const result = calculatePathData({
+        start: { x: 0, y: 100 },
+        end: { x: 500, y: 100 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "bezier",
+        routingPoints: [
+          { x: 150, y: 20 },
+          { x: 300, y: 180 },
+          { x: 400, y: 40 },
+        ],
+      });
+
+      expect(result.path.match(/ C /g)).toHaveLength(4);
+      expect(result.path).toContain("150,20");
+      expect(result.path).toContain("300,180");
+      expect(result.path).toContain("400,40");
+    });
+
+    it("多個直角控制點應維持共用主通道，不形成階梯", () => {
+      const { calculatePathData } = useConnectionPath();
+      const result = calculatePathData({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "orthogonal",
+        routingPoints: [
+          { x: 300, y: 80, orthogonalRole: "lane" },
+          { x: 400, y: 140, orthogonalRole: "target-leg" },
+        ],
+      });
+
+      expect(result.path).toBe(
+        "M 100,200 L 124,200 L 124,80 L 400,80 L 400,200 L 500,200",
+      );
+      expect(result.path).not.toContain("L 400,140");
+    });
+
+    it("舊版無角色控制點應推斷成 ㄇ 形控制角色", () => {
+      const { calculatePathData, calculateRoutingControlPoints } =
+        useConnectionPath();
+      const params = {
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right" as const,
+        targetAnchor: "left" as const,
+        routingMode: "orthogonal" as const,
+        routingPoints: [
+          { x: 300, y: 80 },
+          { x: 400, y: 140 },
+        ],
+      };
+
+      expect(calculatePathData(params).path).toBe(
+        "M 100,200 L 124,200 L 124,80 L 400,80 L 400,200 L 500,200",
+      );
+      expect(
+        calculateRoutingControlPoints(params).map(
+          (point) => point.orthogonalRole,
+        ),
+      ).toEqual(["lane", "target-leg"]);
+    });
+
+    it("新增把手會隨既有節點增加，達三個後停止提供", () => {
+      const { calculateInsertionHandles } = useConnectionPath();
+      const base = {
+        start: { x: 0, y: 100 },
+        end: { x: 500, y: 100 },
+        sourceAnchor: "right" as const,
+        targetAnchor: "left" as const,
+        routingMode: "bezier" as const,
+      };
+
+      expect(calculateInsertionHandles(base)).toHaveLength(1);
+      expect(
+        calculateInsertionHandles({
+          ...base,
+          routingPoints: [{ x: 250, y: 20 }],
+        }),
+      ).toHaveLength(2);
+      expect(
+        calculateInsertionHandles({
+          ...base,
+          routingPoints: [
+            { x: 175, y: 20 },
+            { x: 325, y: 180 },
+          ],
+        }),
+      ).toHaveLength(1);
+      expect(
+        calculateInsertionHandles({
+          ...base,
+          routingPoints: [
+            { x: 125, y: 20 },
+            { x: 250, y: 180 },
+            { x: 375, y: 20 },
+          ],
+        }),
+      ).toHaveLength(0);
+    });
+
+    it("ㄇ形直角線會在三段線的中心提供新增把手", () => {
+      const { calculateInsertionHandles } = useConnectionPath();
+      const handles = calculateInsertionHandles({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "orthogonal",
+        routingOffset: -120,
+      });
+
+      expect(handles).toHaveLength(3);
+      expect(handles.map((handle) => handle.point)).toEqual([
+        { x: 124, y: 140, orthogonalRole: "source-leg" },
+        { x: 300, y: 80, orthogonalRole: "lane" },
+        { x: 476, y: 140, orthogonalRole: "target-leg" },
+      ]);
+      expect(handles.map((handle) => handle.dragAxis)).toEqual(["x", "y", "x"]);
+    });
+
+    it("水平邊已有控制點時，剩餘控制點應位於左右垂直邊中心", () => {
+      const { calculateInsertionHandles } = useConnectionPath();
+      const handles = calculateInsertionHandles({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "orthogonal",
+        routingPoints: [{ x: 300, y: 80 }],
+      });
+
+      expect(handles).toEqual([
+        {
+          point: {
+            x: 124,
+            y: 140,
+            orthogonalRole: "source-leg",
+          },
+          insertIndex: 0,
+          dragAxis: "x",
+        },
+        {
+          point: {
+            x: 476,
+            y: 140,
+            orthogonalRole: "target-leg",
+          },
+          insertIndex: 1,
+          dragAxis: "x",
+        },
+      ]);
+    });
+
+    it("單一直角線段只在邊中心提供一個新增把手", () => {
+      const { calculateInsertionHandles } = useConnectionPath();
+      const handles = calculateInsertionHandles({
+        start: { x: 100, y: 200 },
+        end: { x: 500, y: 200 },
+        sourceAnchor: "right",
+        targetAnchor: "left",
+        routingMode: "orthogonal",
+      });
+
+      expect(handles).toEqual([
+        {
+          point: { x: 300, y: 200, orthogonalRole: "lane" },
+          insertIndex: 0,
+          dragAxis: "y",
+        },
+      ]);
     });
   });
 

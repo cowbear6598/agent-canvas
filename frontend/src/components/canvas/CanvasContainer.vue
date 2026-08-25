@@ -115,6 +115,12 @@ const connectionContextMenuDirectEnabled = computed(
     connectionContextMenu.value.data.direct,
 );
 
+const connectionContextMenuRoutingMode = computed(
+  () =>
+    activeConnectionContextMenuConnection.value?.routingMode ??
+    connectionContextMenu.value.data.routingMode,
+);
+
 const { allProgressTasks: canvasProgressTasks, handleCloneStarted, handlePullStarted } =
   useCanvasProgressTasks();
 const allProgressTasks = computed(() => {
@@ -371,6 +377,7 @@ const visibleRepositoryNotes = computed(() =>
     :connection-id="connectionContextMenu.data.connectionId"
     :current-trigger-mode="connectionContextMenuTriggerMode"
     :direct-enabled="connectionContextMenuDirectEnabled"
+    :routing-mode="connectionContextMenuRoutingMode"
     @close="closeConnectionContextMenu"
     @trigger-mode-changed="closeConnectionContextMenu"
     @branch-mode-clicked="handleBranchModeClicked"

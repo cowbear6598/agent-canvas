@@ -827,6 +827,11 @@
       "changeFailed": "Change failed",
       "triggerModeChangeFailed": "Unable to change trigger mode",
       "directChangeFailed": "Failed to toggle direct trigger",
+      "routingBezier": "Bezier Curve",
+      "routingOrthogonal": "Orthogonal Line",
+      "routingChanged": "Connection style changed",
+      "routingChangedDesc": "Switched to {mode}",
+      "routingChangeFailed": "Unable to change connection style",
       "summaryModelChanged": "Summary model changed",
       "summaryModelChangeFailed": "Unable to change summary model",
       "branchModelChanged": "Branch model changed",
@@ -904,6 +909,11 @@
       "aiRejectedReason": "Not selected: {reason}",
       "aiErrorReason": "Error: {reason}"
     },
+    "connectionRouting": {
+      "dragHandle": "Drag to adjust the connection route",
+      "movePoint": "Drag to move the routing point",
+      "addPoint": "Drag to add a routing point"
+    },
     "podTypeMenu": {}
   },
   "store": {
@@ -920,6 +930,7 @@
       "createFailed": "Failed to create connection",
       "deleteFailed": "Failed to delete connection",
       "updateFailed": "Failed to update connection",
+      "routingUpdateFailed": "Failed to update connection route",
       "summaryModelUpdateFailed": "Failed to update connection summary model",
       "branchLabelEmpty": "Branch label cannot be empty",
       "branchLabelTooLong": "Branch label must not exceed {max} characters",

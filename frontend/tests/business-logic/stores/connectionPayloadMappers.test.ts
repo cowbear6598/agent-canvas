@@ -68,6 +68,41 @@ describe("connectionPayloadMappers", () => {
 
       expect(connection.label).toBeUndefined();
     });
+
+    it("舊連線預設使用 Bezier，新欄位則應保留", () => {
+      const legacy = normalizeConnection({
+        id: "legacy",
+        sourceAnchor: "right",
+        targetPodId: "target",
+        targetAnchor: "left",
+      });
+      const orthogonal = normalizeConnection({
+        id: "orthogonal",
+        sourceAnchor: "right",
+        targetPodId: "target",
+        targetAnchor: "left",
+        routingMode: "orthogonal",
+        routingOffset: -180,
+        routingPoints: [
+          { x: 100, y: -80, orthogonalRole: "source-leg" },
+          { x: 300, y: 40, orthogonalRole: "lane" },
+        ],
+      });
+
+      expect(legacy).toMatchObject({
+        routingMode: "bezier",
+        routingOffset: 0,
+        routingPoints: [],
+      });
+      expect(orthogonal).toMatchObject({
+        routingMode: "orthogonal",
+        routingOffset: -180,
+        routingPoints: [
+          { x: 100, y: -80, orthogonalRole: "source-leg" },
+          { x: 300, y: 40, orthogonalRole: "lane" },
+        ],
+      });
+    });
   });
 
   describe("response event payload mapping 規則", () => {

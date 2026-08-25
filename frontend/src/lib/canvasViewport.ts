@@ -55,3 +55,15 @@ export function isCanvasSegmentBoundsVisible(
     top > bounds.bottom
   );
 }
+
+export function isCanvasBoundsVisible(
+  viewport: CanvasViewportBounds,
+  content: CanvasViewportBounds,
+): boolean {
+  return !(
+    content.right < viewport.left ||
+    content.left > viewport.right ||
+    content.bottom < viewport.top ||
+    content.top > viewport.bottom
+  );
+}

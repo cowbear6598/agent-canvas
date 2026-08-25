@@ -1,5 +1,5 @@
 import { useContextMenu } from "@/composables/canvas/useContextMenu";
-import type { ConnectionBaseMode } from "@/types";
+import type { ConnectionBaseMode, ConnectionRoutingMode } from "@/types";
 import type { PodProvider } from "@/types/pod";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 
@@ -13,6 +13,7 @@ interface ConnectionContextMenuData {
   connectionId: string;
   triggerMode: ConnectionBaseMode;
   direct: boolean;
+  routingMode: ConnectionRoutingMode;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel: string;
   /** 目前 Summary 使用的 AI provider；null 表示尚未設定，undefined 表示舊資料 */
@@ -42,6 +43,7 @@ interface ConnectionStore {
     id: string;
     triggerMode: ConnectionBaseMode;
     direct: boolean;
+    routingMode?: ConnectionRoutingMode;
     /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
     summaryModel?: string;
     /** 目前 Summary 使用的 AI provider */
@@ -114,6 +116,7 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     connectionId: "",
     triggerMode: "auto",
     direct: false,
+    routingMode: "bezier",
     summaryModel: DEFAULT_SUMMARY_MODEL,
     summaryProvider: "claude",
   });
@@ -160,6 +163,7 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
       connectionId: connection.id,
       triggerMode: connection.triggerMode,
       direct: connection.direct,
+      routingMode: connection.routingMode ?? "bezier",
       summaryModel: connection.summaryModel ?? DEFAULT_SUMMARY_MODEL,
       summaryProvider: connection.summaryProvider ?? "claude",
       label: connection.label,

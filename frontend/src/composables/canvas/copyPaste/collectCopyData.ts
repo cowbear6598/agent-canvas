@@ -5,6 +5,7 @@ import type {
   CopiedConnection,
   AnchorPosition,
   ConnectionBaseMode,
+  ConnectionRoutingPoint,
   Pod,
   PodProvider,
 } from "@/types";
@@ -303,6 +304,9 @@ export function collectRelatedConnections(
     branchProvider?: PodProvider | null;
     branchModel?: string | null;
     branchThinkingLevel?: string | null;
+    routingMode?: "bezier" | "orthogonal";
+    routingOffset?: number;
+    routingPoints?: ConnectionRoutingPoint[];
   }[],
 ): CopiedConnection[] {
   const copiedConnections: CopiedConnection[] = [];
@@ -318,6 +322,9 @@ export function collectRelatedConnections(
         sourceAnchor: connection.sourceAnchor,
         targetPodId: connection.targetPodId,
         targetAnchor: connection.targetAnchor,
+        routingMode: connection.routingMode,
+        routingOffset: connection.routingOffset,
+        routingPoints: connection.routingPoints,
         triggerMode: connection.triggerMode,
         direct: connection.direct,
         summaryProvider: connection.summaryProvider,

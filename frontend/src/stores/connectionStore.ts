@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import type {
   AnchorPosition,
   Connection,
+  ConnectionRoutingMode,
   DraggingConnection,
   WorkflowRole,
 } from "@/types/connection";
@@ -427,6 +428,9 @@ export const useConnectionStore = defineStore("connection", () => {
       | "summaryThinkingLevel"
       | "label"
       | "description"
+      | "routingMode"
+      | "routingOffset"
+      | "routingPoints"
     >,
     errorMessage: string,
   ): Promise<Connection | null> {
@@ -499,6 +503,21 @@ export const useConnectionStore = defineStore("connection", () => {
       connectionId,
       { direct },
       t("store.connection.updateFailed"),
+    );
+  }
+
+  async function updateConnectionRouting(
+    connectionId: string,
+    updates: {
+      routingMode?: ConnectionRoutingMode;
+      routingOffset?: number;
+      routingPoints?: Connection["routingPoints"];
+    },
+  ): Promise<Connection | null> {
+    return executeConnectionUpdate(
+      connectionId,
+      updates,
+      t("store.connection.routingUpdateFailed"),
     );
   }
 
@@ -822,6 +841,7 @@ export const useConnectionStore = defineStore("connection", () => {
     endDragging,
     updateConnectionTriggerMode,
     updateConnectionDirect,
+    updateConnectionRouting,
     updateConnectionSummaryModel,
     updateConnectionSummaryThinkingLevel,
     updateConnectionSummaryProvider,

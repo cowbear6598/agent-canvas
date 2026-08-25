@@ -1,0 +1,67 @@
+description: >
+  Connections can currently cross over agent nodes, such as Game Asset, without
+  offering a simple way to route an edge around the obstruction. Every connection
+  needs Miro-style adjustable Bezier and orthogonal routes with up to three
+  persistent intermediate routing points while retaining Bezier as the default,
+  so users can keep relationships readable without changing the existing
+  appearance unless they choose to.
+goal:
+  - Let users choose Bezier or orthogonal routing independently for every connection, with Bezier remaining the default.
+  - Present the routing choice in the connection context menu below Direct Trigger and a separating divider.
+  - Let users adjust either routing style above or around obstructing nodes with one simple drag handle.
+  - Display orthogonal routes as a three-segment U or sideways-U route with 90-degree turns.
+  - Match Miro-style constrained dragging: move a horizontal middle segment vertically, move a vertical middle segment horizontally, and bend a Bezier curve perpendicular to the connection's dominant direction.
+  - Preview the route while dragging and save its relative routing offset when the drag ends.
+  - Let users progressively create and freely move up to three intermediate routing points on either routing style.
+  - Show insertion handles between existing routing points until the three-point limit is reached.
+  - Smooth Bezier paths through their routing points and keep orthogonal paths axis-aligned through theirs.
+  - Keep connection labels and directional arrows correctly positioned along the selected and adjusted route.
+  - Preserve each connection's routing mode, offset, and routing points after reloads, real-time updates, copy and paste, and Pod Pack export and import, while treating legacy data as Bezier with no routing points.
+  - Keep adjusted orthogonal routes available when their routed bounds intersect the virtualized canvas viewport.
+related:
+  - backend/src/database/schema.ts
+  - backend/src/database/statements.ts
+  - backend/src/handlers/paste/pasteHelpers.ts
+  - backend/src/schemas/connectionSchemas.ts
+  - backend/src/schemas/pasteSchemas.ts
+  - backend/src/services/commands/connectionCommandService.ts
+  - backend/src/services/connection/connectionRepository.ts
+  - backend/src/services/connection/connectionRowMapper.ts
+  - backend/src/services/connectionStore.ts
+  - backend/src/services/podPack/podPackService.ts
+  - backend/src/types/connection.ts
+  - backend/tests/business-logic/connectionSchemas.test.ts
+  - backend/tests/business-logic/podPackService.test.ts
+  - backend/tests/database/schema.test.ts
+  - backend/tests/integration/store-coverage.test.ts
+  - backend/tests/userflows/paste.test.ts
+  - frontend/src/components/canvas/CanvasContainer.vue
+  - frontend/src/components/canvas/ConnectionContextMenu.vue
+  - frontend/src/components/canvas/ConnectionLayer.vue
+  - frontend/src/components/canvas/ConnectionLine.vue
+  - frontend/src/composables/canvas/useCanvasContextMenus.ts
+  - frontend/src/composables/canvas/copyPaste/calculatePaste.ts
+  - frontend/src/composables/canvas/copyPaste/collectCopyData.ts
+  - frontend/src/composables/canvas/usePodPack.ts
+  - frontend/src/composables/useConnectionPath.ts
+  - frontend/src/assets/styles/doodle/connections.css
+  - frontend/src/lib/canvasViewport.ts
+  - frontend/src/locales/en.json
+  - frontend/src/locales/ja.json
+  - frontend/src/locales/zh-TW.json
+  - frontend/src/types/clipboard.ts
+  - frontend/src/types/connection.ts
+  - frontend/src/stores/connectionStore.ts
+  - frontend/src/stores/connectionPayloadMappers.ts
+  - frontend/src/types/websocket/requests.ts
+  - frontend/src/types/websocket/responses.ts
+  - frontend/tests/business-logic/lib/canvasViewport.test.ts
+  - frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts
+  - frontend/tests/business-logic/stores/connectionStore.test.ts
+  - frontend/tests/business-logic/composables/websocket/useConnectionPath.test.ts
+  - frontend/tests/userflows/canvas/connectionContextMenuBranchFlow.test.ts
+  - frontend/tests/userflows/canvas/connectionRoutingFlow.test.ts
+  - frontend/tests/userflows/copy-paste/copyPasteFlow.test.ts
+verify:
+  - cd frontend && bun run test -- tests/business-logic/composables/websocket/useConnectionPath.test.ts tests/business-logic/lib/canvasViewport.test.ts tests/business-logic/stores/connectionPayloadMappers.test.ts tests/business-logic/stores/connectionStore.test.ts tests/userflows/canvas/connectionContextMenuBranchFlow.test.ts tests/userflows/canvas/connectionRoutingFlow.test.ts tests/userflows/copy-paste/copyPasteFlow.test.ts
+  - cd backend && bun run test -- tests/business-logic/connectionSchemas.test.ts tests/business-logic/podPackService.test.ts tests/database/schema.test.ts tests/integration/store-coverage.test.ts tests/userflows/paste.test.ts

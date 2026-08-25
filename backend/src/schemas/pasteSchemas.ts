@@ -8,6 +8,9 @@ import {
 } from "./base.js";
 import {
   anchorPositionSchema,
+  connectionRoutingModeSchema,
+  connectionRoutingOffsetSchema,
+  connectionRoutingPointsSchema,
   labelSchema,
   descriptionSchema,
 } from "./connectionSchemas.js";
@@ -88,6 +91,9 @@ export const pasteConnectionItemSchema = z
     sourceAnchor: anchorPositionSchema,
     originalTargetPodId: z.uuid(),
     targetAnchor: anchorPositionSchema,
+    routingMode: connectionRoutingModeSchema.optional(),
+    routingOffset: connectionRoutingOffsetSchema.optional(),
+    routingPoints: connectionRoutingPointsSchema.optional(),
     triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
     direct: z.boolean().optional(),
     /** paste 時保留 summary provider（若有） */

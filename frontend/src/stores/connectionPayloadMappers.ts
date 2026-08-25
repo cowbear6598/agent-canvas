@@ -2,6 +2,8 @@ import type {
   AnchorPosition,
   Connection,
   ConnectionBaseMode,
+  ConnectionRoutingMode,
+  ConnectionRoutingPoint,
 } from "@/types/connection";
 import type { PodProvider } from "@/types/pod";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
@@ -17,6 +19,9 @@ export interface RawConnection {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  routingMode?: ConnectionRoutingMode;
+  routingOffset?: number;
+  routingPoints?: ConnectionRoutingPoint[];
   triggerMode?: ConnectionBaseMode | "direct";
   direct?: boolean;
   summaryModel?: string;
@@ -86,6 +91,24 @@ export function normalizeConnection(
     ...raw,
     triggerMode: normalizedMode.triggerMode,
     direct: normalizedMode.direct,
+    routingMode: raw.routingMode === "orthogonal" ? "orthogonal" : "bezier",
+    routingOffset: Number.isFinite(raw.routingOffset) ? raw.routingOffset! : 0,
+    routingPoints: Array.isArray(raw.routingPoints)
+      ? raw.routingPoints
+          .filter(
+            (point) => Number.isFinite(point.x) && Number.isFinite(point.y),
+          )
+          .slice(0, 3)
+          .map((point) => ({
+            x: point.x,
+            y: point.y,
+            ...(point.orthogonalRole === "source-leg" ||
+            point.orthogonalRole === "lane" ||
+            point.orthogonalRole === "target-leg"
+              ? { orthogonalRole: point.orthogonalRole }
+              : {}),
+          }))
+      : [],
     summaryModel: normalizedSummary.summaryModel,
     summaryProvider: normalizedSummary.summaryProvider,
     summaryThinkingLevel: raw.summaryThinkingLevel ?? null,
@@ -198,6 +221,12 @@ export function mapConnectionUpdatedEventPayload(
     targetAnchor: connection.targetAnchor,
     triggerMode: normalizedMode.triggerMode,
     direct: normalizedMode.direct,
+    routingMode:
+      connection.routingMode ?? existingConnection.routingMode,
+    routingOffset:
+      connection.routingOffset ?? existingConnection.routingOffset,
+    routingPoints:
+      connection.routingPoints ?? existingConnection.routingPoints,
     summaryModel: normalizedSummary.summaryModel,
     summaryProvider: normalizedSummary.summaryProvider,
     summaryThinkingLevel:

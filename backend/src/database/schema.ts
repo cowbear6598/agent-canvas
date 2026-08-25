@@ -62,6 +62,21 @@ function ensureConnectionPersistenceColumns(db: Database): void {
       "connections",
       "direct_enabled INTEGER NOT NULL DEFAULT 0",
     );
+    addColumnIfMissing(
+      db,
+      "connections",
+      "routing_mode TEXT NOT NULL DEFAULT 'bezier'",
+    );
+    addColumnIfMissing(
+      db,
+      "connections",
+      "routing_offset REAL NOT NULL DEFAULT 0",
+    );
+    addColumnIfMissing(
+      db,
+      "connections",
+      "routing_points TEXT NOT NULL DEFAULT '[]'",
+    );
   })();
 }
 
@@ -363,6 +378,9 @@ function createBaseTables(db: Database): void {
       "source_anchor TEXT NOT NULL," +
       "target_pod_id TEXT NOT NULL," +
       "target_anchor TEXT NOT NULL," +
+      "routing_mode TEXT NOT NULL DEFAULT 'bezier'," +
+      "routing_offset REAL NOT NULL DEFAULT 0," +
+      "routing_points TEXT NOT NULL DEFAULT '[]'," +
       "trigger_mode TEXT NOT NULL DEFAULT 'auto'," +
       "summary_model TEXT NOT NULL DEFAULT 'sonnet'," +
       // summary_provider 不設 NOT NULL：NULL 代表使用者未指定，

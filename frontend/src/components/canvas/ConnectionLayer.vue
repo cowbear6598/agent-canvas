@@ -3,17 +3,20 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { isEditingElement } from "@/utils/domHelpers";
 import ConnectionLine from "./ConnectionLine.vue";
-import { POD_HEIGHT, POD_WIDTH } from "@/lib/constants";
 import {
-  isCanvasSegmentBoundsVisible,
+  isCanvasBoundsVisible,
   type CanvasViewportBounds,
 } from "@/lib/canvasViewport";
+import { useAnchorDetection } from "@/composables/useAnchorDetection";
+import { useConnectionPath } from "@/composables/useConnectionPath";
 
 const props = defineProps<{
   viewportBounds: CanvasViewportBounds;
 }>();
 
 const { connectionStore, podStore } = useCanvasContext();
+const { getAnchorPositions } = useAnchorDetection();
+const { calculatePathData } = useConnectionPath();
 
 const podsById = computed(
   () => new Map(podStore.pods.map((pod) => [pod.id, pod])),
@@ -25,17 +28,24 @@ const visibleConnections = computed(() =>
     const targetPod = podsById.value.get(connection.targetPodId);
     if (!sourcePod || !targetPod) return false;
 
-    return isCanvasSegmentBoundsVisible(
-      props.viewportBounds,
-      {
-        x: sourcePod.x + POD_WIDTH / 2,
-        y: sourcePod.y + POD_HEIGHT / 2,
-      },
-      {
-        x: targetPod.x + POD_WIDTH / 2,
-        y: targetPod.y + POD_HEIGHT / 2,
-      },
+    const sourceAnchor = getAnchorPositions(sourcePod).find(
+      (anchor) => anchor.anchor === connection.sourceAnchor,
     );
+    const targetAnchor = getAnchorPositions(targetPod).find(
+      (anchor) => anchor.anchor === connection.targetAnchor,
+    );
+    if (!sourceAnchor || !targetAnchor) return false;
+
+    const pathData = calculatePathData({
+      start: { x: sourceAnchor.x, y: sourceAnchor.y },
+      end: { x: targetAnchor.x, y: targetAnchor.y },
+      sourceAnchor: connection.sourceAnchor,
+      targetAnchor: connection.targetAnchor,
+      routingMode: connection.routingMode ?? "bezier",
+      routingOffset: connection.routingOffset ?? 0,
+      routingPoints: connection.routingPoints ?? [],
+    });
+    return isCanvasBoundsVisible(props.viewportBounds, pathData.bounds);
   }),
 );
 

@@ -52,6 +52,11 @@ function createExportData() {
         sourceAnchor: "right" as const,
         originalTargetPodId: TARGET_ID,
         targetAnchor: "left" as const,
+        routingMode: "orthogonal" as const,
+        routingPoints: [
+          { x: 120, y: -40 },
+          { x: 260, y: -60 },
+        ],
         triggerMode: "branch" as const,
         label: "approve",
         description: "Review the plan",
@@ -82,6 +87,11 @@ describe("podPackService", () => {
       branchProvider: "claude",
       branchModel: "opus",
       branchThinkingLevel: "high",
+      routingMode: "orthogonal",
+      routingPoints: [
+        { x: 120, y: -40 },
+        { x: 260, y: -60 },
+      ],
     });
   });
 

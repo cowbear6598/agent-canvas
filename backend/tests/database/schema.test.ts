@@ -69,6 +69,27 @@ describe("Pod Fast mode 與退役 Codex 模型 migration", () => {
     expect(row.summary_thinking_level).toBe("high");
   });
 
+  it("既有 Connection 會補上預設 Bezier routing 欄位", () => {
+    const columns = db.prepare("PRAGMA table_info(connections)").all() as Array<{
+      name: string;
+      dflt_value: string | null;
+    }>;
+
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "routing_mode",
+          dflt_value: "'bezier'",
+        }),
+        expect.objectContaining({ name: "routing_offset", dflt_value: "0" }),
+        expect.objectContaining({
+          name: "routing_points",
+          dflt_value: "'[]'",
+        }),
+      ]),
+    );
+  });
+
   it("將全域 Memory 與 Connection Line 設定轉換為 Luna / high", () => {
     db.exec(
       `INSERT INTO global_settings (key, value)

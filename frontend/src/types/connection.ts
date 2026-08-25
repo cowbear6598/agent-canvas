@@ -1,6 +1,18 @@
 import type { PodProvider } from "@/types/pod";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
+export type ConnectionRoutingMode = "bezier" | "orthogonal";
+export type OrthogonalRoutingControlRole =
+  | "source-leg"
+  | "lane"
+  | "target-leg";
+export interface ConnectionRoutingPoint {
+  x: number;
+  y: number;
+  /** 直角模式下控制 ㄇ 形的哪一段；Bezier 與舊資料可省略。 */
+  orthogonalRole?: OrthogonalRoutingControlRole;
+}
+export const MAX_CONNECTION_ROUTING_POINTS = 3;
 
 /** Connection 資料契約的基底模式，只保留 Auto / Branch。 */
 export type ConnectionBaseMode = "auto" | "branch";
@@ -16,6 +28,11 @@ export interface Connection {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  routingMode?: ConnectionRoutingMode;
+  /** 舊版單一控制點相對於預設通道的位移量（canvas 座標）。 */
+  routingOffset?: number;
+  /** 可調整的連線控制點；直角模式對應 ㄇ 形三段，最多三個。 */
+  routingPoints?: ConnectionRoutingPoint[];
   triggerMode: ConnectionBaseMode;
   /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
   direct: boolean;

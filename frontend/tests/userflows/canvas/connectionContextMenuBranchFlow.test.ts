@@ -93,6 +93,58 @@ describe("connection context menu branch userflow", () => {
     wrapper.unmount();
   });
 
+  it("直接觸發下方可切換為直角折線", async () => {
+    const connectionStore = useConnectionStore();
+    const updatedConnection: Connection = {
+      id: "conn-routing",
+      sourceAnchor: "right",
+      targetPodId: "target-pod",
+      targetAnchor: "left",
+      triggerMode: "auto",
+      direct: false,
+      routingMode: "orthogonal",
+      routingOffset: 0,
+    };
+    vi.spyOn(connectionStore, "updateConnectionRouting").mockResolvedValue(
+      updatedConnection,
+    );
+
+    const wrapper = mount(ConnectionContextMenu, {
+      props: {
+        position: { x: 120, y: 80 },
+        connectionId: "conn-routing",
+        currentTriggerMode: "auto",
+        directEnabled: false,
+        routingMode: "bezier",
+      },
+      global: {
+        mocks: {
+          $t: (key: string) => key,
+        },
+      },
+    });
+
+    const directRow = wrapper.find(
+      '[data-testid="connection-direct-toggle-row"]',
+    );
+    const orthogonalRow = wrapper.find(
+      '[data-testid="connection-routing-orthogonal"]',
+    );
+    expect(orthogonalRow.exists()).toBe(true);
+    expect(
+      directRow.element.compareDocumentPosition(orthogonalRow.element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await orthogonalRow.trigger("click");
+    expect(connectionStore.updateConnectionRouting).toHaveBeenCalledWith(
+      "conn-routing",
+      { routingMode: "orthogonal" },
+    );
+
+    wrapper.unmount();
+  });
+
   it("branch 模式選單不再顯示 branch settings 額外入口", () => {
     const wrapper = mount(ConnectionContextMenu, {
       props: {

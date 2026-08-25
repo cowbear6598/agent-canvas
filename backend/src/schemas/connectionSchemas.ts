@@ -3,6 +3,25 @@ import { requestIdSchema, podIdSchema, canvasIdSchema } from "./base.js";
 import { providerSchema } from "./podSchemas.js";
 
 export const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
+export const connectionRoutingModeSchema = z.enum(["bezier", "orthogonal"]);
+export const connectionRoutingOffsetSchema = z
+  .number()
+  .finite()
+  .min(-100000)
+  .max(100000);
+export const orthogonalRoutingControlRoleSchema = z.enum([
+  "source-leg",
+  "lane",
+  "target-leg",
+]);
+export const connectionRoutingPointSchema = z.object({
+  x: connectionRoutingOffsetSchema,
+  y: connectionRoutingOffsetSchema,
+  orthogonalRole: orthogonalRoutingControlRoleSchema.optional(),
+});
+export const connectionRoutingPointsSchema = z
+  .array(connectionRoutingPointSchema)
+  .max(3);
 
 // summaryModel 接受合法模型名稱字串，允許 Codex 模型名稱（如 "gpt-5.6-luna"）
 // 與 OpenCode alias model value（如 "openai/gpt-4o"）。
@@ -67,6 +86,9 @@ export const connectionCreateSchema = z
     sourceAnchor: anchorPositionSchema,
     targetPodId: podIdSchema,
     targetAnchor: anchorPositionSchema,
+    routingMode: connectionRoutingModeSchema.optional(),
+    routingOffset: connectionRoutingOffsetSchema.optional(),
+    routingPoints: connectionRoutingPointsSchema.optional(),
     summaryModel: summaryModelSchema.optional(),
     summaryThinkingLevel: nullableThinkingLevelSchema.optional(),
     /** summaryProvider 可選；未提供時由服務層依 sourcePod.provider 決定預設值 */
@@ -106,6 +128,9 @@ export const connectionUpdateSchema = z
     requestId: requestIdSchema,
     canvasId: canvasIdSchema,
     connectionId: z.uuid(),
+    routingMode: connectionRoutingModeSchema.optional(),
+    routingOffset: connectionRoutingOffsetSchema.optional(),
+    routingPoints: connectionRoutingPointsSchema.optional(),
     triggerMode: legacyTriggerModeSchema.optional(),
     summaryModel: summaryModelSchema.optional(),
     summaryThinkingLevel: nullableThinkingLevelSchema.optional(),

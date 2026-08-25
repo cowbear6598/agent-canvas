@@ -1,5 +1,10 @@
 import type { PodProvider, ProviderConfig, PodGoal } from "./pod";
-import type { AnchorPosition, TriggerMode } from "./connection";
+import type {
+  AnchorPosition,
+  ConnectionRoutingMode,
+  ConnectionRoutingPoint,
+  TriggerMode,
+} from "./connection";
 
 export interface CopiedPod {
   id: string;
@@ -34,6 +39,9 @@ export interface CopiedConnection {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  routingMode?: ConnectionRoutingMode;
+  routingOffset?: number;
+  routingPoints?: ConnectionRoutingPoint[];
   triggerMode?: TriggerMode;
   /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
   direct?: boolean;

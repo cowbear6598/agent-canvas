@@ -1,6 +1,11 @@
 import type { Pod, PodProvider } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
-import type { AnchorPosition, TriggerMode } from "@/types";
+import type {
+  AnchorPosition,
+  ConnectionRoutingMode,
+  ConnectionRoutingPoint,
+  TriggerMode,
+} from "@/types";
 import type { InstalledPlugin } from "../plugin";
 import type { ResultPayload } from "./index";
 import type {
@@ -163,6 +168,9 @@ export interface ConnectionPayloadItem {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  routingMode?: ConnectionRoutingMode;
+  routingOffset?: number;
+  routingPoints?: ConnectionRoutingPoint[];
   triggerMode?: TriggerMode;
   /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
   direct?: boolean;

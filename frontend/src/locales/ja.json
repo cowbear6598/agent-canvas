@@ -827,6 +827,11 @@
       "changeFailed": "変更に失敗しました",
       "triggerModeChangeFailed": "トリガーモードを変更できません",
       "directChangeFailed": "直接トリガーを切り替えできませんでした",
+      "routingBezier": "ベジェ曲線",
+      "routingOrthogonal": "直角折れ線",
+      "routingChanged": "接続線の形式を変更しました",
+      "routingChangedDesc": "{mode} に切り替えました",
+      "routingChangeFailed": "接続線の形式を変更できません",
       "summaryModelChanged": "要約モデルを変更しました",
       "summaryModelChangeFailed": "要約モデルを変更できません",
       "branchModelChanged": "Branch モデルを変更しました",
@@ -904,6 +909,11 @@
       "aiRejectedReason": "選択されなかった理由：{reason}",
       "aiErrorReason": "エラー：{reason}"
     },
+    "connectionRouting": {
+      "dragHandle": "ドラッグして接続線の経路を調整",
+      "movePoint": "ドラッグして経路ポイントを移動",
+      "addPoint": "ドラッグして経路ポイントを追加"
+    },
     "podTypeMenu": {}
   },
   "store": {
@@ -920,6 +930,7 @@
       "createFailed": "接続の作成に失敗しました",
       "deleteFailed": "接続の削除に失敗しました",
       "updateFailed": "接続の更新に失敗しました",
+      "routingUpdateFailed": "接続経路の更新に失敗しました",
       "summaryModelUpdateFailed": "接続の要約モデルの更新に失敗しました",
       "branchLabelEmpty": "Branch label は空にできません",
       "branchLabelTooLong": "Branch label は {max} 文字を超えることができません",

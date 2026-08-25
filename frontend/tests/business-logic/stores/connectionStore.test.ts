@@ -719,6 +719,49 @@ describe("connectionStore", () => {
 
   });
 
+  describe("updateConnectionRouting", () => {
+    it("應以單一 connection:update 保存線型與位移量", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-routing";
+      const store = useConnectionStore();
+      const existing = createMockConnection({ id: "conn-routing" });
+      store.connections = [existing];
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...existing,
+          routingMode: "orthogonal",
+          routingOffset: -140,
+          routingPoints: [{ x: 240, y: -80 }],
+        },
+      });
+
+      const result = await store.updateConnectionRouting("conn-routing", {
+        routingMode: "orthogonal",
+        routingOffset: -140,
+        routingPoints: [{ x: 240, y: -80 }],
+      });
+
+      expect(result).toMatchObject({
+        routingMode: "orthogonal",
+        routingOffset: -140,
+        routingPoints: [{ x: 240, y: -80 }],
+      });
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          responseEvent: "connection:updated",
+          payload: expect.objectContaining({
+            canvasId: "canvas-routing",
+            connectionId: "conn-routing",
+            routingMode: "orthogonal",
+            routingOffset: -140,
+            routingPoints: [{ x: 240, y: -80 }],
+          }),
+        }),
+      );
+    });
+  });
+
   describe("loadConnectionsFromBackend", () => {
     it("成功時應設定 connections 與 triggerMode 預設值", async () => {
       const canvasStore = useCanvasStore();

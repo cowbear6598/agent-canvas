@@ -1,6 +1,16 @@
 import type { ProviderName } from "../services/provider/index.js";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
+export type ConnectionRoutingMode = "bezier" | "orthogonal";
+export type OrthogonalRoutingControlRole =
+  | "source-leg"
+  | "lane"
+  | "target-leg";
+export interface ConnectionRoutingPoint {
+  x: number;
+  y: number;
+  orthogonalRole?: OrthogonalRoutingControlRole;
+}
 
 export type ConnectionBaseTriggerMode = "auto" | "branch";
 export type TriggerMode = "auto" | "branch" | "direct";
@@ -13,6 +23,12 @@ export interface Connection {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  /** 畫布顯示用的連線路由模式，不影響 workflow 執行語意。 */
+  routingMode?: ConnectionRoutingMode;
+  /** 直角折線相對於預設通道的位移量（canvas 座標）。 */
+  routingOffset?: number;
+  /** 使用者建立的連線控制點；直角模式對應 ㄇ 形三段，最多三個。 */
+  routingPoints?: ConnectionRoutingPoint[];
   /**
    * 對外 connection 契約僅保留 auto / branch 基底模式。
    * legacy "direct" 會在 schema / repository 層正規化為 directEnabled。

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getCanvasViewportBounds,
+  isCanvasBoundsVisible,
   isCanvasRectVisible,
   isCanvasSegmentBoundsVisible,
 } from "@/lib/canvasViewport";
@@ -40,5 +41,24 @@ describe("canvasViewport", () => {
         { x: 2000, y: 400 },
       ),
     ).toBe(true);
+  });
+
+  it("調整後的直角折線 bounds 與視口相交時應保留", () => {
+    expect(
+      isCanvasBoundsVisible(bounds, {
+        left: -1000,
+        top: 1100,
+        right: 2000,
+        bottom: 1300,
+      }),
+    ).toBe(true);
+    expect(
+      isCanvasBoundsVisible(bounds, {
+        left: -1000,
+        top: 1300,
+        right: 2000,
+        bottom: 1400,
+      }),
+    ).toBe(false);
   });
 });

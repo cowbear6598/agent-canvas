@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from "uuid";
 import type {
   Connection,
   AnchorPosition,
+  ConnectionRoutingMode,
+  ConnectionRoutingPoint,
   TriggerMode,
   Pod,
 } from "../types";
@@ -35,6 +37,9 @@ interface CreateConnectionData {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  routingMode?: ConnectionRoutingMode;
+  routingOffset?: number;
+  routingPoints?: ConnectionRoutingPoint[];
   triggerMode?: TriggerMode;
   /** summaryModel 接受任意非空模型名稱 */
   summaryModel?: string;
@@ -59,6 +64,9 @@ type ConnectionUpdateData = Partial<{
   direct: boolean;
   label: string;
   description: string | null;
+  routingMode: ConnectionRoutingMode;
+  routingOffset: number;
+  routingPoints: ConnectionRoutingPoint[];
   branchProvider: ProviderName | null;
   branchModel: string | null;
   branchThinkingLevel: string | null;
@@ -77,6 +85,9 @@ type ConnectionUpdateState = Pick<
   | "direct"
   | "label"
   | "description"
+  | "routingMode"
+  | "routingOffset"
+  | "routingPoints"
   | "branchProvider"
   | "branchModel"
   | "branchThinkingLevel"
@@ -113,6 +124,9 @@ function createConnectionUpdateState(
     direct: existing.direct,
     label: existing.label,
     description: existing.description ?? null,
+    routingMode: existing.routingMode ?? "bezier",
+    routingOffset: existing.routingOffset ?? 0,
+    routingPoints: existing.routingPoints ?? [],
     branchProvider: existing.branchProvider,
     branchModel: existing.branchModel ?? null,
     branchThinkingLevel: existing.branchThinkingLevel,
@@ -378,6 +392,9 @@ class ConnectionStore {
       sourceAnchor: data.sourceAnchor,
       targetPodId: data.targetPodId,
       targetAnchor: data.targetAnchor,
+      routingMode: data.routingMode ?? "bezier",
+      routingOffset: data.routingOffset ?? 0,
+      routingPoints: data.routingPoints ?? [],
       triggerMode: normalizedMode.triggerMode,
       direct: normalizedMode.direct,
       summaryModel: summary.model,
@@ -460,6 +477,15 @@ class ConnectionStore {
     }
     if (updates.description !== undefined) {
       state.description = updates.description;
+    }
+    if (updates.routingMode !== undefined) {
+      state.routingMode = updates.routingMode;
+    }
+    if (updates.routingOffset !== undefined) {
+      state.routingOffset = updates.routingOffset;
+    }
+    if (updates.routingPoints !== undefined) {
+      state.routingPoints = updates.routingPoints;
     }
     applyBranchUpdates(state, updates);
 

@@ -157,6 +157,56 @@ describe("Store 覆蓋率測試", () => {
       expect(connections.find((c) => c.id === connectionId)).toBeUndefined();
     });
 
+    it("線型、routing offset 與路徑節點更新後可從資料庫讀回", async () => {
+      const client = getClient();
+      const source = await createPod(client, { name: "Routing Source" });
+      const target = await createPod(client, { name: "Routing Target" });
+      const canvasId = await getCanvasId(client);
+      const response = await emitAndWaitResponse<
+        ConnectionCreatePayload,
+        ConnectionCreatedPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONNECTION_CREATE,
+        WebSocketResponseEvents.CONNECTION_CREATED,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          sourcePodId: source.id,
+          sourceAnchor: "right",
+          targetPodId: target.id,
+          targetAnchor: "left",
+        },
+      );
+      const connectionId = response.connection!.id;
+
+      const updated = connectionStore.update(canvasId, connectionId, {
+        routingMode: "orthogonal",
+        routingOffset: -180,
+        routingPoints: [
+          { x: 100, y: -50, orthogonalRole: "source-leg" },
+          { x: 300, y: 80, orthogonalRole: "lane" },
+        ],
+      });
+
+      expect(updated).toMatchObject({
+        routingMode: "orthogonal",
+        routingOffset: -180,
+        routingPoints: [
+          { x: 100, y: -50, orthogonalRole: "source-leg" },
+          { x: 300, y: 80, orthogonalRole: "lane" },
+        ],
+      });
+      expect(connectionStore.getById(canvasId, connectionId)).toMatchObject({
+        routingMode: "orthogonal",
+        routingOffset: -180,
+        routingPoints: [
+          { x: 100, y: -50, orthogonalRole: "source-leg" },
+          { x: 300, y: 80, orthogonalRole: "lane" },
+        ],
+      });
+    });
+
     it("刪除失敗時跳過儲存", () => {
       const server = getServer();
       const canvasId = server.canvasId;
