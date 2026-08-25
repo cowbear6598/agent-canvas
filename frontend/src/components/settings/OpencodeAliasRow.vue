@@ -183,19 +183,18 @@ const formatPresetStatus = (): string => {
           >
         </div>
 
-        <!-- 儲存 / 取消按鈕 -->
         <div class="flex items-center gap-1 justify-end">
           <Button
             variant="outline"
             size="sm"
-            class="h-7 px-2"
+            class="flat-button h-7 px-2"
             @click="handleCancel"
           >
             {{ t("common.cancel") }}
           </Button>
           <Button
             size="sm"
-            class="h-7 px-2"
+            class="flat-button flat-button--primary h-7 px-2"
             @click="handleSave"
           >
             {{ t("common.save") }}

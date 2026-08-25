@@ -317,13 +317,14 @@ defineExpose({ todos, appendTodo, updateTodo, removeTodo });
       <DialogFooter class="gap-2">
         <Button
           variant="outline"
+          class="flat-button"
           @click="handleClose"
         >
           {{ t("common.cancel") }}
         </Button>
         <Button
           data-testid="goal-editor-save"
-          variant="default"
+          class="flat-button flat-button--primary"
           @click="handleSubmit"
         >
           {{ t("common.save") }}
