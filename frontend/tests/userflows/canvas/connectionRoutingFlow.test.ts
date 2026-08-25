@@ -281,4 +281,35 @@ describe("connection routing point userflow", () => {
     expect(wrapper.find('[data-testid^="connection-route-insert-"]').exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it("Branch label 應繪製在路徑調節點後方", () => {
+    const connection = createMockConnection();
+    const podsById = new Map([
+      [
+        connection.sourcePodId!,
+        createMockPod({ id: connection.sourcePodId, x: 0, y: 0 }),
+      ],
+      [
+        connection.targetPodId,
+        createMockPod({ id: connection.targetPodId, x: 400, y: 0 }),
+      ],
+    ]);
+    const wrapper = mount(ConnectionLine, {
+      props: {
+        connection,
+        podsById,
+        isSelected: true,
+        triggerMode: "branch",
+        label: "fail",
+      },
+    });
+
+    const label = wrapper.find("foreignObject").element;
+    const handle = wrapper.find('[data-testid="connection-route-insert-0"]').element;
+
+    expect(
+      label.compareDocumentPosition(handle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    wrapper.unmount();
+  });
 });

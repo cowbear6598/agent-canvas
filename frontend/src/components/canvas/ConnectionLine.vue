@@ -331,6 +331,31 @@ onUnmounted(cleanupRouteDrag);
       :transform="`translate(${arrow.x}, ${arrow.y}) rotate(${arrow.angle})`"
     />
 
+    <foreignObject
+      v-if="midLabel || isDirect"
+      :x="pathData.midPoint.x - 100"
+      :y="pathData.midPoint.y - 10"
+      width="200"
+      height="20"
+    >
+      <div class="connection-mid-label-wrapper">
+        <div class="connection-mid-label-stack">
+          <div
+            v-if="midLabel"
+            :class="['connection-mid-label', midLabel.class]"
+          >
+            <span>{{ midLabel.text }}</span>
+          </div>
+          <div
+            v-if="isDirect"
+            class="connection-mid-label direct-label"
+          >
+            <span>D</span>
+          </div>
+        </div>
+      </div>
+    </foreignObject>
+
     <template v-if="isSelected">
       <g
         v-for="(point, index) in displayedRoutingPoints"
@@ -369,30 +394,5 @@ onUnmounted(cleanupRouteDrag);
         />
       </g>
     </template>
-
-    <foreignObject
-      v-if="midLabel || isDirect"
-      :x="pathData.midPoint.x - 100"
-      :y="pathData.midPoint.y - 10"
-      width="200"
-      height="20"
-    >
-      <div class="connection-mid-label-wrapper">
-        <div class="connection-mid-label-stack">
-          <div
-            v-if="midLabel"
-            :class="['connection-mid-label', midLabel.class]"
-          >
-            <span>{{ midLabel.text }}</span>
-          </div>
-          <div
-            v-if="isDirect"
-            class="connection-mid-label direct-label"
-          >
-            <span>D</span>
-          </div>
-        </div>
-      </div>
-    </foreignObject>
   </g>
 </template>
