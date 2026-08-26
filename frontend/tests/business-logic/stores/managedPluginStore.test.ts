@@ -88,6 +88,55 @@ describe("managedPluginStore", () => {
     });
   });
 
+  describe("upload", () => {
+    it("上傳替換成功後應採用後端完整清單並移除同名舊版本", async () => {
+      const store = useManagedPluginStore();
+      store.plugins = [
+        createMockPlugin({
+          id: "upload:old-a",
+          source: { type: "upload", ref: "old-a" },
+          displayName: "Plan Bundle",
+          sortIndex: 1,
+        }),
+        createMockPlugin({
+          id: "upload:old-b",
+          source: { type: "upload", ref: "old-b" },
+          displayName: "PLAN BUNDLE",
+          sortIndex: 3,
+        }),
+      ];
+      const githubPlugin = createMockPlugin({
+        id: "owner/plan-bundle",
+        source: { type: "github", ref: "owner/plan-bundle" },
+        displayName: "Plan Bundle",
+        sortIndex: 0,
+      });
+      const newUpload = createMockPlugin({
+        id: "upload:new",
+        source: { type: "upload", ref: "new" },
+        displayName: "Plan Bundle",
+        sortIndex: 1,
+      });
+      mockUploadPluginBundle.mockResolvedValueOnce({
+        bundle: newUpload,
+        plugins: [newUpload, githubPlugin],
+      });
+
+      const result = await store.upload(
+        new File(["zip"], "plan-bundle.zip", { type: "application/zip" }),
+      );
+
+      expect(result).toEqual(newUpload);
+      expect(store.plugins).toEqual([githubPlugin, newUpload]);
+      expect(store.plugins.map((plugin) => plugin.id)).not.toContain(
+        "upload:old-a",
+      );
+      expect(store.plugins.map((plugin) => plugin.id)).not.toContain(
+        "upload:old-b",
+      );
+    });
+  });
+
   describe("reorder", () => {
     it("應先 optimistic update，再套用 API confirmed order", async () => {
       const store = useManagedPluginStore();

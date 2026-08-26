@@ -1,0 +1,31 @@
+description: >
+  Local plugin uploads use the archive content hash as their identity, so a new
+  archive with the same resolved plugin name currently creates an additional
+  catalog entry. Treating trimmed, case-insensitive names as identical only
+  among upload-sourced plugins, replacing the prior local upload after the new
+  archive is validated, removing its pod bindings, and synchronizing the
+  resulting state will keep stored files, the plugin catalog, and active
+  canvases consistent without affecting same-named GitHub plugins.
+goal:
+  - Uploading a valid local plugin whose trimmed name case-insensitively matches one or more existing local uploads removes every matching old version, leaves one catalog entry containing the latest archive in the earliest prior sort position, and keeps same-named GitHub plugins unchanged.
+  - Replacing a local plugin preserves every affected pod and its other enabled plugins, removes only the old plugin association, and sends connected canvases the updated pod state.
+  - A replacement that cannot be validated or activated leaves the existing plugin, its files, and its pod bindings intact.
+  - The plugin manager reflects the replacement immediately without retaining the old upload in its local list.
+related:
+  - backend/src/services/plugin/pluginInstallService.ts
+  - backend/src/services/plugin/managedPluginRegistry.ts
+  - backend/src/api/bundleImportApi.ts
+  - backend/src/handlers/pluginHandlers.ts
+  - backend/src/services/podStore.ts
+  - backend/src/services/pod/podRepository.ts
+  - frontend/src/services/pluginApi.ts
+  - frontend/src/stores/managedPluginStore.ts
+  - backend/tests/business-logic/pluginInstallService.test.ts
+  - backend/tests/business-logic/bundleImportApi.test.ts
+  - backend/tests/business-logic/pluginHandlers.test.ts
+  - backend/tests/userflows/plugin-api.test.ts
+  - frontend/tests/business-logic/services/pluginApi.test.ts
+  - frontend/tests/business-logic/stores/managedPluginStore.test.ts
+verify:
+  - cd backend && bun run test -- tests/business-logic/pluginInstallService.test.ts tests/business-logic/bundleImportApi.test.ts tests/business-logic/pluginHandlers.test.ts tests/userflows/plugin-api.test.ts
+  - cd frontend && bun run test -- --run tests/business-logic/services/pluginApi.test.ts tests/business-logic/stores/managedPluginStore.test.ts

@@ -103,10 +103,10 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
   async function upload(file: File): Promise<InstalledPlugin> {
     loading.value = true;
     try {
-      const installed = await uploadPluginBundle(file);
-      plugins.value = upsertPlugin(plugins.value, installed);
+      const result = await uploadPluginBundle(file);
+      plugins.value = sortPluginsByBackendOrder(result.plugins);
       error.value = null;
-      return installed;
+      return result.bundle;
     } catch (err) {
       error.value = normalizeManagedPluginError(err);
       throw err;

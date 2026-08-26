@@ -48,10 +48,11 @@ describe("pluginApi", () => {
   });
 
   it("uploadPluginBundle 會帶上 credentials include", async () => {
+    const plugin = createPlugin();
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ bundle: createPlugin() }), {
+        new Response(JSON.stringify({ bundle: plugin, plugins: [plugin] }), {
           status: 201,
           headers: { "Content-Type": "application/json" },
         }),
@@ -61,7 +62,7 @@ describe("pluginApi", () => {
       new File(["zip"], "bundle.zip", { type: "application/zip" }),
     );
 
-    expect(result).toEqual(createPlugin());
+    expect(result).toEqual({ bundle: plugin, plugins: [plugin] });
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:3001/api/bundles/import",
       expect.objectContaining({

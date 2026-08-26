@@ -1119,6 +1119,8 @@
     "pluginUpdateFailed": "Plugin「{pluginId}」を更新できません。repository に引き続きアクセスでき、ネットワーク接続が正常であることを確認してください。理由：{reason}",
     "bundleUploadAlreadyInstalled": "このローカル skill はすでに追加されています。",
     "bundleUploadMissingBundle": "ローカル bundle の取り込みは成功しましたが backend が bundle データを返しませんでした",
+    "bundleUploadMissingPlugins": "ローカル bundle の取り込みは成功しましたが backend が更新後の plugin 一覧を返しませんでした",
+    "bundleUploadReplacementFailed": "既存のローカル bundle を置き換えられませんでした。以前のバージョンは保持されています。",
     "bundleUploadFailed": "ローカル bundle の取り込みに失敗しました",
     "bundleUploadFileTooLarge": "ローカル zip ファイルが許容サイズ上限を超えています。",
     "bundleUploadSkillMissing": "ローカル bundle 内に利用可能な SKILL.md が見つかりませんでした。",

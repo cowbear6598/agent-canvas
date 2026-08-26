@@ -5,6 +5,10 @@ import {
   importBundleArchive,
   MAX_BUNDLE_ARCHIVE_BYTES,
 } from "../services/plugin/pluginInstallService.js";
+import { socketService } from "../services/socketService.js";
+import { WebSocketResponseEvents } from "../schemas/index.js";
+import { toPodPublicView } from "../types/pod.js";
+import type { PodPluginsSetPayload } from "../types/responses/pod.js";
 
 function resolveBundleImportStatus(code: string): number {
   switch (code) {
@@ -90,5 +94,26 @@ export async function handleImportBundle(
     );
   }
 
-  return jsonResponse({ bundle: result.data }, HTTP_STATUS.CREATED);
+  const { affectedPods, plugin, plugins } = result.data;
+  for (const podEntry of affectedPods) {
+    const podPayload: PodPluginsSetPayload = {
+      requestId: "",
+      canvasId: podEntry.canvasId,
+      success: true,
+      pod: toPodPublicView(podEntry.pod),
+    };
+    socketService.emitToCanvas(
+      podEntry.canvasId,
+      WebSocketResponseEvents.POD_PLUGINS_SET,
+      podPayload,
+    );
+  }
+
+  return jsonResponse(
+    {
+      bundle: plugin,
+      plugins,
+    },
+    HTTP_STATUS.CREATED,
+  );
 }

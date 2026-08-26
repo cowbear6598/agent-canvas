@@ -25,6 +25,8 @@ import type {
 import { getDb } from "../../database/index.js";
 import { logger } from "../../utils/logger.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
+import { podStore } from "../podStore.js";
+import type { Pod } from "../../types/pod.js";
 import {
   isZip64Entry,
   isZip64EndRecord,
@@ -70,6 +72,12 @@ interface ExtractedBundleMetadata {
   displayName: string;
   description: string | null;
   skills: SkillInfo[];
+}
+
+export interface BundleImportResult {
+  plugin: ManagedPluginRecord;
+  plugins: ManagedPluginRecord[];
+  affectedPods: Array<{ canvasId: string; pod: Pod }>;
 }
 
 interface OptionalPluginMetadata {
@@ -701,12 +709,13 @@ function resolveRecordSource(
   return createGithubSource(record.githubRepo || record.id);
 }
 
-async function createRecord(
+function createRecord(
   source: ManagedBundleSource,
   installPath: string,
   displayName: string,
   description: string | null,
-): Promise<ManagedPluginRecord> {
+  sortIndex?: number,
+): ManagedPluginRecord {
   const now = new Date().toISOString();
   const id =
     source.type === "github" ? source.ref : `upload:${source.ref}`;
@@ -717,8 +726,183 @@ async function createRecord(
     displayName,
     description,
     installPath,
+    sortIndex,
     installedAt: now,
     updatedAt: now,
+  });
+}
+
+function normalizePluginDisplayName(displayName: string | null): string {
+  return displayName?.trim().toLowerCase() ?? "";
+}
+
+function findMatchingUploadedPlugins(
+  displayName: string,
+): ManagedPluginRecord[] {
+  const normalizedName = normalizePluginDisplayName(displayName);
+  return managedPluginStore
+    .list()
+    .filter(
+      (plugin) =>
+        plugin.source.type === "upload" &&
+        normalizePluginDisplayName(plugin.displayName) === normalizedName,
+    );
+}
+
+function collectAffectedPodIds(
+  plugins: ManagedPluginRecord[],
+): Array<{ canvasId: string; podId: string }> {
+  const affectedPods = new Map<
+    string,
+    { canvasId: string; podId: string }
+  >();
+
+  for (const plugin of plugins) {
+    for (const podEntry of podStore.getPodsByPluginIdGlobal(plugin.id)) {
+      affectedPods.set(podEntry.pod.id, {
+        canvasId: podEntry.canvasId,
+        podId: podEntry.pod.id,
+      });
+    }
+  }
+
+  return [...affectedPods.values()];
+}
+
+type PluginPathBackups = Map<string, PluginInstallBackup>;
+
+async function restorePluginPathBackups(
+  backups: PluginPathBackups,
+): Promise<void> {
+  for (const [installPath, backup] of [...backups].reverse()) {
+    await restorePluginInstall(installPath, backup);
+  }
+}
+
+async function cleanupPluginPathBackups(
+  backups: PluginPathBackups,
+): Promise<void> {
+  await Promise.all(
+    [...backups.values()]
+      .filter((backup) => backup.installPathExisted)
+      .map((backup) =>
+        removeDirectoryIfExists(backup.backupPath).catch(() => void 0),
+      ),
+  );
+}
+
+async function backupPluginPaths(
+  installPaths: string[],
+): Promise<Result<PluginPathBackups>> {
+  const backups: PluginPathBackups = new Map();
+
+  for (const installPath of [...new Set(installPaths)]) {
+    const backupResult = await backupPluginInstall(installPath);
+    if (!backupResult.success) {
+      await restorePluginPathBackups(backups);
+      return err(backupResult.error);
+    }
+    backups.set(installPath, backupResult.data);
+  }
+
+  return ok(backups);
+}
+
+function createBundleReplacementError(message: string): string {
+  return createBundleError("BUNDLE_REPLACEMENT_FAILED", message);
+}
+
+function resolveAffectedPods(
+  affectedPodIds: Array<{ canvasId: string; podId: string }>,
+): Array<{ canvasId: string; pod: Pod }> {
+  return affectedPodIds
+    .map(({ canvasId, podId }) => {
+      const podEntry = podStore.getByIdGlobal(podId);
+      return podEntry ? { canvasId, pod: podEntry.pod } : null;
+    })
+    .filter(
+      (entry): entry is { canvasId: string; pod: Pod } => entry !== null,
+    );
+}
+
+async function activateUploadedPlugin(
+  source: ManagedBundleSource,
+  installPath: string,
+  extractRoot: string,
+  metadata: ExtractedBundleMetadata,
+  matchingPlugins: ManagedPluginRecord[],
+): Promise<Result<BundleImportResult>> {
+  const affectedPodIds = collectAffectedPodIds(matchingPlugins);
+  const earliestSortIndex =
+    matchingPlugins.length > 0
+      ? Math.min(...matchingPlugins.map((plugin) => plugin.sortIndex))
+      : undefined;
+  const backupResult = await backupPluginPaths([
+    ...matchingPlugins.map((plugin) => plugin.installPath),
+    installPath,
+  ]);
+  if (!backupResult.success) {
+    return err(createBundleReplacementError("無法備份既有的本地 plugin"));
+  }
+
+  const backups = backupResult.data;
+  const installPathBackup = backups.get(installPath)!;
+
+  const activateResult = await activatePluginInstall(
+    extractRoot,
+    installPath,
+    source.ref,
+    installPathBackup,
+  );
+  if (!activateResult.success) {
+    await restorePluginPathBackups(backups);
+    return err(
+      createBundleReplacementError("無法啟用新上傳的本地 plugin"),
+    );
+  }
+
+  let plugin: ManagedPluginRecord;
+  try {
+    const db = getDb();
+    const commitReplacement = db.transaction(() => {
+      if (matchingPlugins.length > 0) {
+        const deletePodBindings = db.prepare(
+          "DELETE FROM pod_plugin_ids WHERE plugin_id = ?",
+        );
+        for (const matchingPlugin of matchingPlugins) {
+          deletePodBindings.run(matchingPlugin.id);
+          managedPluginStore.delete(matchingPlugin.id);
+        }
+      }
+
+      return createRecord(
+        source,
+        installPath,
+        metadata.displayName,
+        metadata.description,
+        earliestSortIndex,
+      );
+    });
+    plugin = commitReplacement();
+  } catch (error) {
+    logger.error(
+      "Plugin",
+      "Error",
+      "取代本地 plugin 的資料時失敗",
+      error,
+    );
+    await removeDirectoryIfExists(installPath).catch(() => void 0);
+    await restorePluginPathBackups(backups);
+    return err(
+      createBundleReplacementError("無法儲存新上傳的本地 plugin"),
+    );
+  }
+
+  await cleanupPluginPathBackups(backups);
+  return ok({
+    plugin,
+    plugins: managedPluginStore.list(),
+    affectedPods: resolveAffectedPods(affectedPodIds),
   });
 }
 
@@ -764,7 +948,7 @@ export async function installPlugin(
 
 export async function importBundleArchive(
   file: File,
-): Promise<Result<ManagedPluginRecord>> {
+): Promise<Result<BundleImportResult>> {
   const archiveBytesResult = await readUploadedArchiveBytes(file);
   if (!archiveBytesResult.success) {
     return err(archiveBytesResult.error);
@@ -803,20 +987,16 @@ export async function importBundleArchive(
       return err(metadataResult.error);
     }
 
-    if (managedPluginStore.getBySource(source)) {
-      return err("PLUGIN_ALREADY_INSTALLED");
-    }
-
-    await removeDirectoryIfExists(installPath);
-    await fs.promises.rename(extractRoot, installPath);
-
-    const record = await createRecord(
+    const matchingPlugins = findMatchingUploadedPlugins(
+      metadataResult.data.displayName,
+    );
+    return activateUploadedPlugin(
       source,
       installPath,
-      metadataResult.data.displayName,
-      metadataResult.data.description,
+      extractRoot,
+      metadataResult.data,
+      matchingPlugins,
     );
-    return ok(record);
   } finally {
     await removeDirectoryIfExists(extractRoot).catch(() => void 0);
   }

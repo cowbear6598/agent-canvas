@@ -1119,6 +1119,8 @@
     "pluginUpdateFailed": "Unable to update plugin \"{pluginId}\". Confirm the repository is still accessible and your network connection is working. Reason: {reason}",
     "bundleUploadAlreadyInstalled": "This local skill has already been added.",
     "bundleUploadMissingBundle": "The local bundle import succeeded but the backend did not return bundle data.",
+    "bundleUploadMissingPlugins": "The local bundle import succeeded but the backend did not return the updated plugin list.",
+    "bundleUploadReplacementFailed": "The existing local bundle could not be replaced. The previous version was kept.",
     "bundleUploadFailed": "Failed to import the local bundle.",
     "bundleUploadFileTooLarge": "The local zip file exceeds the allowed size limit.",
     "bundleUploadSkillMissing": "No usable SKILL.md was found in the local bundle.",

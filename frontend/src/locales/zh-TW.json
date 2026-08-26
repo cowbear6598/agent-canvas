@@ -1119,6 +1119,8 @@
     "pluginUpdateFailed": "無法重新整理 skill bundle「{pluginId}」。請確認 repository 仍可存取，且網路連線正常。原因：{reason}",
     "bundleUploadAlreadyInstalled": "這個本地 skill 已經新增過了。",
     "bundleUploadMissingBundle": "匯入本地 bundle 成功但後端未回傳 bundle 資料",
+    "bundleUploadMissingPlugins": "匯入本地 bundle 成功但後端未回傳更新後的清單資料",
+    "bundleUploadReplacementFailed": "無法取代既有的本地 bundle，舊版本已保留。",
     "bundleUploadFailed": "本地 bundle 匯入失敗",
     "bundleUploadFileTooLarge": "本地 zip 檔超過允許大小上限。",
     "bundleUploadSkillMissing": "本地 bundle 內找不到任何可用的 SKILL.md。",

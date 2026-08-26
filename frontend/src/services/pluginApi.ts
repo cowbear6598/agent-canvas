@@ -36,6 +36,7 @@ function mapBundleUploadError(
     BUNDLE_ARCHIVE_TOO_LARGE: "errors.bundleUploadArchiveTooLarge",
     BUNDLE_TOO_MANY_FILES: "errors.bundleUploadTooManyFiles",
     INVALID_BUNDLE_ARCHIVE: "errors.bundleUploadInvalidArchive",
+    BUNDLE_REPLACEMENT_FAILED: "errors.bundleUploadReplacementFailed",
   };
   const errorKey = code ? errorKeys[code] : undefined;
   return errorKey ? t(errorKey) : message || t("errors.bundleUploadFailed");
@@ -134,7 +135,7 @@ export async function reorderPlugins(
 
 export async function uploadPluginBundle(
   file: File,
-): Promise<InstalledPlugin> {
+): Promise<{ bundle: InstalledPlugin; plugins: InstalledPlugin[] }> {
   const formData = new FormData();
   formData.append("bundle", file);
 
@@ -145,7 +146,12 @@ export async function uploadPluginBundle(
   });
 
   const body = (await response.json().catch(() => null)) as
-    | { bundle?: InstalledPlugin; error?: string; code?: string }
+    | {
+        bundle?: InstalledPlugin;
+        plugins?: InstalledPlugin[];
+        error?: string;
+        code?: string;
+      }
     | null;
 
   if (!response.ok) {
@@ -156,5 +162,9 @@ export async function uploadPluginBundle(
     throw new Error(t("errors.bundleUploadMissingBundle"));
   }
 
-  return body.bundle;
+  if (!body.plugins) {
+    throw new Error(t("errors.bundleUploadMissingPlugins"));
+  }
+
+  return { bundle: body.bundle, plugins: body.plugins };
 }

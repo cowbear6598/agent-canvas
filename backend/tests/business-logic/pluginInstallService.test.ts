@@ -20,9 +20,16 @@
 // ─── hoisted：simple-git mock factory ──────────────────────────────────────
 // vi.mock 工廠被 hoist 到最頂層，不能直接引用 let 變數；
 // 透過 vi.hoisted 先建立一個可被後續 beforeEach 控制的 spy 容器
-const { mockClone, mockLoggerWarn } = vi.hoisted(() => ({
+const {
+  mockClone,
+  mockLoggerWarn,
+  mockGetPodsByPluginIdGlobal,
+  mockGetPodByIdGlobal,
+} = vi.hoisted(() => ({
   mockClone: vi.fn(),
   mockLoggerWarn: vi.fn(),
+  mockGetPodsByPluginIdGlobal: vi.fn(),
+  mockGetPodByIdGlobal: vi.fn(),
 }));
 
 vi.mock("simple-git", () => ({
@@ -40,6 +47,13 @@ vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
     update: vi.fn(),
     delete: vi.fn(),
     list: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/services/podStore.js", () => ({
+  podStore: {
+    getPodsByPluginIdGlobal: mockGetPodsByPluginIdGlobal,
+    getByIdGlobal: mockGetPodByIdGlobal,
   },
 }));
 
@@ -72,6 +86,7 @@ const mockDbRun = vi.fn();
 vi.mock("../../src/database/index.js", () => ({
   getDb: () => ({
     prepare: () => ({ run: mockDbRun }),
+    transaction: (operation: () => unknown) => operation,
   }),
 }));
 
@@ -422,11 +437,22 @@ describe("installPlugin", () => {
 describe("importBundleArchive", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(fsOperation).mockImplementation(async (operation) => {
+      try {
+        const data = await operation();
+        return ok(data);
+      } catch (error) {
+        return err(String(error));
+      }
+    });
     vi.mocked(managedPluginStore.getBySource).mockReturnValue(null);
+    vi.mocked(managedPluginStore.list).mockReturnValue([]);
     vi.mocked(managedPluginStore.insert).mockImplementation((record) => ({
       sortIndex: 0,
       ...record,
     }));
+    mockGetPodsByPluginIdGlobal.mockReturnValue([]);
+    mockGetPodByIdGlobal.mockReturnValue(undefined);
     mockReadFile.mockRejectedValue(makeEnoentError());
     mockAccess.mockRejectedValue(makeEnoentError());
     mockMkdtemp.mockImplementation(async (prefix: string) => `${prefix}test`);
@@ -476,6 +502,152 @@ describe("importBundleArchive", () => {
       string,
     ];
     expect(path.dirname(extractRoot)).toBe(path.dirname(installPath));
+  });
+
+  it("同名本地 plugins 應全部由新版本取代，保留最前排序並解除 pod 關聯", async () => {
+    const archiveBytes = createBundleZip({
+      "skills/plan/SKILL.md": "---\ndescription: 新版\n---\n# Plan\n",
+      ".codex-plugin/plugin.json": JSON.stringify({
+        name: "Plan Bundle",
+        description: "新版 bundle",
+      }),
+    });
+    const oldUploadA = makeRecord({
+      id: "upload:old-a",
+      source: { type: "upload", ref: "old-a" },
+      githubRepo: "old-a",
+      displayName: " plan bundle ",
+      installPath: "/plugins/upload__old-a",
+      sortIndex: 4,
+    });
+    const oldUploadB = makeRecord({
+      id: "upload:old-b",
+      source: { type: "upload", ref: "old-b" },
+      githubRepo: "old-b",
+      displayName: "PLAN BUNDLE",
+      installPath: "/plugins/upload__old-b",
+      sortIndex: 1,
+    });
+    const sameNameGithubPlugin = makeRecord({
+      id: "owner/plan-bundle",
+      source: { type: "github", ref: "owner/plan-bundle" },
+      githubRepo: "owner/plan-bundle",
+      displayName: "Plan Bundle",
+      installPath: "/plugins/owner__plan-bundle",
+      sortIndex: 0,
+    });
+    let insertedPlugin: ManagedPluginRecord | undefined;
+    vi.mocked(managedPluginStore.list)
+      .mockReturnValueOnce([oldUploadA, oldUploadB, sameNameGithubPlugin])
+      .mockImplementation(() => [sameNameGithubPlugin, insertedPlugin!]);
+    vi.mocked(managedPluginStore.insert).mockImplementation((record) => {
+      insertedPlugin = { ...record, sortIndex: record.sortIndex ?? 99 };
+      return insertedPlugin;
+    });
+    mockGetPodsByPluginIdGlobal.mockImplementation((pluginId: string) =>
+      pluginId === "upload:old-a" || pluginId === "upload:old-b"
+        ? [
+            {
+              canvasId: "canvas-1",
+              pod: { id: "pod-1" },
+            },
+          ]
+        : [],
+    );
+    mockGetPodByIdGlobal.mockReturnValue({
+      canvasId: "canvas-1",
+      pod: {
+        id: "pod-1",
+        name: "Pod 1",
+        workspacePath: "/workspace",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        sessionId: null,
+        mcpServerNames: [],
+        agentCanvasMcpEnabled: false,
+        pluginIds: ["other-plugin"],
+        codexSkillKeys: [],
+        codexSkillsInitialized: true,
+        provider: "claude",
+        providerConfig: null,
+        repositoryId: null,
+      },
+    });
+    mockValidPluginJson("Plan Bundle", "新版 bundle");
+
+    const result = await importBundleArchive(
+      new File([archiveBytes], "plan-bundle.zip", {
+        type: "application/zip",
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(managedPluginStore.delete).toHaveBeenCalledWith("upload:old-a");
+    expect(managedPluginStore.delete).toHaveBeenCalledWith("upload:old-b");
+    expect(managedPluginStore.delete).not.toHaveBeenCalledWith(
+      "owner/plan-bundle",
+    );
+    expect(mockDbRun).toHaveBeenCalledWith("upload:old-a");
+    expect(mockDbRun).toHaveBeenCalledWith("upload:old-b");
+    expect(result.data.plugin.sortIndex).toBe(1);
+    expect(result.data.plugins).toEqual([
+      sameNameGithubPlugin,
+      result.data.plugin,
+    ]);
+    expect(result.data.affectedPods).toEqual([
+      expect.objectContaining({
+        canvasId: "canvas-1",
+        pod: expect.objectContaining({
+          id: "pod-1",
+          pluginIds: ["other-plugin"],
+        }),
+      }),
+    ]);
+  });
+
+  it("新版本寫入失敗時應還原既有本地 plugin 目錄", async () => {
+    const archiveBytes = createBundleZip({
+      "skills/plan/SKILL.md": "---\ndescription: 新版\n---\n# Plan\n",
+      ".codex-plugin/plugin.json": JSON.stringify({
+        name: "Plan Bundle",
+      }),
+    });
+    const oldUpload = makeRecord({
+      id: "upload:old",
+      source: { type: "upload", ref: "old" },
+      githubRepo: "old",
+      displayName: "Plan Bundle",
+      installPath: "/plugins/upload__old",
+      sortIndex: 2,
+    });
+    vi.mocked(managedPluginStore.list).mockReturnValue([oldUpload]);
+    vi.mocked(managedPluginStore.insert).mockImplementation(() => {
+      throw new Error("資料庫寫入失敗");
+    });
+    mockAccess.mockImplementation(async (targetPath: string) => {
+      if (targetPath === oldUpload.installPath) return;
+      throw makeEnoentError();
+    });
+    mockValidPluginJson("Plan Bundle");
+
+    const result = await importBundleArchive(
+      new File([archiveBytes], "plan-bundle.zip", {
+        type: "application/zip",
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("BUNDLE_REPLACEMENT_FAILED");
+    }
+    const restoredOldDirectory = mockRename.mock.calls.some(
+      ([fromPath, toPath]) =>
+        String(fromPath).includes(".agent-canvas-bundle-backup-") &&
+        toPath === oldUpload.installPath,
+    );
+    expect(restoredOldDirectory).toBe(true);
   });
 
   it("超過 archive 大小上限時直接回 BUNDLE_FILE_TOO_LARGE", async () => {
