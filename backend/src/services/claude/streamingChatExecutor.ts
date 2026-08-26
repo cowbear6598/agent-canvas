@@ -325,26 +325,47 @@ interface ChatTurnOutcome {
 const CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH = 240;
 const PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE =
   "Provider 發生不可恢復錯誤，Goal 尚未完成";
-const CODEX_TRANSPORT_RECOVERY_MESSAGE =
-  "剛剛 Codex 內部連線中斷。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。";
-const CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE =
-  "Codex 連線恢復失敗，已停止本次執行";
-const CODEX_CAPACITY_RECOVERY_MESSAGE =
-  "剛剛 Codex 選用的模型滿載。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。";
-const CODEX_CAPACITY_RECOVERY_FAILED_MESSAGE =
-  "Codex 選用的模型目前持續滿載，已停止本次執行，請稍後再試或切換模型";
-const CODEX_CAPACITY_RETRY_DELAYS_MS = [2000, 5000] as const;
+interface CodexProviderRecovery {
+  retryMessage: string;
+  failureMessage: string;
+}
 
-function hasRecoverableCodexError(
+const CODEX_PROVIDER_RETRY_DELAYS_MS = [2000, 5000] as const;
+
+function resolveCodexProviderRecovery(
   pod: Pod,
   turnOutcome: ChatTurnOutcome,
-  code: string,
-): boolean {
-  return (
-    pod.provider === "codex" &&
-    turnOutcome.finished === "completed_with_recoverable_provider_error" &&
-    turnOutcome.providerErrorCode === code
-  );
+): CodexProviderRecovery | null {
+  if (
+    pod.provider !== "codex" ||
+    turnOutcome.finished !== "completed_with_recoverable_provider_error"
+  ) {
+    return null;
+  }
+
+  switch (turnOutcome.providerErrorCode) {
+    case "STREAM_DISCONNECTED":
+      return {
+        retryMessage:
+          "剛剛 Codex 內部連線中斷。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。",
+        failureMessage: "Codex 連線恢復失敗，已停止本次執行",
+      };
+    case "MODEL_CAPACITY_EXHAUSTED":
+      return {
+        retryMessage:
+          "剛剛 Codex 選用的模型滿載。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。",
+        failureMessage:
+          "Codex 選用的模型目前持續滿載，已停止本次執行，請稍後再試或切換模型",
+      };
+    case "STREAM_ERROR":
+      return {
+        retryMessage:
+          "剛剛 Codex 串流發生錯誤。請先確認目前工作狀態，繼續原本未完成的任務，不要重做已完成項目。",
+        failureMessage: "Codex 串流持續發生錯誤，已停止本次執行",
+      };
+    default:
+      return null;
+  }
 }
 
 function createClientSafeBlockedReason(reason: string | null): string | null {
@@ -537,10 +558,6 @@ interface TurnFlowResult {
   stopped: boolean;
 }
 
-function waitForCodexCapacityRetry(delayMs: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
-
 async function stopAfterCodexRecoveryFailure(
   options: StreamingChatExecutorOptions,
   callbacks: StreamingChatExecutorCallbacks | undefined,
@@ -564,59 +581,31 @@ async function recoverCodexProviderErrors(
   callbacks?: StreamingChatExecutorCallbacks,
 ): Promise<TurnFlowResult> {
   let turnOutcome = initialOutcome;
-  let transportRetryCount = 0;
-  let capacityRetryCount = 0;
+  let retryCount = 0;
 
   while (true) {
-    let retryMessage: StreamingChatExecutorOptions["message"];
-
-    if (
-      hasRecoverableCodexError(pod, turnOutcome, "STREAM_DISCONNECTED")
-    ) {
-      if (transportRetryCount >= 1) {
-        return stopAfterCodexRecoveryFailure(
-          options,
-          callbacks,
-          turnOutcome,
-          CODEX_TRANSPORT_RECOVERY_FAILED_MESSAGE,
-        );
-      }
-
-      await options.strategy.addUserMessage(
-        options.podId,
-        CODEX_TRANSPORT_RECOVERY_MESSAGE,
-      );
-      retryMessage = CODEX_TRANSPORT_RECOVERY_MESSAGE;
-      transportRetryCount++;
-    } else if (
-      hasRecoverableCodexError(
-        pod,
-        turnOutcome,
-        "MODEL_CAPACITY_EXHAUSTED",
-      )
-    ) {
-      const retryDelayMs = CODEX_CAPACITY_RETRY_DELAYS_MS[capacityRetryCount];
-      if (retryDelayMs === undefined) {
-        return stopAfterCodexRecoveryFailure(
-          options,
-          callbacks,
-          turnOutcome,
-          CODEX_CAPACITY_RECOVERY_FAILED_MESSAGE,
-        );
-      }
-
-      await waitForCodexCapacityRetry(retryDelayMs);
-      const hasSession = Boolean(options.strategy.getSessionId(options.podId));
-      retryMessage = hasSession
-        ? CODEX_CAPACITY_RECOVERY_MESSAGE
-        : options.message;
-      if (hasSession) {
-        await options.strategy.addUserMessage(options.podId, retryMessage);
-      }
-      capacityRetryCount++;
-    } else {
+    const recovery = resolveCodexProviderRecovery(pod, turnOutcome);
+    if (!recovery) {
       return { outcome: turnOutcome, stopped: false };
     }
+
+    const retryDelayMs = CODEX_PROVIDER_RETRY_DELAYS_MS[retryCount];
+    if (retryDelayMs === undefined) {
+      return stopAfterCodexRecoveryFailure(
+        options,
+        callbacks,
+        turnOutcome,
+        recovery.failureMessage,
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    const hasSession = Boolean(options.strategy.getSessionId(options.podId));
+    const retryMessage = hasSession ? recovery.retryMessage : options.message;
+    if (hasSession) {
+      await options.strategy.addUserMessage(options.podId, retryMessage);
+    }
+    retryCount++;
 
     turnOutcome = await executeChatTurn(
       options,
@@ -717,7 +706,7 @@ async function runGoalCompletionGate(
  *
  * 流程：
  *   1. 第一輪 turn 帶 caller 傳入的 message
- *   2. Codex transport 中斷或模型滿載時，依錯誤碼執行對應恢復策略
+ *   2. Codex provider 發生可恢復錯誤時，依錯誤碼執行對應恢復策略
  *   3. 進入 Goal 完成 gate loop：
  *      - proceed → 跳出，呼叫 callbacks.onComplete
  *      - retry   → 透過 strategy.addUserMessage 注入 nudge，再跑一輪

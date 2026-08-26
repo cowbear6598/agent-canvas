@@ -166,6 +166,16 @@ function makeCodexCapacityEvent(): NormalizedEvent {
   };
 }
 
+function makeCodexStreamErrorEvent(): NormalizedEvent {
+  return {
+    type: "error",
+    message: '{"detail":"Bad Request"}',
+    fatal: true,
+    recovery: "recoverable",
+    code: "STREAM_ERROR",
+  };
+}
+
 function readOnlyScopedGoalRuntimeSnapshot(
   runContext: RunContext,
   podId: string,
@@ -344,6 +354,7 @@ describe("executeStreamingChat", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     closeDb();
     clearPodStoreCache();
@@ -1484,6 +1495,7 @@ describe("executeStreamingChat", () => {
     });
 
     it("Codex transport 中斷時應透過既有 session 繼續並完成 Goal", async () => {
+      vi.useFakeTimers();
       const goal = {
         todos: [{ id: "todo-1", text: "重試後完成" }],
       };
@@ -1526,7 +1538,7 @@ describe("executeStreamingChat", () => {
       setupProviderMock([], chatMock);
 
       const onComplete = vi.fn();
-      await executeStreamingChat(
+      const execution = executeStreamingChat(
         {
           canvasId,
           podId: pod.id,
@@ -1536,6 +1548,9 @@ describe("executeStreamingChat", () => {
         },
         { onComplete },
       );
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await execution;
 
       expect(chatMock).toHaveBeenCalledTimes(2);
       expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
@@ -1682,6 +1697,82 @@ describe("executeStreamingChat", () => {
       }
     });
 
+    it("Codex 一般串流錯誤應等待後重試", async () => {
+      vi.useFakeTimers();
+      const pod = insertCodexPod();
+      const chatMock = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          makeEventStream([makeCodexStreamErrorEvent()]),
+        )
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            { type: "text", content: "重試成功" },
+            { type: "turn_complete" },
+          ]),
+        );
+      mockCodexProviderChat(chatMock);
+
+      const onComplete = vi.fn();
+      const onError = vi.fn();
+      const execution = executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete, onError },
+      );
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await execution;
+
+      expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
+        resumeSessionId: null,
+        message,
+      });
+      expect(onError).not.toHaveBeenCalled();
+      expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+    });
+
+    it("Codex 一般串流錯誤超過兩次重試後應停止", async () => {
+      vi.useFakeTimers();
+      const pod = insertCodexPod();
+      const chatMock = vi.fn(() =>
+        makeEventStream([makeCodexStreamErrorEvent()]),
+      );
+      mockCodexProviderChat(chatMock);
+
+      const onComplete = vi.fn();
+      const onError = vi.fn();
+      const execution = executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete, onError },
+      );
+
+      await vi.advanceTimersByTimeAsync(7000);
+      await execution;
+
+      expect(chatMock).toHaveBeenCalledTimes(3);
+      expect(onError).toHaveBeenCalledWith(
+        canvasId,
+        pod.id,
+        expect.objectContaining({
+          message: "Codex 串流持續發生錯誤，已停止本次執行",
+        }),
+      );
+      expect(onComplete).not.toHaveBeenCalled();
+    });
+
     it("Codex 模型持續滿載超過重試上限時應停止且不觸發完成", async () => {
       vi.useFakeTimers();
       try {
@@ -1735,6 +1826,7 @@ describe("executeStreamingChat", () => {
     });
 
     it("沒有 Goal 的 Codex Pod transport 中斷時仍應 resume 後才完成", async () => {
+      vi.useFakeTimers();
       const pod = insertCodexPod();
       mockRunSessionPersistence("codex-instance-without-goal");
       const chatMock = vi
@@ -1758,7 +1850,7 @@ describe("executeStreamingChat", () => {
 
       const onComplete = vi.fn();
       const onError = vi.fn();
-      await executeStreamingChat(
+      const execution = executeStreamingChat(
         {
           canvasId,
           podId: pod.id,
@@ -1769,6 +1861,9 @@ describe("executeStreamingChat", () => {
         { onComplete, onError },
       );
 
+      await vi.advanceTimersByTimeAsync(2000);
+      await execution;
+
       expect(chatMock).toHaveBeenCalledTimes(2);
       expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
         resumeSessionId: "codex-thread-without-goal",
@@ -1777,7 +1872,8 @@ describe("executeStreamingChat", () => {
       expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
     });
 
-    it("Codex transport resume 後再次斷線時應停止且不觸發完成", async () => {
+    it("Codex transport 持續斷線超過兩次重試後應停止且不觸發完成", async () => {
+      vi.useFakeTimers();
       const pod = insertCodexPod();
       mockRunSessionPersistence("codex-instance-recovery-failed");
       const chatMock = vi
@@ -1791,14 +1887,14 @@ describe("executeStreamingChat", () => {
             makeCodexDisconnectedEvent(),
           ]),
         )
-        .mockImplementationOnce(() =>
+        .mockImplementation(() =>
           makeEventStream([makeCodexDisconnectedEvent()]),
         );
       mockCodexProviderChat(chatMock);
 
       const onComplete = vi.fn();
       const onError = vi.fn();
-      await executeStreamingChat(
+      const execution = executeStreamingChat(
         {
           canvasId,
           podId: pod.id,
@@ -1809,7 +1905,10 @@ describe("executeStreamingChat", () => {
         { onComplete, onError },
       );
 
-      expect(chatMock).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(7000);
+      await execution;
+
+      expect(chatMock).toHaveBeenCalledTimes(3);
       expect(chatMock.mock.calls[1]?.[0]).toMatchObject({
         resumeSessionId: "codex-thread-recovery-failed",
       });

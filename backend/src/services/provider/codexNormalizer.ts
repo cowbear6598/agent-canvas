@@ -349,7 +349,7 @@ function normalizeItemCompleted(
 }
 
 function normalizeStreamError(event: CodexStreamErrorEvent): NormalizedEvent {
-  const rawContent = event.message ?? "Codex 串流發生不可恢復的錯誤";
+  const rawContent = event.message ?? "Codex 串流發生錯誤";
 
   if (isCodexReconnectProgressMessage(rawContent)) {
     return buildCodexSystemError({
@@ -390,7 +390,7 @@ function normalizeStreamError(event: CodexStreamErrorEvent): NormalizedEvent {
     fatal: true,
     code: "STREAM_ERROR",
     rawContent,
-    recovery: "unrecoverable",
+    recovery: "recoverable",
   });
 }
 

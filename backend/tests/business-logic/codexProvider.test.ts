@@ -535,7 +535,7 @@ describe("CodexProvider", () => {
     expect(errorEvents).toHaveLength(1);
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.fatal).toBe(true);
-    expect(e.recovery).toBe("unrecoverable");
+    expect(e.recovery).toBe("recoverable");
     expect(e.systemMessage?.metadata.code).toBe("STREAM_ERROR");
     expect(e.message).toBe("usage limit exceeded");
     // 確保沒有 EXIT_CODE 訊息（不會 fall through 到 handleExitCode）
@@ -547,7 +547,7 @@ describe("CodexProvider", () => {
     expect(hasExitCode).toBe(false);
   });
 
-  it("type=error stream event 即使含 transport 關鍵字也應標記為 unrecoverable", async () => {
+  it("未符合特定 transport 格式的 type=error stream event 應標記為 recoverable", async () => {
     const stdoutLines = [
       JSON.stringify({
         type: "error",
@@ -563,8 +563,8 @@ describe("CodexProvider", () => {
       { type: "error" }
     >;
 
-    expect(errorEvent.recovery).toBe("unrecoverable");
-    expect(errorEvent.systemMessage?.metadata.recovery).toBe("unrecoverable");
+    expect(errorEvent.recovery).toBe("recoverable");
+    expect(errorEvent.systemMessage?.metadata.recovery).toBe("recoverable");
   });
 
   it("Codex CLI 重連進度後成功時應繼續消費串流，且不推出 error event", async () => {

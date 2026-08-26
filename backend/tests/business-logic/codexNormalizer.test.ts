@@ -256,8 +256,8 @@ describe("CodexNormalizer - normalize()", () => {
     expect(result?.type).toBe("turn_complete");
   });
 
-  // ── Case 7：error envelope → error (fatal=true，AI 終態錯誤) ────────
-  it("error envelope 應映射為 error，fatal=true（AI 終態錯誤代表本輪結束）", () => {
+  // ── Case 7：error envelope → error (fatal=true，可由 executor 重試) ──
+  it("error envelope 應映射為 fatal=true 且 recoverable 的串流錯誤", () => {
     const line = toLine({ type: "error", message: "Something went wrong" });
     const result = normalize(line);
 
@@ -266,7 +266,7 @@ describe("CodexNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.message).toBe("Something went wrong");
     expect(e?.fatal).toBe(true);
-    expect(e?.recovery).toBe("unrecoverable");
+    expect(e?.recovery).toBe("recoverable");
     expect(e?.systemMessage).toMatchObject({
       role: "system",
       content: "Something went wrong",
@@ -275,7 +275,7 @@ describe("CodexNormalizer - normalize()", () => {
         code: "STREAM_ERROR",
         severity: "fatal",
         rawContent: "Something went wrong",
-        recovery: "unrecoverable",
+        recovery: "recoverable",
       },
     });
   });
@@ -302,7 +302,7 @@ describe("CodexNormalizer - normalize()", () => {
     });
   });
 
-  it("error envelope 即使含 transport 關鍵字也應維持 unrecoverable", () => {
+  it("未符合特定 transport 格式的 error envelope 應維持一般可恢復串流錯誤", () => {
     const line = toLine({
       type: "error",
       message: "WebSocket connection closed while resuming stream",
@@ -313,8 +313,9 @@ describe("CodexNormalizer - normalize()", () => {
     expect(result?.type).toBe("error");
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e.fatal).toBe(true);
-    expect(e.recovery).toBe("unrecoverable");
-    expect(e.systemMessage?.metadata.recovery).toBe("unrecoverable");
+    expect(e.code).toBe("STREAM_ERROR");
+    expect(e.recovery).toBe("recoverable");
+    expect(e.systemMessage?.metadata.recovery).toBe("recoverable");
   });
 
   it("Codex CLI 重連進度應映射為 non-fatal recoverable error", () => {
