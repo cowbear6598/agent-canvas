@@ -743,12 +743,19 @@ export async function executeStreamingChat(
   }
 
   const runContext = effectiveOptions.strategy.getRunContext();
+  let outerActiveStreamRegistered = false;
+  const releaseOuterActiveStream = (): void => {
+    if (!runContext || !outerActiveStreamRegistered) return;
+    runExecutionService.unregisterActiveStream(runContext.runId, podId);
+    outerActiveStreamRegistered = false;
+  };
+
   if (runContext) {
     // provider turn 會各自增減一次；這一層覆蓋整段多輪執行，避免 Goal gate
     // 在兩輪之間暫時被視為沒有活躍串流。
     runExecutionService.registerActiveStream(runContext.runId, podId);
+    outerActiveStreamRegistered = true;
   }
-  let shouldEvaluateAfterStreamRelease = false;
   try {
     // 第一輪 turn：使用 caller 傳入的 message
     let turnOutcome = await executeChatTurn(
@@ -783,17 +790,17 @@ export async function executeStreamingChat(
     persistGoalRoundDivider(effectiveOptions);
 
     if (callbacks?.onComplete) {
+      // 完成 callback 會接續處理 Run queue；必須先釋放外層 lease，
+      // 否則 queue 會誤判目前仍有活躍串流並永久停在 summarizing。
+      releaseOuterActiveStream();
       await callbacks.onComplete(canvasId, podId);
-      shouldEvaluateAfterStreamRelease = true;
+      if (runContext) {
+        runExecutionService.evaluateRun(runContext);
+      }
     }
 
     return turnOutcome.result;
   } finally {
-    if (runContext) {
-      runExecutionService.unregisterActiveStream(runContext.runId, podId);
-      if (shouldEvaluateAfterStreamRelease) {
-        runExecutionService.evaluateRun(runContext);
-      }
-    }
+    releaseOuterActiveStream();
   }
 }

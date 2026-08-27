@@ -2766,7 +2766,7 @@ describe("executeStreamingChat", () => {
       expect(result.aborted).toBe(false);
     });
 
-    it("完成 callback 執行期間仍保留整段串流的 active scope，離開後才釋放", async () => {
+    it("完成 callback 執行前應釋放外層 active scope，讓 Run queue 可立即接續", async () => {
       const pod = insertClaudePod();
       const scopedRunContext: RunContext = {
         ...runContext,
@@ -2789,7 +2789,7 @@ describe("executeStreamingChat", () => {
             scopedRunContext.runId,
             pod.id,
           ),
-        ).toBe(true);
+        ).toBe(false);
       });
 
       await executeStreamingChat(
@@ -2804,9 +2804,9 @@ describe("executeStreamingChat", () => {
       );
 
       expect(onComplete).toHaveBeenCalledTimes(1);
-      expect(
-        runExecutionService.hasActiveStream(scopedRunContext.runId, pod.id),
-      ).toBe(false);
+      expect(runExecutionService.unregisterActiveStream).toHaveBeenCalledTimes(
+        2,
+      );
     });
 
     it("AbortError → unregisterActiveStream + errorPodInstance", async () => {
