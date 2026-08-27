@@ -118,6 +118,14 @@ describe("runStatusMachine", () => {
       ).toBe("completed");
     });
 
+    it("重複 settle 已 skipped 的 branch 路徑時應維持 skipped", () => {
+      expect(
+        decidePodStatusAfterPathwaySettlement(
+          makeInstance("skipped", "settled", "not-applicable"),
+        ),
+      ).toBe("skipped");
+    });
+
     it("trigger settlement 需 pathway 全 settled 且 queue 為空才 completed", () => {
       expect(
         decidePodStatusAfterTriggerSettlement(

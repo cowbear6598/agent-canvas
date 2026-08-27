@@ -58,9 +58,10 @@ export function decidePodStatusAfterPathwaySettlement(
     return null;
   }
 
-  return NEVER_TRIGGERED_STATUSES.has(instance.status)
-    ? "skipped"
-    : "completed";
+  const shouldRemainSkipped =
+    instance.status === "skipped" ||
+    NEVER_TRIGGERED_STATUSES.has(instance.status);
+  return shouldRemainSkipped ? "skipped" : "completed";
 }
 
 export function decidePodStatusAfterTriggerSettlement(
