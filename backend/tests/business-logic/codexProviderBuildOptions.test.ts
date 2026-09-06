@@ -57,8 +57,6 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
 }
 
 describe("CodexProvider.buildOptions()", () => {
-  const provider = codexProvider;
-
   beforeEach(() => {
     mockManagedMcpSurfaceService.ensureSurface.mockClear();
     mockManagedMcpSurfaceService.ensureChatSurface.mockClear();
@@ -73,12 +71,26 @@ describe("CodexProvider.buildOptions()", () => {
     });
   });
 
+  it("Astra 的 Ultra 與 Fast 設定應保留至執行選項", async () => {
+    const options = await codexProvider.buildOptions(
+      makePod({
+        providerConfig: { model: "gpt-6-astra", thinkingLevel: "ultra" },
+        fastModeEnabled: true,
+      }),
+    );
+    expect(options).toMatchObject({
+      model: "gpt-6-astra",
+      thinkingLevel: "ultra",
+      fastModeEnabled: true,
+    });
+  });
+
   // ── Case 1：空 providerConfig → 回傳 metadata.defaultOptions ─────────
   it("空 providerConfig 應回傳 metadata.defaultOptions", async () => {
     const pod = makePod({ providerConfig: {} });
-    const options = await provider.buildOptions(pod);
+    const options = await codexProvider.buildOptions(pod);
 
-    expect(options.model).toBe(provider.metadata.defaultOptions.model);
+    expect(options.model).toBe(codexProvider.metadata.defaultOptions.model);
     expect(options.resumeMode).toBe("cli");
     expect(options.mcpEntries).toEqual([]);
     expect(options.hasGoalRuntime).toBe(false);
@@ -89,7 +101,7 @@ describe("CodexProvider.buildOptions()", () => {
   // ── Case 2：合法 model → 採用之 ──────────────────────────────────────
   it("providerConfig.model 為合法字串時應採用之", async () => {
     const pod = makePod({ providerConfig: { model: "gpt-5.4-pro" } });
-    const options = await provider.buildOptions(pod);
+    const options = await codexProvider.buildOptions(pod);
 
     expect(options.model).toBe("gpt-5.4-pro");
     expect(options.resumeMode).toBe("cli");
@@ -109,9 +121,9 @@ describe("CodexProvider.buildOptions()", () => {
 
     for (const illegalModel of illegalModels) {
       const pod = makePod({ providerConfig: { model: illegalModel } });
-      const options = await provider.buildOptions(pod);
+      const options = await codexProvider.buildOptions(pod);
 
-      expect(options.model).toBe(provider.metadata.defaultOptions.model);
+      expect(options.model).toBe(codexProvider.metadata.defaultOptions.model);
       expect(options.resumeMode).toBe("cli");
     }
   });
@@ -119,19 +131,19 @@ describe("CodexProvider.buildOptions()", () => {
   // ── Case 4：providerConfig.model 為非字串型別 → fallback 為 default ──
   it("providerConfig.model 為非字串型別時應 fallback 為 default model", async () => {
     const pod = makePod({ providerConfig: { model: 42 as unknown as string } });
-    const options = await provider.buildOptions(pod);
+    const options = await codexProvider.buildOptions(pod);
 
-    expect(options.model).toBe(provider.metadata.defaultOptions.model);
+    expect(options.model).toBe(codexProvider.metadata.defaultOptions.model);
   });
 
   it("支援模型開啟 Fast mode 時保留 true，不支援模型則防禦性關閉", async () => {
-    const supported = await provider.buildOptions(
+    const supported = await codexProvider.buildOptions(
       makePod({
         providerConfig: { model: "gpt-5.6-luna" },
         fastModeEnabled: true,
       }),
     );
-    const unsupported = await provider.buildOptions(
+    const unsupported = await codexProvider.buildOptions(
       makePod({
         providerConfig: { model: "gpt-5.4-pro" },
         fastModeEnabled: true,
@@ -182,7 +194,7 @@ describe("CodexProvider.buildOptions()", () => {
       sourcePodId: "pod-buildopts-001",
     } as any;
 
-    const withContext = await provider.buildOptions(pod, fakeRunContext);
+    const withContext = await codexProvider.buildOptions(pod, fakeRunContext);
 
     expect(withContext.model).toBe("gpt-5.4-pro");
     expect(withContext.resumeMode).toBe("cli");
@@ -223,7 +235,7 @@ describe("CodexProvider.buildOptions()", () => {
       sourcePodId: "pod-buildopts-001",
     } as any;
 
-    const withContext = await provider.buildOptions(pod, fakeRunContext);
+    const withContext = await codexProvider.buildOptions(pod, fakeRunContext);
 
     expect(withContext.hasGoalRuntime).toBe(false);
     expect(withContext.mcpEntries).toEqual([
@@ -254,7 +266,7 @@ describe("CodexProvider.buildOptions()", () => {
       providerConfig: { model: "gpt-5.4-pro" },
       mcpServerNames: ["team-server"],
     });
-    const options = await provider.buildOptions(pod);
+    const options = await codexProvider.buildOptions(pod);
 
     expect(
       mockManagedMcpSurfaceService.buildPodMcpEntries,
@@ -280,7 +292,7 @@ describe("CodexProvider.buildOptions()", () => {
     });
 
     const pod = makePod({ mcpServerNames: ["remote-mcp"] });
-    const options = await provider.buildOptions(pod);
+    const options = await codexProvider.buildOptions(pod);
 
     expect(options.mcpEntries).toEqual([
       { name: "remote-mcp", transport: "http", url: "https://example.com/mcp" },

@@ -132,6 +132,49 @@ afterEach(() => {
 // ════════════════════════════════════════════════════════════════════════
 
 describe("Pod 建立預設 thinkingLevel 寫入", () => {
+  it.each([undefined, "ultra"])(
+    "Astra 推理等級可儲存並重新載入（%s）",
+    (thinkingLevel) => {
+      const { pod } = podStore.create(TEST_CANVAS_ID, {
+        name: "astra",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        provider: "codex",
+        providerConfig: {
+          model: "gpt-6-astra",
+          ...(thinkingLevel ? { thinkingLevel } : {}),
+        },
+      });
+      expect(podStore.getById(TEST_CANVAS_ID, pod.id)?.providerConfig).toEqual({
+        model: "gpt-6-astra",
+        thinkingLevel: thinkingLevel ?? "medium",
+      });
+      const row = getDb()
+        .prepare("SELECT provider_config_json FROM pods WHERE id = ?")
+        .get(pod.id) as { provider_config_json: string };
+      expect(JSON.parse(row.provider_config_json).thinkingLevel).toBe(
+        thinkingLevel ?? "medium",
+      );
+    },
+  );
+
+  it.each(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])(
+    "不支援 Ultra 的模型應拒絕寫入（%s）",
+    (model) => {
+      expect(() =>
+        podStore.create(TEST_CANVAS_ID, {
+          name: "invalid-ultra",
+          x: 0,
+          y: 0,
+          rotation: 0,
+          provider: "codex",
+          providerConfig: { model, thinkingLevel: "ultra" },
+        }),
+      ).toThrow("不支援此 thinking level");
+    },
+  );
+
   it("[B3] Claude opus Pod 建立後 DB 內 providerConfig.thinkingLevel 應為 'high'", () => {
     const { pod } = podStore.create(TEST_CANVAS_ID, {
       name: "pod-b3-claude-opus",
@@ -209,6 +252,32 @@ describe("Pod 建立預設 thinkingLevel 寫入", () => {
 // ════════════════════════════════════════════════════════════════════════
 
 describe("handlePodSetModel 切 model 對 thinkingLevel 的影響", () => {
+  it.each([
+    ["gpt-5.6-sol", "medium"],
+    ["gpt-5.6-luna", "high"],
+  ])(
+    "Astra Ultra 切換模型後應儲存有效預設等級（%s）",
+    async (model, thinkingLevel) => {
+      const { pod } = podStore.create(TEST_CANVAS_ID, {
+        name: "astra-switch",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        provider: "codex",
+        providerConfig: { model: "gpt-6-astra", thinkingLevel: "ultra" },
+      });
+      await handlePodSetModel(
+        TEST_CONNECTION_ID,
+        makeSetModelPayload(pod.id, model),
+        "req-test",
+      );
+      expect(podStore.getById(TEST_CANVAS_ID, pod.id)?.providerConfig).toEqual({
+        model,
+        thinkingLevel,
+      });
+    },
+  );
+
   /** 直接由 SQL 寫入指定 thinkingLevel，繞過 sanitize 自動補預設邏輯，供後續切 model 測試使用 */
   function patchThinkingLevel(
     podId: string,

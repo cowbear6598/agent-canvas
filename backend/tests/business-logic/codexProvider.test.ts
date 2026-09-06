@@ -138,18 +138,46 @@ describe("CodexProvider", () => {
     vi.restoreAllMocks();
   });
 
+  it.each([null, "session-astra-123"])(
+    "Astra Ultra 新對話與恢復對話應傳入模型、推理及 Fast 設定（%s）",
+    async (resumeSessionId) => {
+      spawnSpy = vi
+        .spyOn(Bun, "spawn")
+        .mockReturnValue(
+          makeMockProc([JSON.stringify({ type: "turn.completed" })]) as any,
+        );
+      await collectEvents(
+        codexProvider.chat(
+          makeCtx({
+            resumeSessionId,
+            options: {
+              model: "gpt-6-astra",
+              resumeMode: "cli",
+              thinkingLevel: "ultra",
+              fastModeEnabled: true,
+            },
+          }),
+        ),
+      );
+      const [args] = spawnSpy.mock.calls[0] as [string[], unknown];
+      expect(args[args.indexOf("--model") + 1]).toBe("gpt-6-astra");
+      expect(args).toContain("model_reasoning_effort=ultra");
+      expect(args).toContain("features.fast_mode=true");
+      expect(args).toContain('service_tier="fast"');
+    },
+  );
+
   // ── Case 1：首次對話 spawn 指令 ───────────────────────────────────
   it("首次對話時 spawn 指令應包含必要的 CLI 參數（--json、--cd、bypass、--model 等）", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: { model: "gpt-4o", resumeMode: "cli" },
     });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs, spawnOptions] = spawnSpy.mock.calls[0] as [
@@ -185,10 +213,9 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: "session-abc123" });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
@@ -257,7 +284,6 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       message: "fix the failing test",
       options: {
@@ -280,7 +306,7 @@ describe("CodexProvider", () => {
       },
     });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(mockProc.stdin.write).toHaveBeenCalledOnce();
     const [promptText] = mockProc.stdin.write.mock.calls[0] as [string];
@@ -303,7 +329,6 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       message: "fix the failing test",
       options: {
@@ -314,7 +339,7 @@ describe("CodexProvider", () => {
       },
     });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(mockProc.stdin.write).toHaveBeenCalledWith("fix the failing test");
   });
@@ -336,7 +361,6 @@ describe("CodexProvider", () => {
       },
     ]);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       options: {
         model: "gpt-5.5",
@@ -357,7 +381,7 @@ describe("CodexProvider", () => {
       },
     });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     // 注入 entry 的 command / args
@@ -385,7 +409,6 @@ describe("CodexProvider", () => {
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
     vi.mocked(readCodexMcpServers).mockReturnValue([]);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       options: {
         model: "gpt-5.5",
@@ -401,7 +424,7 @@ describe("CodexProvider", () => {
       },
     });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     expect(spawnArgs).toContain(
@@ -426,13 +449,12 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({ abortSignal: ac.signal });
 
     // 在 collectEvents 之前先 abort，確保 onAbort 邏輯會被觸發
     ac.abort();
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     // abortSignal 已在 spawn 前觸發，應呼叫 kill
     expect(mockProc.kill).toHaveBeenCalled();
@@ -447,8 +469,7 @@ describe("CodexProvider", () => {
       throw enoentErr;
     });
 
-    const provider = codexProvider;
-    const events = await collectEvents(provider.chat(makeCtx()));
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
 
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe("error");
@@ -471,8 +492,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc(stdoutLines);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
-    const events = await collectEvents(provider.chat(makeCtx()));
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
 
     expect(events).toHaveLength(3);
 
@@ -498,8 +518,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([], ["some stderr output"], 1);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
-    const events = await collectEvents(provider.chat(makeCtx()));
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
 
     const errorEvents = events.filter((e) => e.type === "error");
     expect(errorEvents).toHaveLength(1);
@@ -520,11 +539,10 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc(stdoutLines, [], 1);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
 
     // 模擬 streamingChatExecutor 主迴圈：收到 fatal=true 後 break，generator 被 return
     const collected: NormalizedEvent[] = [];
-    for await (const ev of provider.chat(makeCtx())) {
+    for await (const ev of codexProvider.chat(makeCtx())) {
       collected.push(ev);
       if (ev.type === "error" && ev.fatal) {
         break;
@@ -675,8 +693,7 @@ describe("CodexProvider", () => {
     );
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
-    const events = await collectEvents(provider.chat(makeCtx()));
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
 
     const errorEvents = events.filter((e) => e.type === "error");
     expect(errorEvents).toHaveLength(0);
@@ -688,12 +705,11 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     // 帶入 options.model = "gpt-5.4-pro"
     const ctx = makeCtx({
       options: { model: "gpt-5.4-pro", resumeMode: "cli" },
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     // --model 應存在且其後跟著指定的模型名稱
@@ -707,10 +723,9 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     // 含空格和特殊字元，格式不合法
     const ctx = makeCtx({ resumeSessionId: "invalid session id!" });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     // 不應含 resume
@@ -724,9 +739,8 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: null });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs, spawnOptions] = spawnSpy.mock.calls[0] as [
@@ -746,9 +760,8 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: "session-xyz" });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs, spawnOptions] = spawnSpy.mock.calls[0] as [
@@ -767,12 +780,11 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       workspacePath: "/repos/my-repo",
       resumeSessionId: null,
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
@@ -809,7 +821,6 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: {
@@ -818,7 +829,7 @@ describe("CodexProvider", () => {
         codexMcpServerKeys: ["user:figma", "user:context7"],
       },
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
@@ -854,7 +865,6 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: "session-abc123",
       options: {
@@ -863,7 +873,7 @@ describe("CodexProvider", () => {
         codexMcpServerKeys: ["user:my-mcp"],
       },
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
@@ -883,7 +893,6 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: {
@@ -906,7 +915,7 @@ describe("CodexProvider", () => {
       },
     });
 
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     expect(spawnArgs).toContain(
@@ -926,13 +935,12 @@ describe("CodexProvider", () => {
     vi.mocked(readCodexMcpServers).mockClear();
     // 不設定 spawnSpy：若走到 spawn 會使用真實 Bun.spawn（但 prepareExecution 失敗應在此之前 return）
 
-    const provider = codexProvider;
     // 含空格的 model 名稱不合法（不通過 MODEL_RE）
     const ctx = makeCtx({
       options: { model: "invalid model name!", resumeMode: "cli" },
     });
 
-    const events = await collectEvents(provider.chat(ctx));
+    const events = await collectEvents(codexProvider.chat(ctx));
 
     // 應 yield 一個 error event
     expect(events).toHaveLength(1);
@@ -949,12 +957,11 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: { model: "gpt-5.5", resumeMode: "cli", thinkingLevel: "high" },
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
@@ -969,12 +976,11 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: "session-thinking-xyz",
       options: { model: "gpt-5.5", resumeMode: "cli", thinkingLevel: "xhigh" },
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
@@ -991,13 +997,12 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     // 預設 options 不含 thinkingLevel
     const ctx = makeCtx({
       resumeSessionId: null,
       options: { model: "gpt-5.5", resumeMode: "cli" },
     });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     const hasReasoningFlag = spawnArgs.some((arg) =>
@@ -1014,9 +1019,8 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: null });
-    await collectEvents(provider.chat(ctx));
+    await collectEvents(codexProvider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     const hasApproveFlag = spawnArgs.some((arg) =>

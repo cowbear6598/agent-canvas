@@ -25,13 +25,7 @@ const getOpencodeAliasModelValue = (alias: {
 
 function getOpencodeAliasThinkingMeta(
   model: string,
-):
-  | {
-      levels: ReadonlyArray<string>;
-      labels: Readonly<Record<string, string>>;
-      defaultLevel: string;
-    }
-  | undefined {
+): ThinkingMeta | undefined {
   const aliasStore = useOpencodeAliasStore();
   const alias = aliasStore.aliases.find(
     (item) => getOpencodeAliasModelValue(item) === model,
@@ -215,8 +209,7 @@ export const useProviderCapabilityStore = defineStore(
             );
           }
           const modelSet = availableModelValuesByProvider.value[provider];
-          if (!modelSet || modelSet.size === 0) return false;
-          return modelSet.has(model);
+          return modelSet?.has(model) ?? false;
         },
     );
 
@@ -264,9 +257,10 @@ export const useProviderCapabilityStore = defineStore(
               thinkingMetaByProviderModel.value.opencode?.[model]?.labels[level]
             );
           }
-          return thinkingMetaByProviderModel.value[provider]?.[model]?.labels[
-            level
-          ];
+          return (
+            thinkingMetaByProviderModel.value[provider]?.[model]?.labels[level] ??
+            (level === "ultra" ? t("pod.thinkingUltra") : undefined)
+          );
         },
     );
 

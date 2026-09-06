@@ -12,7 +12,7 @@ describe("PodModelSelector", () => {
       {
         name: "codex",
         availableModels: [
-          { label: "GPT-5.7 Preview", value: "gpt-5.7-preview" },
+          { label: "GPT-6 Astra", value: "gpt-6-astra" },
           { label: "GPT-5.5", value: "gpt-5.5" },
           { label: "GPT-5.6 Sol", value: "gpt-5.6-sol" },
           { label: "GPT-5.6 Terra", value: "gpt-5.6-terra" },
@@ -33,16 +33,16 @@ describe("PodModelSelector", () => {
     const stack = wrapper.find<HTMLElement>(".model-cards-stack");
     stack.element.scrollTop = 64;
 
-    const terraButton = wrapper
+    const astraButton = wrapper
       .findAll(".model-card")
-      .find((button) => button.text() === "GPT-5.6 Terra");
-    expect(terraButton).toBeDefined();
-    await terraButton!.trigger("click");
-    expect(wrapper.emitted("update:model")?.[0]).toEqual(["gpt-5.6-terra"]);
+      .find((button) => button.text() === "GPT-6 Astra");
+    expect(astraButton).toBeDefined();
+    await astraButton!.trigger("click");
+    expect(wrapper.emitted("update:model")?.[0]).toEqual(["gpt-6-astra"]);
 
-    await wrapper.setProps({ currentModel: "gpt-5.6-terra" });
+    await wrapper.setProps({ currentModel: "gpt-6-astra" });
 
     expect(stack.element.scrollTop).toBe(0);
-    expect(wrapper.find(".model-card.active").text()).toBe("GPT-5.6 Terra");
+    expect(wrapper.find(".model-card.active").text()).toBe("GPT-6 Astra");
   });
 });

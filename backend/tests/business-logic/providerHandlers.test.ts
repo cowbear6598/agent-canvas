@@ -64,17 +64,14 @@ beforeEach(() => {
 // ================================================================
 describe("handleProviderList", () => {
   it("收到 provider:list 請求後，應呼叫 emitToConnection 一次並帶 provider:list:result 事件", async () => {
-    // 執行 handler
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
       REQUEST_ID,
     );
 
-    // 應只呼叫一次
     expect(mockEmitToConnection).toHaveBeenCalledTimes(1);
 
-    // 第一個參數：connectionId
     expect(mockEmitToConnection).toHaveBeenCalledWith(
       CONNECTION_ID,
       "provider:list:result",
@@ -91,11 +88,9 @@ describe("handleProviderList", () => {
 
     const [, , payload] = mockEmitToConnection.mock.calls[0];
 
-    // providers 應是陣列且不為空
     expect(Array.isArray(payload.providers)).toBe(true);
     expect(payload.providers.length).toBeGreaterThan(0);
 
-    // 每個 provider 應包含 name、defaultOptions 以及 availableModels
     for (const provider of payload.providers) {
       expect(provider).toHaveProperty("name");
       expect(provider).toHaveProperty("defaultOptions");
@@ -183,7 +178,6 @@ describe("handleProviderList", () => {
 
     const [, , payload] = mockEmitToConnection.mock.calls[0];
 
-    // requestId 必須與 request 帶入的值一致
     expect(payload.requestId).toBe(specificRequestId);
   });
 
@@ -279,6 +273,17 @@ describe("handleProviderList", () => {
           model.value === "gpt-5.4" || model.value === "gpt-5.5",
       ),
     ).toBe(false);
+
+    expect(
+      codex.availableModels.find(
+        (model: { value: string }) => model.value === "gpt-6-astra",
+      ),
+    ).toMatchObject({
+      label: "GPT-6 Astra",
+      thinkingLevels: ["low", "medium", "high", "xhigh", "max", "ultra"],
+      defaultThinkingLevel: "medium",
+      supportsFastMode: true,
+    });
 
     const gpt56Models = codex.availableModels.filter(
       (model: { value: string }) => model.value.startsWith("gpt-5.6-"),

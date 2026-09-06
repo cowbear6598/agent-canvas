@@ -1,0 +1,38 @@
+description: >
+  Agent 畫布目前的 Codex 模型清單只有 GPT-5.6 Sol、Terra、Luna，
+  尚未提供 Codex 已支援的 gpt-6-astra。新增 Astra 可讓使用者透過
+  既有模型設定與 Codex CLI 執行流程使用此模型，並選擇包含 Ultra 的完整推理等級。
+goal:
+  - 使用者可在 Codex 的 Pod、記憶與連線模型設定中選擇 GPT-6 Astra（gpt-6-astra），並成功儲存與載入。
+  - Astra 提供 low、medium、high、xhigh、max、ultra 六個推理等級，預設為 medium；Codex 預設模型維持 gpt-5.6-luna。
+  - 新對話與恢復對話均使用使用者選定的 Astra 模型及推理等級執行，Ultra 透過 model_reasoning_effort=ultra 交由 Codex CLI 處理。
+  - Astra 可使用既有 Fast mode 開關，沿用使用者的開關狀態與 CLI 執行設定。
+  - Astra 的 Ultra 選擇可正確儲存、重新載入，切換至不支援 Ultra 的模型時依既有規則回復有效等級；其他模型維持原有能力。
+  - 新增的前端顯示文字透過 en、zh-TW、ja 多語系提供，Ultra 選項的顯示、選取與思考水位符合六階能力清單。
+related:
+  - backend/src/services/provider/capabilities.ts
+  - backend/src/services/provider/codexProvider.ts
+  - backend/src/services/pod/providerConfigResolver.ts
+  - backend/src/handlers/providerHandlers.ts
+  - backend/src/schemas/providerSchemas.ts
+  - backend/tests/business-logic/providerHandlers.test.ts
+  - backend/tests/business-logic/codexProvider.test.ts
+  - backend/tests/business-logic/codexProviderBuildOptions.test.ts
+  - frontend/src/stores/providerCapabilityStore.ts
+  - frontend/src/components/pod/ThinkingPopover.vue
+  - frontend/src/components/pod/PodThinkingSlot.vue
+  - frontend/src/locales/en.json
+  - frontend/src/locales/zh-TW.json
+  - frontend/src/locales/ja.json
+  - frontend/src/components/pod/PodModelSelector.vue
+  - frontend/src/components/settings/ModelSettingsModal.vue
+  - frontend/tests/business-logic/stores/providerCapabilityStore.test.ts
+  - frontend/tests/business-logic/components/pod/PodModelSelector.test.ts
+  - frontend/tests/business-logic/components/settings/ModelSettingsModal.test.ts
+  - backend/tests/business-logic/podThinkingLevel.test.ts
+  - backend/tests/business-logic/podFastMode.test.ts
+  - frontend/tests/userflows/canvas/thinkingPopoverFlow.test.ts
+  - frontend/tests/userflows/canvas/podThinkingFlow.test.ts
+verify:
+  - cd backend && bun run test tests/business-logic/providerHandlers.test.ts tests/business-logic/codexProvider.test.ts tests/business-logic/codexProviderBuildOptions.test.ts tests/business-logic/podThinkingLevel.test.ts tests/business-logic/podFastMode.test.ts
+  - cd frontend && bun run test --run tests/business-logic/stores/providerCapabilityStore.test.ts tests/business-logic/components/pod/PodModelSelector.test.ts tests/business-logic/components/settings/ModelSettingsModal.test.ts tests/userflows/canvas/thinkingPopoverFlow.test.ts tests/userflows/canvas/podThinkingFlow.test.ts

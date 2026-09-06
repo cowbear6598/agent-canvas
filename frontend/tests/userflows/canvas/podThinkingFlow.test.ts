@@ -49,3 +49,39 @@ describe("PodThinkingSlot", () => {
     );
   });
 });
+
+it("Astra 的 Medium 為六階中的第二階，Ultra 水位為滿格", async () => {
+  setActivePinia(setupTestPinia());
+  useProviderCapabilityStore().syncFromPayload([
+    {
+      name: "codex",
+      availableModels: [
+        {
+          label: "GPT-6 Astra",
+          value: "gpt-6-astra",
+          thinkingLevels: ["low", "medium", "high", "xhigh", "max", "ultra"],
+          defaultThinkingLevel: "medium",
+        },
+      ],
+    },
+  ]);
+  const wrapper = mount(PodThinkingSlot, {
+    props: {
+      podId: "astra",
+      podRotation: 0,
+      currentLevel: "medium",
+      currentModel: "gpt-6-astra",
+      provider: "codex",
+      disabled: false,
+      disabledTooltip: "",
+    },
+  });
+  expect(wrapper.find(".pod-thinking-slot").attributes("style")).toContain(
+    "--thinking-fill-pct: 33.33333333333333%;",
+  );
+  await wrapper.setProps({ currentLevel: "ultra" });
+  expect(wrapper.find(".pod-thinking-slot").attributes("style")).toContain(
+    "--thinking-fill-pct: 100%;",
+  );
+  wrapper.unmount();
+});

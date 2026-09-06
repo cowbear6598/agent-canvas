@@ -234,6 +234,7 @@
     }
   },
   "pod": {
+    "thinkingUltra": "Ultra",
     "modelSelector": {
       "opencode": {
         "emptyPlaceholder": "Please add model aliases in LLM Provider settings first",

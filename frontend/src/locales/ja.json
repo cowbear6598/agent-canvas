@@ -234,6 +234,7 @@
     }
   },
   "pod": {
+    "thinkingUltra": "Ultra",
     "modelSelector": {
       "opencode": {
         "emptyPlaceholder": "先に LLM Provider 設定で model エイリアスを追加してください",

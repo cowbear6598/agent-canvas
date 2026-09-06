@@ -234,6 +234,7 @@
     }
   },
   "pod": {
+    "thinkingUltra": "Ultra",
     "modelSelector": {
       "opencode": {
         "emptyPlaceholder": "請先到 LLM Provider 設定新增 model 對應",

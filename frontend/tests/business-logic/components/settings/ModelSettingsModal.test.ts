@@ -139,6 +139,50 @@ function saveButton(wrapper: ReturnType<typeof mountModal>) {
 }
 
 describe("ModelSettingsModal", () => {
+  it("記憶與連線的 Astra Ultra 設定載入後可原樣儲存", async () => {
+    useProviderCapabilityStore().syncFromPayload([
+      {
+        name: "codex",
+        availableModels: [
+          {
+            label: "GPT-6 Astra",
+            value: "gpt-6-astra",
+            thinkingLevels: ["low", "medium", "high", "xhigh", "max", "ultra"],
+            defaultThinkingLevel: "medium",
+          },
+        ],
+      },
+    ]);
+    const config = {
+      success: true,
+      timezoneOffset: 8,
+      memoryProvider: "codex",
+      memoryModel: "gpt-6-astra",
+      memoryThinkingLevel: "ultra",
+      connectionLineProvider: "codex",
+      connectionLineModel: "gpt-6-astra",
+      connectionLineThinkingLevel: "ultra",
+    };
+    getConfigMock.mockResolvedValue(config);
+    updateConfigMock.mockResolvedValue(config);
+    const wrapper = mountModal();
+    await flushPromises();
+    expect(selectedValues(wrapper)).toEqual(["codex", "gpt-6-astra", "ultra"]);
+    expect(wrapper.text()).toContain("Ultra");
+    await saveButton(wrapper)!.trigger("click");
+    await flushPromises();
+    expect(updateConfigMock).toHaveBeenCalledWith({
+      timezoneOffset: 8,
+      memoryProvider: "codex",
+      memoryModel: "gpt-6-astra",
+      memoryThinkingLevel: "ultra",
+      connectionLineProvider: "codex",
+      connectionLineModel: "gpt-6-astra",
+      connectionLineThinkingLevel: "ultra",
+    });
+    wrapper.unmount();
+  });
+
   beforeEach(() => {
     setActivePinia(setupTestPinia());
     syncProviderCapabilities();

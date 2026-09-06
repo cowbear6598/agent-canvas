@@ -1,5 +1,5 @@
 /** 各 provider 共用的 thinking level 型別 alias，供 pod 設定與型別引用 */
-export type ThinkingLevel = "low" | "medium" | "high" | "xhigh" | "max";
+export type ThinkingLevel = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
 
 type ModelThinkingConfig = Readonly<{
   levels: readonly ThinkingLevel[];
@@ -87,6 +87,14 @@ const CODEX_MODEL_METADATA = Object.freeze({
   "gpt-5.6-luna": Object.freeze({
     label: "GPT-5.6 Luna",
     thinking: CODEX_5_6_LUNA_THINKING,
+    supportsFastMode: true,
+  }),
+  "gpt-6-astra": Object.freeze({
+    label: "GPT-6 Astra",
+    thinking: Object.freeze({
+      levels: Object.freeze([...FIVE_THINKING_LEVELS, "ultra"] as const),
+      default: "medium",
+    }),
     supportsFastMode: true,
   }),
 } as const satisfies Record<string, ModelMetadata>);
